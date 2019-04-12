@@ -16,7 +16,7 @@ use std::{
 
 use getopts::Options;
 
-use yksom::vm::VM;
+use yksom::vm::vm::{VMError, VM};
 
 fn usage(prog: &str) -> ! {
     let path = Path::new(prog);
@@ -43,5 +43,11 @@ fn main() {
     let vm = VM::new(matches.opt_strs("cp"));
     let cls = vm.compile(&Path::new(&matches.free[0]).canonicalize().unwrap());
     let obj = vm.send(cls, "new", &[]).unwrap();
-    vm.send(obj, "run", &[]).unwrap();
+    match vm.send(obj, "run", &[]) {
+        Ok(_) | Err(VMError::Exit) => (),
+        Err(e) => {
+            println!("{:?}", e);
+            process::exit(1);
+        }
+    }
 }
