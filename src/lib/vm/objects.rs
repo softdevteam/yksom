@@ -158,7 +158,7 @@ impl Drop for Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 if self.val != 0 {
-                    unsafe { Gc::<ThinObj>::from_raw(self.val as *const _) };
+                    drop(unsafe { Gc::<ThinObj>::from_raw(self.val as *const _) });
                 }
             }
             ValKind::INT => (),
