@@ -12,6 +12,7 @@ use std::{
     marker::PhantomData,
     mem::{forget, size_of},
     ops::Deref,
+    ptr,
 };
 
 /// Since Rust's alloc system requires us to tell it the `Layout` of a region of memory upon
@@ -64,7 +65,10 @@ impl<T: GcLayout> Drop for Gc<T> {
     fn drop(&mut self) {
         let clones = unsafe { &mut *self.ptr }.clones;
         if clones == 1 {
-            unsafe { dealloc(self.ptr as *mut u8, self.layout()) };
+            unsafe {
+                ptr::drop_in_place(self.ptr);
+                dealloc(self.ptr as *mut u8, self.layout());
+            }
         } else {
             unsafe { &mut *self.ptr }.clones = clones - 1;
         }
@@ -80,7 +84,7 @@ impl<T: GcLayout> Deref for Gc<T> {
 }
 
 #[derive(Debug)]
-pub struct GcBox<T: ?Sized> {
+pub struct GcBox<T> {
     clones: usize,
     phantom: PhantomData<T>,
 }
@@ -110,5 +114,14 @@ impl<T: GcLayout> Deref for GcBox<T> {
         let valptr = unsafe { (self as *const GcBox<T> as *const u8).add(size_of::<GcBox<T>>()) }
             as *const T;
         unsafe { &*valptr }
+    }
+}
+
+impl<T> Drop for GcBox<T> {
+    fn drop(&mut self) {
+        unsafe {
+            let valptr = (self as *mut GcBox<T> as *mut u8).add(size_of::<GcBox<T>>()) as *mut T;
+            ptr::drop_in_place(valptr);
+        }
     }
 }

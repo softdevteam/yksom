@@ -17,6 +17,7 @@ use std::{
     mem::{forget, size_of, transmute},
     ops::{CoerceUnsized, Deref},
     path::PathBuf,
+    ptr,
 };
 
 use enum_primitive_derive::Primitive;
@@ -239,6 +240,16 @@ impl Deref for ThinObj {
             let self_ptr = self as *const Self;
             let obj_ptr = self_ptr.add(1);
             transmute((obj_ptr, self.vtable))
+        }
+    }
+}
+
+impl Drop for ThinObj {
+    fn drop(&mut self) {
+        let self_ptr = self as *const Self;
+        unsafe {
+            let obj_ptr = self_ptr.add(1);
+            ptr::drop_in_place::<Obj>(transmute((obj_ptr, self.vtable)));
         }
     }
 }
