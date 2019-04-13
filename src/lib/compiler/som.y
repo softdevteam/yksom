@@ -32,7 +32,7 @@ MethodsOpt -> Result<Vec<Method>, ()>:
     ;
 Methods -> Result<Vec<Method>, ()>:
       Method { Ok(vec![$1?]) }
-    | Methods Method { flatten($1, $2) }
+    | Methods Method { flattenr($1, $2) }
     ;
 ClassMethods -> Result<(), ()>:
           "SEPARATOR" InstanceFields MethodsOpt { unimplemented!() }
@@ -96,7 +96,7 @@ DotOpt -> Result<(), ()>:
     ;
 Exprs -> Result<Vec<Expr>, ()>:
       Expr { Ok(vec![$1?]) }
-    | Exprs "." Expr { flatten($1, $3) }
+    | Exprs "." Expr { flattenr($1, $3) }
     ;
 Expr -> Result<Expr, ()>:
       Assign { unimplemented!() }
@@ -115,7 +115,7 @@ KeywordMsg -> Result<Expr, ()>:
     | BinaryMsg { $1 }
     ;
 KeywordMsgList -> Result<Vec<(Lexeme<StorageT>, Expr)>, ()>:
-      KeywordMsgList "KEYWORD" BinaryMsg { flatten($1, Ok((map_err($2)?, $3?))) }
+      KeywordMsgList "KEYWORD" BinaryMsg { flattenr($1, Ok((map_err($2)?, $3?))) }
     | "KEYWORD" BinaryMsg { Ok(vec![(map_err($1)?, $2?)]) }
     ;
 BinaryMsg -> Result<Expr, ()>:
@@ -130,7 +130,7 @@ IdListOpt -> Result<Vec<Lexeme<StorageT>>, ()>:
     ;
 IdList -> Result<Vec<Lexeme<StorageT>>, ()>:
       "ID" { Ok(vec![map_err($1)?]) }
-    | IdList "ID" { flatten($1, map_err($2)) }
+    | IdList "ID" { flattenr($1, map_err($2)) }
     ;
 BinOp -> Result<(), ()>:
       "BINOPSEQ" { unimplemented!() }
@@ -191,7 +191,8 @@ fn map_err<StorageT>(r: Result<Lexeme<StorageT>, Lexeme<StorageT>>)
     r.map_err(|_| ())
 }
 
-fn flatten<T>(lhs: Result<Vec<T>, ()>, rhs: Result<T, ()>) -> Result<Vec<T>, ()> {
+/// Flatten `rhs` into `lhs`.
+fn flattenr<T>(lhs: Result<Vec<T>, ()>, rhs: Result<T, ()>) -> Result<Vec<T>, ()> {
     let mut flt = lhs?;
     flt.push(rhs?);
     Ok(flt)
