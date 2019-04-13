@@ -78,7 +78,6 @@ MethodNameBinOp -> Result<(), ()>:
     ;
 Argument -> Result<(), ()>:
       "ID" { unimplemented!() }
-    | "PRIMITIVE" { unimplemented!() }
     | { unimplemented!() }
     ;
 MethodBody -> Result<MethodBody, ()>:
