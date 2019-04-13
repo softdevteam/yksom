@@ -111,9 +111,11 @@ impl<T: GcLayout> Deref for GcBox<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        let valptr = unsafe { (self as *const GcBox<T> as *const u8).add(size_of::<GcBox<T>>()) }
-            as *const T;
-        unsafe { &*valptr }
+        unsafe {
+            let valptr =
+                (self as *const GcBox<T> as *const u8).add(size_of::<GcBox<T>>()) as *const T;
+            &*valptr
+        }
     }
 }
 
