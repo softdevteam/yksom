@@ -25,6 +25,7 @@ pub const SOM_EXTENSION: &str = "som";
 #[derive(Debug)]
 pub enum VMError {
     UnknownMethod(String),
+    Exit,
 }
 
 pub struct VM {
@@ -136,7 +137,7 @@ impl VM {
                 _ => unimplemented!(),
             }
         }
-        process::exit(0);
+        Err(VMError::Exit)
     }
 }
 
