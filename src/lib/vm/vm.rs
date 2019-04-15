@@ -128,11 +128,11 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Send(moff) => {
-                    let rcv = frame.stack_pop();
                     let (ref name, nargs) = &cls.sends[moff];
                     let args = frame
                         .stack_drain(frame.stack_len() - nargs..)
                         .collect::<Vec<_>>();
+                    let rcv = frame.stack_pop();
                     let r = self.send(rcv, &name, &args)?;
                     frame.stack_push(r);
                     pc += 1;
