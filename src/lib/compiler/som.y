@@ -52,8 +52,8 @@ MethodName -> Result<MethodName, ()>:
     | MethodNameBin { unimplemented!() }
     ;
 MethodNameKeywords -> Result<(), ()>:
-      "KEYWORD" Argument { unimplemented!() }
-    | MethodNameKeywords "KEYWORD" Argument { unimplemented!() }
+      "KEYWORD" "ID" { unimplemented!() }
+    | MethodNameKeywords "KEYWORD" "ID" { unimplemented!() }
     ;
 MethodNameBin -> Result<(), ()>:
       MethodNameBinOp Argument { unimplemented!() };
@@ -75,10 +75,6 @@ MethodNameBinOp -> Result<(), ()>:
     | "," { unimplemented!() }
     | "@" { unimplemented!() }
     | "%" { unimplemented!() }
-    ;
-Argument -> Result<(), ()>:
-      "ID" { unimplemented!() }
-    | { unimplemented!() }
     ;
 MethodBody -> Result<MethodBody, ()>:
       "PRIMITIVE" { Ok(MethodBody::Primitive) }
@@ -167,6 +163,10 @@ BlockParamsOpt -> Result<(), ()>:
 BlockParams -> Result<(), ()>:
       "PARAM" Argument { unimplemented!() }
     | BlockParams "PARAM" Argument { unimplemented!() }
+    ;
+Argument -> Result<(), ()>:
+      "ID" { unimplemented!() }
+    | { unimplemented!() }
     ;
 StringConst -> Result<(), ()>:
       "#" "STRING" { unimplemented!() }
