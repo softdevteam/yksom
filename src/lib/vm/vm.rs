@@ -26,6 +26,8 @@ pub const SOM_EXTENSION: &str = "som";
 pub enum VMError {
     UnknownMethod(String),
     Exit,
+    CantRepresentAsIsize,
+    CantRepresentAsUsize,
 }
 
 pub struct VM {
@@ -90,7 +92,7 @@ impl VM {
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> Result<Val, VMError> {
-        let cls_gcobj = rcv.gc_obj(self).get_class(self).gc_obj(self);
+        let cls_gcobj = rcv.gc_obj(self)?.get_class(self).gc_obj(self)?;
         let cls: &Class = cls_gcobj.as_any().downcast_ref().unwrap();
         let meth = cls.get_method(self, msg)?;
 
@@ -108,7 +110,7 @@ impl VM {
             }
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string
-                let str_gcobj = rcv.gc_obj(self);
+                let str_gcobj = rcv.gc_obj(self)?;
                 let string: &String_ = str_gcobj.as_any().downcast_ref().unwrap();
                 println!("{}", string.as_str());
                 Ok(self.nil.clone())
