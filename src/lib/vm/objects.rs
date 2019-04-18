@@ -99,7 +99,7 @@ impl Val {
                 debug_assert_ne!(self.val, 0);
                 unsafe { Gc::clone_from_raw(self.val as *const _) }
             }
-            ValKind::INT => Int::from_isize(vm, self.as_isize(vm).unwrap()).gc_obj(vm),
+            ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap()).gc_obj(vm),
         }
     }
 
@@ -423,6 +423,12 @@ impl Int {
         }
     }
 
+    /// Create a `Val` representing the `usize` integer `i`. The `Val` is guaranteed to be boxed
+    /// internally.
+    pub fn boxed_isize(vm: &VM, i: isize) -> Val {
+        Val::from_obj(vm, Int { val: i })
+    }
+
     /// Create a `Val` representing the `usize` integer `i`. If `i` is too big to be stored (in
     /// practice, meaning that it can't be stored in an `isize`), `Err(())` is returned.
     pub fn from_usize(vm: &VM, i: usize) -> Result<Val, ()> {
@@ -531,5 +537,16 @@ mod tests {
         assert_eq!(v.valkind(), ValKind::GCBOX);
         assert_eq!(v.as_usize(&vm), Ok(1 << (BITSIZE - 2)));
         assert_eq!(v.as_isize(&vm), Ok(1 << (BITSIZE - 2)));
+    }
+
+    #[test]
+    fn test_boxed_int() {
+        let vm = VM::new_no_bootstrap();
+
+        assert_eq!(Int::from_isize(&vm, 12345).valkind(), ValKind::INT);
+        assert_eq!(Int::boxed_isize(&vm, 12345).valkind(), ValKind::GCBOX);
+
+        let v = Int::from_isize(&vm, 12345);
+        assert_eq!(v.gc_obj(&vm).as_usize(), v.as_usize(&vm));
     }
 }
