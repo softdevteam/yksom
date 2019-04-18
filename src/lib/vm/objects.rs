@@ -9,6 +9,28 @@
 
 #![allow(clippy::new_ret_no_self)]
 
+//! This file contains the core SOM objects. Note that there is a fundamental constraint that
+//! *must* be obeyed by the programmer at all times: upon their creation, instances of the `Obj`
+//! trait must immediately be passed to `Val::from_obj`. In other words this is safe:
+//!
+//! ```rust,ignore
+//! let x = Val::from_obj(vm, String_{ s: "a".to_owned() });
+//! dbg!(x.gc_obj().as_str());
+//! ```
+//!
+//! but this leads to undefined behaviour:
+//!
+//! ```rust,ignore
+//! let x = String_{ s: "a".to_owned() };
+//! dbg!(x.gc_obj().as_str());
+//! ```
+//!
+//! The reason for this is that methods on `Obj`s can call `Val::restore` which converts an `Obj`
+//! reference back into a `Val`.
+//!
+//! Although this constraint is not enforced through the type system, it is not hard to obey: as
+//! soon as you create an `Obj` instance, pass it to `Val::from_obj`.
+
 use std::{
     alloc::Layout,
     any::Any,
@@ -73,6 +95,18 @@ impl Val {
         let ptr = ThinObj::new(obj).into_raw();
         Val {
             val: unsafe { transmute(ptr) },
+        }
+    }
+
+    /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Obj::from_off` and
+    /// then turned into an actual object with `gc_obj`: failure to follow these steps results in
+    /// undefined behaviour.
+    pub fn recover(_: &VM, obj: &Obj) -> Self {
+        unsafe {
+            let ptr = ThinObj::recover(obj);
+            Val {
+                val: transmute(ptr),
+            }
         }
     }
 
@@ -167,6 +201,7 @@ impl Drop for Val {
     }
 }
 
+/// The main SOM Object trait.
 pub trait Obj: Debug + GcLayout {
     /// Return this object as an `Any` that can then be safely turned into a specific struct.
     fn as_any(&self) -> &Any;
@@ -220,6 +255,11 @@ impl ThinObj {
         }
         forget(v);
         unsafe { Gc::from_raw(gcbptr) }
+    }
+
+    pub unsafe fn recover(o: &Obj) -> Gc<ThinObj> {
+        let thinptr = (o as *const _ as *const u8).sub(size_of::<ThinObj>()) as *const ThinObj;
+        Gc::recover(thinptr)
     }
 }
 
@@ -565,6 +605,31 @@ mod tests {
         assert_eq!(
             v.gc_obj(&vm).unwrap().as_usize().unwrap(),
             v.as_usize(&vm).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_recovery() {
+        let vm = VM::new_no_bootstrap();
+
+        let v = {
+            let v = String_::new(&vm, "s".to_owned());
+            let v_gcobj = v.gc_obj(&vm).unwrap();
+            let v_int: &Obj = v_gcobj.deref().deref();
+            let v_recovered = Val::recover(&vm, v_int);
+            assert_eq!(v_recovered.val, v.val);
+            v_recovered
+        };
+        // At this point, we will have dropped one of the references to the String above so the
+        // assertion below is really checking that we're not doing a read after free.
+        assert_eq!(
+            v.gc_obj(&vm)
+                .unwrap()
+                .as_any()
+                .downcast_ref::<String_>()
+                .unwrap()
+                .s,
+            "s"
         );
     }
 }
