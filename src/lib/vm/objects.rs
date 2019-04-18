@@ -322,7 +322,7 @@ impl Obj for Class {
 }
 
 impl Class {
-    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Self {
+    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Val {
         let mut methods = HashMap::with_capacity(ccls.methods.len());
         for cmeth in ccls.methods.into_iter() {
             let body = match cmeth.body {
@@ -342,13 +342,16 @@ impl Class {
                 cobjects::Const::String(s) => String_::new(vm, s),
             })
             .collect();
-        Class {
-            path: ccls.path,
-            methods,
-            instrs: ccls.instrs,
-            consts,
-            sends: ccls.sends,
-        }
+        Val::from_obj(
+            vm,
+            Class {
+                path: ccls.path,
+                methods,
+                instrs: ccls.instrs,
+                consts,
+                sends: ccls.sends,
+            },
+        )
     }
 
     pub fn get_method(&self, _: &VM, msg: &str) -> Result<&Method, VMError> {

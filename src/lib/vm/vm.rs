@@ -59,8 +59,7 @@ impl VM {
     /// Compile the file at `path`.
     pub fn compile(&self, path: &Path) -> Val {
         let ccls = compile(path);
-        let cls = Class::from_ccls(self, ccls);
-        Val::from_obj(self, cls)
+        Class::from_ccls(self, ccls)
     }
 
     fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
