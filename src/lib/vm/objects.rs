@@ -101,7 +101,7 @@ impl Val {
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Obj::from_off` and
     /// then turned into an actual object with `gc_obj`: failure to follow these steps results in
     /// undefined behaviour.
-    pub fn recover(_: &VM, obj: &Obj) -> Self {
+    pub fn recover(obj: &Obj) -> Self {
         unsafe {
             let ptr = ThinObj::recover(obj);
             Val {
@@ -619,7 +619,7 @@ mod tests {
             let v = String_::new(&vm, "s".to_owned());
             let v_gcobj = v.gc_obj(&vm).unwrap();
             let v_int: &Obj = v_gcobj.deref().deref();
-            let v_recovered = Val::recover(&vm, v_int);
+            let v_recovered = Val::recover(v_int);
             assert_eq!(v_recovered.val, v.val);
             v_recovered
         };
