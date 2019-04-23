@@ -25,11 +25,16 @@ pub const SOM_EXTENSION: &str = "som";
 
 #[derive(Debug, PartialEq)]
 pub enum VMError {
-    UnknownMethod(String),
-    Exit,
+    /// A number which can't be represented in an `isize`.
     CantRepresentAsIsize,
+    /// A number which can't be represented in an `usize`.
     CantRepresentAsUsize,
+    /// The VM is trying to exit.
+    Exit,
+    /// A dynamic type error.
     TypeError { expected: TypeId, got: TypeId },
+    /// An unknown method.
+    UnknownMethod(String),
 }
 
 pub struct VM {
