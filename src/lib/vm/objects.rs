@@ -540,8 +540,8 @@ impl String_ {
 
     /// Concatenate this string with another string and return the result.
     pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, VMError> {
-        let other_gcobj = other.tobj(vm)?;
-        let other_str: &String_ = other_gcobj.cast()?;
+        let other_tobj = other.tobj(vm)?;
+        let other_str: &String_ = other_tobj.cast()?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.
@@ -651,8 +651,8 @@ mod tests {
 
         let v = {
             let v = String_::new(&vm, "s".to_owned());
-            let v_gcobj = v.tobj(&vm).unwrap();
-            let v_int: &Obj = v_gcobj.deref().deref();
+            let v_tobj = v.tobj(&vm).unwrap();
+            let v_int: &Obj = v_tobj.deref().deref();
             let v_recovered = Val::recover(v_int);
             assert_eq!(v_recovered.val, v.val);
             v_recovered
