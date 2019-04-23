@@ -113,24 +113,33 @@ impl<'a> Compiler<'a> {
         let mut vars = HashMap::new();
         vars.insert("self", 0);
         self.vars_stack.push(vars);
-        let (name, body) = match astmeth.name {
+        let (name, args) = match astmeth.name {
             ast::MethodName::Id(lexeme) => {
-                let name = self.lexer.lexeme_str(&lexeme).to_string();
-                let body = self.c_body((lexeme, &name), &astmeth.body)?;
-                (name, body)
+                ((lexeme, self.lexer.lexeme_str(&lexeme).to_string()), vec![])
+            }
+            ast::MethodName::Keywords(ref pairs) => {
+                let name = pairs
+                    .iter()
+                    .map(|x| self.lexer.lexeme_str(&x.0))
+                    .collect::<String>();
+                let args = pairs.iter().map(|x| x.1).collect::<Vec<_>>();
+                ((pairs[0].0, name), args)
             }
         };
+        let body = self.c_body((name.0, &name.1), args, &astmeth.body)?;
         self.vars_stack.pop();
-        Ok(cobjects::Method { name, body })
+        Ok(cobjects::Method { name: name.1, body })
     }
 
     fn c_body(
         &mut self,
         name: (Lexeme<StorageT>, &str),
+        _args: Vec<Lexeme<StorageT>>,
         body: &ast::MethodBody,
     ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
         match body {
             ast::MethodBody::Primitive => match name.1 {
+                "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),

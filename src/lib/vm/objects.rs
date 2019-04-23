@@ -537,6 +537,25 @@ impl String_ {
     pub fn as_str(&self) -> &str {
         &self.s
     }
+
+    /// Concatenate this string with another string and return the result.
+    pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, VMError> {
+        let other_gcobj = other.gc_obj(vm)?;
+        let other_str: &String_ = other_gcobj.cast()?;
+
+        // Since strings are immutable, concatenating an empty string means we don't need to
+        // make a new string.
+        if self.s.is_empty() {
+            return Ok(other);
+        } else if other_str.s.is_empty() {
+            return Ok(Val::recover(self));
+        }
+
+        let mut new = String::with_capacity(self.s.len() + other_str.s.len());
+        new.push_str(&self.s);
+        new.push_str(&other_str.s);
+        Ok(String_::new(vm, new))
+    }
 }
 
 #[cfg(test)]

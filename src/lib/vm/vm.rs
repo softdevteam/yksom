@@ -105,6 +105,11 @@ impl VM {
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> Result<Val, VMError> {
         match prim {
+            Primitive::Concatenate => {
+                let rcv_gcobj = rcv.gc_obj(self)?;
+                let rcv_str: &String_ = rcv_gcobj.cast()?;
+                rcv_str.concatenate(self, args[0].clone())
+            }
             Primitive::New => {
                 assert_eq!(args.len(), 0);
                 Ok(Inst::new(self, rcv))

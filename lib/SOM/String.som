@@ -1,3 +1,5 @@
 String = (
     println = primitive
+    concatenate: argument = primitive
+"    + argument            = ( ^self concatenate: argument asString )"
 )

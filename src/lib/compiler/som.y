@@ -48,11 +48,11 @@ Temps -> Result<Vec<Lexeme<StorageT>>, ()>:
     ;
 MethodName -> Result<MethodName, ()>:
       "ID" { Ok(MethodName::Id(map_err($1)?)) }
-    | MethodNameKeywords { unimplemented!() }
+    | MethodNameKeywords { Ok(MethodName::Keywords($1?)) }
     | MethodNameBin { unimplemented!() }
     ;
-MethodNameKeywords -> Result<(), ()>:
-      "KEYWORD" "ID" { unimplemented!() }
+MethodNameKeywords -> Result<Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>, ()>:
+      "KEYWORD" "ID" { Ok(vec![(map_err($1)?, map_err($2)?)]) }
     | MethodNameKeywords "KEYWORD" "ID" { unimplemented!() }
     ;
 MethodNameBin -> Result<(), ()>:

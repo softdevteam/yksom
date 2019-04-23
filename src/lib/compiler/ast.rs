@@ -28,6 +28,7 @@ pub struct Method {
 #[derive(Debug)]
 pub enum MethodName {
     Id(Lexeme<StorageT>),
+    Keywords(Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>),
 }
 
 #[derive(Debug)]
