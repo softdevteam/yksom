@@ -56,7 +56,7 @@ impl<T: GcLayout> Gc<T> {
 
     /// Recreate the `Gc<T>` pointing to `valptr`. If `valptr` was not originally directly created
     /// by `Gc`/`GcBox` then undefined behaviour will result.
-    pub unsafe fn recover(valptr: *const T) -> Gc<T> {
+    pub unsafe fn recover(valptr: *const T) -> Self {
         Gc::clone_from_raw(GcBox::recover(valptr))
     }
 

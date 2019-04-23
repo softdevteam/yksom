@@ -94,7 +94,7 @@ impl Val {
         debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
         Val {
-            val: unsafe { transmute(ptr) },
+            val: unsafe { transmute::<*const GcBox<ThinObj>, usize>(ptr) },
         }
     }
 
@@ -103,9 +103,9 @@ impl Val {
     /// undefined behaviour.
     pub fn recover(obj: &Obj) -> Self {
         unsafe {
-            let ptr = ThinObj::recover(obj);
+            let ptr = ThinObj::recover(obj).into_raw();
             Val {
-                val: transmute(ptr),
+                val: transmute::<*const GcBox<ThinObj>, usize>(ptr),
             }
         }
     }
@@ -176,7 +176,9 @@ impl Clone for Val {
             ValKind::GCBOX => {
                 if self.val != 0 {
                     unsafe {
-                        transmute(Gc::<ThinObj>::clone_from_raw(self.val as *const _).into_raw())
+                        transmute::<*const GcBox<ThinObj>, usize>(
+                            Gc::<ThinObj>::clone_from_raw(self.val as *const _).into_raw(),
+                        )
                     }
                 } else {
                     0
@@ -247,7 +249,7 @@ impl ThinObj {
         let (gcbptr, objptr) = GcBox::<ThinObj>::alloc_blank(layout);
         let t: &Obj = &v;
         unsafe {
-            (*objptr).vtable = transmute::<_, (usize, usize)>(t).1;
+            (*objptr).vtable = transmute::<*const Obj, (usize, usize)>(t).1;
             let buf_v = (objptr as *mut u8).add(uoff);
             if size_of::<U>() != 0 {
                 buf_v.copy_from_nonoverlapping(&v as *const U as *const u8, size_of::<U>());
@@ -277,19 +279,21 @@ impl Deref for ThinObj {
 
     fn deref(&self) -> &(dyn Obj + 'static) {
         unsafe {
-            let self_ptr = self as *const Self;
-            let obj_ptr = self_ptr.add(1);
-            transmute((obj_ptr, self.vtable))
+            let self_ptr = self as *const Self as *const u8;
+            let obj_ptr = self_ptr.add(size_of::<ThinObj>());
+            transmute::<(*const u8, usize), &dyn Obj>((obj_ptr, self.vtable))
         }
     }
 }
 
 impl Drop for ThinObj {
     fn drop(&mut self) {
-        let self_ptr = self as *const Self;
+        let self_ptr = self as *const Self as *const u8;
         unsafe {
-            let obj_ptr = self_ptr.add(1);
-            ptr::drop_in_place::<Obj>(transmute((obj_ptr, self.vtable)));
+            let obj_ptr = self_ptr.add(size_of::<ThinObj>());
+            let fat_ptr =
+                transmute::<(*mut u8, usize), &mut dyn Obj>((obj_ptr as *mut u8, self.vtable));
+            ptr::drop_in_place(fat_ptr);
         }
     }
 }
