@@ -170,7 +170,9 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::String(lexeme) => {
                 // XXX are there string escaping rules we need to take account of?
-                let s = self.lexer.lexeme_str(&lexeme).to_string();
+                let s_orig = self.lexer.lexeme_str(&lexeme);
+                // Strip off the beginning/end quotes.
+                let s = s_orig[1..s_orig.len() - 1].to_owned();
                 let const_off = self.const_off(cobjects::Const::String(s));
                 self.instrs.push(Instr::Const(const_off));
                 Ok(())
