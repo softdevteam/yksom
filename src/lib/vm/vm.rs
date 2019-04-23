@@ -8,6 +8,7 @@
 // terms.
 
 use std::{
+    any::TypeId,
     ops::RangeBounds,
     path::{Path, PathBuf},
     process,
@@ -22,12 +23,13 @@ use crate::compiler::{
 
 pub const SOM_EXTENSION: &str = "som";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VMError {
     UnknownMethod(String),
     Exit,
     CantRepresentAsIsize,
     CantRepresentAsUsize,
+    TypeError { expected: TypeId, got: TypeId },
 }
 
 pub struct VM {
@@ -92,7 +94,7 @@ impl VM {
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> Result<Val, VMError> {
         let cls_gcobj = rcv.gc_obj(self)?.get_class(self).gc_obj(self)?;
-        let cls: &Class = cls_gcobj.as_any().downcast_ref().unwrap();
+        let cls: &Class = cls_gcobj.cast()?;
         let meth = cls.get_method(self, msg)?;
 
         match meth.body {
@@ -110,7 +112,7 @@ impl VM {
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string
                 let str_gcobj = rcv.gc_obj(self)?;
-                let string: &String_ = str_gcobj.as_any().downcast_ref().unwrap();
+                let string: &String_ = str_gcobj.cast()?;
                 println!("{}", string.as_str());
                 Ok(self.nil.clone())
             }

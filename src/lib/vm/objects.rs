@@ -33,7 +33,7 @@
 
 use std::{
     alloc::Layout,
-    any::Any,
+    any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
     mem::{forget, size_of, transmute},
@@ -262,6 +262,17 @@ impl ThinObj {
     pub unsafe fn recover(o: &Obj) -> Gc<ThinObj> {
         let thinptr = (o as *const _ as *const u8).sub(size_of::<ThinObj>()) as *const ThinObj;
         Gc::recover(thinptr)
+    }
+
+    /// Cast this `ThinObj` to a concrete `Obj` instance.
+    pub fn cast<T: Obj + 'static>(&self) -> Result<&T, VMError> {
+        self.deref()
+            .as_any()
+            .downcast_ref()
+            .ok_or_else(|| VMError::TypeError {
+                expected: TypeId::of::<T>(),
+                got: self.deref().as_any().type_id(),
+            })
     }
 }
 
@@ -629,14 +640,20 @@ mod tests {
         };
         // At this point, we will have dropped one of the references to the String above so the
         // assertion below is really checking that we're not doing a read after free.
+        assert_eq!(v.gc_obj(&vm).unwrap().cast::<String_>().unwrap().s, "s");
+    }
+
+    #[test]
+    fn test_cast() {
+        let vm = VM::new_no_bootstrap();
+        let v = String_::new(&vm, "s".to_owned());
+        assert!(v.gc_obj(&vm).unwrap().cast::<String_>().is_ok());
         assert_eq!(
-            v.gc_obj(&vm)
-                .unwrap()
-                .as_any()
-                .downcast_ref::<String_>()
-                .unwrap()
-                .s,
-            "s"
+            v.gc_obj(&vm).unwrap().cast::<Class>().unwrap_err(),
+            VMError::TypeError {
+                expected: TypeId::of::<Class>(),
+                got: TypeId::of::<String_>()
+            }
         );
     }
 }
