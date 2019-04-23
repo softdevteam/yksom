@@ -54,6 +54,12 @@ impl<T: GcLayout> Gc<T> {
         }
     }
 
+    /// Recreate the `Gc<T>` pointing to `valptr`. If `valptr` was not originally directly created
+    /// by `Gc`/`GcBox` then undefined behaviour will result.
+    pub unsafe fn recover(valptr: *const T) -> Self {
+        Gc::clone_from_raw(GcBox::recover(valptr))
+    }
+
     /// Clone the GC object `gcc`. Note that this is an associated method.
     pub fn clone(gcc: &Gc<T>) -> Self {
         unsafe { &mut *gcc.ptr }.clones += 1;
@@ -104,6 +110,12 @@ impl<T: GcLayout> GcBox<T> {
         unsafe { &mut *gcbptr }.clones = 1;
         let valptr = unsafe { (gcbptr as *mut u8).add(valoff) } as *mut T;
         (gcbptr, valptr)
+    }
+
+    /// Recreate the `GcBox<T>` pointing to `valptr`. If `valptr` was not originally directly
+    /// created by `GcBox` then undefined behaviour will result.
+    pub unsafe fn recover(valptr: *const T) -> *mut GcBox<T> {
+        (valptr as *const u8).sub(size_of::<GcBox<T>>()) as *mut GcBox<T>
     }
 }
 

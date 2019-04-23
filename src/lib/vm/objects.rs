@@ -9,6 +9,28 @@
 
 #![allow(clippy::new_ret_no_self)]
 
+//! This file contains the core SOM objects. Note that there is a fundamental constraint that
+//! *must* be obeyed by the programmer at all times: upon their creation, instances of the `Obj`
+//! trait must immediately be passed to `Val::from_obj`. In other words this is safe:
+//!
+//! ```rust,ignore
+//! let x = Val::from_obj(vm, String_{ s: "a".to_owned() });
+//! dbg!(x.gc_obj().as_str());
+//! ```
+//!
+//! but this leads to undefined behaviour:
+//!
+//! ```rust,ignore
+//! let x = String_{ s: "a".to_owned() };
+//! dbg!(x.gc_obj().as_str());
+//! ```
+//!
+//! The reason for this is that methods on `Obj`s can call `Val::restore` which converts an `Obj`
+//! reference back into a `Val`.
+//!
+//! Although this constraint is not enforced through the type system, it is not hard to obey: as
+//! soon as you create an `Obj` instance, pass it to `Val::from_obj`.
+
 use std::{
     alloc::Layout,
     any::Any,
@@ -72,7 +94,19 @@ impl Val {
         debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
         Val {
-            val: unsafe { transmute(ptr) },
+            val: unsafe { transmute::<*const GcBox<ThinObj>, usize>(ptr) },
+        }
+    }
+
+    /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Obj::from_off` and
+    /// then turned into an actual object with `gc_obj`: failure to follow these steps results in
+    /// undefined behaviour.
+    pub fn recover(obj: &Obj) -> Self {
+        unsafe {
+            let ptr = ThinObj::recover(obj).into_raw();
+            Val {
+                val: transmute::<*const GcBox<ThinObj>, usize>(ptr),
+            }
         }
     }
 
@@ -142,7 +176,9 @@ impl Clone for Val {
             ValKind::GCBOX => {
                 if self.val != 0 {
                     unsafe {
-                        transmute(Gc::<ThinObj>::clone_from_raw(self.val as *const _).into_raw())
+                        transmute::<*const GcBox<ThinObj>, usize>(
+                            Gc::<ThinObj>::clone_from_raw(self.val as *const _).into_raw(),
+                        )
                     }
                 } else {
                     0
@@ -167,6 +203,7 @@ impl Drop for Val {
     }
 }
 
+/// The main SOM Object trait.
 pub trait Obj: Debug + GcLayout {
     /// Return this object as an `Any` that can then be safely turned into a specific struct.
     fn as_any(&self) -> &Any;
@@ -212,7 +249,7 @@ impl ThinObj {
         let (gcbptr, objptr) = GcBox::<ThinObj>::alloc_blank(layout);
         let t: &Obj = &v;
         unsafe {
-            (*objptr).vtable = transmute::<_, (usize, usize)>(t).1;
+            (*objptr).vtable = transmute::<*const Obj, (usize, usize)>(t).1;
             let buf_v = (objptr as *mut u8).add(uoff);
             if size_of::<U>() != 0 {
                 buf_v.copy_from_nonoverlapping(&v as *const U as *const u8, size_of::<U>());
@@ -220,6 +257,11 @@ impl ThinObj {
         }
         forget(v);
         unsafe { Gc::from_raw(gcbptr) }
+    }
+
+    pub unsafe fn recover(o: &Obj) -> Gc<ThinObj> {
+        let thinptr = (o as *const _ as *const u8).sub(size_of::<ThinObj>()) as *const ThinObj;
+        Gc::recover(thinptr)
     }
 }
 
@@ -237,19 +279,21 @@ impl Deref for ThinObj {
 
     fn deref(&self) -> &(dyn Obj + 'static) {
         unsafe {
-            let self_ptr = self as *const Self;
-            let obj_ptr = self_ptr.add(1);
-            transmute((obj_ptr, self.vtable))
+            let self_ptr = self as *const Self as *const u8;
+            let obj_ptr = self_ptr.add(size_of::<ThinObj>());
+            transmute::<(*const u8, usize), &dyn Obj>((obj_ptr, self.vtable))
         }
     }
 }
 
 impl Drop for ThinObj {
     fn drop(&mut self) {
-        let self_ptr = self as *const Self;
+        let self_ptr = self as *const Self as *const u8;
         unsafe {
-            let obj_ptr = self_ptr.add(1);
-            ptr::drop_in_place::<Obj>(transmute((obj_ptr, self.vtable)));
+            let obj_ptr = self_ptr.add(size_of::<ThinObj>());
+            let fat_ptr =
+                transmute::<(*mut u8, usize), &mut dyn Obj>((obj_ptr as *mut u8, self.vtable));
+            ptr::drop_in_place(fat_ptr);
         }
     }
 }
@@ -282,7 +326,7 @@ impl Obj for Class {
 }
 
 impl Class {
-    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Self {
+    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Val {
         let mut methods = HashMap::with_capacity(ccls.methods.len());
         for cmeth in ccls.methods.into_iter() {
             let body = match cmeth.body {
@@ -302,13 +346,16 @@ impl Class {
                 cobjects::Const::String(s) => String_::new(vm, s),
             })
             .collect();
-        Class {
-            path: ccls.path,
-            methods,
-            instrs: ccls.instrs,
-            consts,
-            sends: ccls.sends,
-        }
+        Val::from_obj(
+            vm,
+            Class {
+                path: ccls.path,
+                methods,
+                instrs: ccls.instrs,
+                consts,
+                sends: ccls.sends,
+            },
+        )
     }
 
     pub fn get_method(&self, _: &VM, msg: &str) -> Result<&Method, VMError> {
@@ -565,6 +612,31 @@ mod tests {
         assert_eq!(
             v.gc_obj(&vm).unwrap().as_usize().unwrap(),
             v.as_usize(&vm).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_recovery() {
+        let vm = VM::new_no_bootstrap();
+
+        let v = {
+            let v = String_::new(&vm, "s".to_owned());
+            let v_gcobj = v.gc_obj(&vm).unwrap();
+            let v_int: &Obj = v_gcobj.deref().deref();
+            let v_recovered = Val::recover(v_int);
+            assert_eq!(v_recovered.val, v.val);
+            v_recovered
+        };
+        // At this point, we will have dropped one of the references to the String above so the
+        // assertion below is really checking that we're not doing a read after free.
+        assert_eq!(
+            v.gc_obj(&vm)
+                .unwrap()
+                .as_any()
+                .downcast_ref::<String_>()
+                .unwrap()
+                .s,
+            "s"
         );
     }
 }
