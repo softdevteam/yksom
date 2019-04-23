@@ -25,11 +25,16 @@ pub const SOM_EXTENSION: &str = "som";
 
 #[derive(Debug, PartialEq)]
 pub enum VMError {
-    UnknownMethod(String),
-    Exit,
+    /// A number which can't be represented in an `isize`.
     CantRepresentAsIsize,
+    /// A number which can't be represented in an `usize`.
     CantRepresentAsUsize,
+    /// The VM is trying to exit.
+    Exit,
+    /// A dynamic type error.
     TypeError { expected: TypeId, got: TypeId },
+    /// An unknown method.
+    UnknownMethod(String),
 }
 
 pub struct VM {
@@ -105,6 +110,11 @@ impl VM {
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> Result<Val, VMError> {
         match prim {
+            Primitive::Concatenate => {
+                let rcv_gcobj = rcv.gc_obj(self)?;
+                let rcv_str: &String_ = rcv_gcobj.cast()?;
+                rcv_str.concatenate(self, args[0].clone())
+            }
             Primitive::New => {
                 assert_eq!(args.len(), 0);
                 Ok(Inst::new(self, rcv))
@@ -114,7 +124,7 @@ impl VM {
                 let str_gcobj = rcv.gc_obj(self)?;
                 let string: &String_ = str_gcobj.cast()?;
                 println!("{}", string.as_str());
-                Ok(self.nil.clone())
+                Ok(rcv)
             }
         }
     }
@@ -128,11 +138,11 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Send(moff) => {
-                    let rcv = frame.stack_pop();
                     let (ref name, nargs) = &cls.sends[moff];
                     let args = frame
                         .stack_drain(frame.stack_len() - nargs..)
                         .collect::<Vec<_>>();
+                    let rcv = frame.stack_pop();
                     let r = self.send(rcv, &name, &args)?;
                     frame.stack_push(r);
                     pc += 1;
