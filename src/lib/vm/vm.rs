@@ -119,7 +119,7 @@ impl VM {
                 let str_gcobj = rcv.gc_obj(self)?;
                 let string: &String_ = str_gcobj.cast()?;
                 println!("{}", string.as_str());
-                Ok(self.nil.clone())
+                Ok(rcv)
             }
         }
     }
