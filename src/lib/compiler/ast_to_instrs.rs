@@ -43,8 +43,10 @@ impl<'a> Compiler<'a> {
             vars_stack: Vec::new(),
         };
 
-        let mut methods = Vec::with_capacity(astcls.methods.len());
         let mut errs = vec![];
+        let supercls = astcls.supername.map(|x| lexer.lexeme_str(&x).to_owned());
+
+        let mut methods = Vec::with_capacity(astcls.methods.len());
         for astmeth in &astcls.methods {
             match compiler.c_method(&astmeth) {
                 Ok(m) => {
@@ -77,6 +79,7 @@ impl<'a> Compiler<'a> {
 
         Ok(cobjects::Class {
             path: compiler.path.to_path_buf(),
+            supercls,
             methods,
             instrs: compiler.instrs,
             consts: compiler.consts.into_iter().map(|(k, _)| k).collect(),
@@ -175,6 +178,10 @@ impl<'a> Compiler<'a> {
                     let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
                     self.instrs.push(Instr::Send(send_off));
                 }
+                Ok(())
+            }
+            ast::Expr::Return => {
+                self.instrs.push(Instr::Return);
                 Ok(())
             }
             ast::Expr::String(lexeme) => {

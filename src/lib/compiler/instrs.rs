@@ -11,6 +11,7 @@
 pub enum Instr {
     Const(usize),
     Primitive(Primitive),
+    Return,
     Send(usize),
     VarLookup(u32),
 }

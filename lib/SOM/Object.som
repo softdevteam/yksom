@@ -1,2 +1,4 @@
 Object = nil (
+    "asString  = ( ^'instance of ' + (self class) )"
+    asString = ( ^'woo' )
 )

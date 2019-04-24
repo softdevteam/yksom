@@ -18,6 +18,7 @@ pub enum Const {
 
 pub struct Class {
     pub path: PathBuf,
+    pub supercls: Option<String>,
     pub methods: Vec<Method>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Const>,

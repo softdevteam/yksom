@@ -56,8 +56,8 @@ impl VM {
         };
         // XXX wrong class!
         vm.nil = Inst::new(&vm, Val::illegal());
-        vm.cls_cls = vm.init_builtin_class("Class");
         vm.obj_cls = vm.init_builtin_class("Object");
+        vm.cls_cls = vm.init_builtin_class("Class");
         vm.str_cls = vm.init_builtin_class("String");
 
         vm
@@ -100,11 +100,15 @@ impl VM {
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> Result<Val, VMError> {
         let cls_tobj = rcv.tobj(self)?.get_class(self).tobj(self)?;
         let cls: &Class = cls_tobj.cast()?;
-        let meth = cls.get_method(self, msg)?;
+        let (meth_cls_val, meth) = cls.get_method(self, msg)?;
 
         match meth.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
-            MethodBody::User(pc) => self.exec_user(cls, pc, args),
+            MethodBody::User(pc) => {
+                let meth_cls_tobj = meth_cls_val.tobj(self)?;
+                let meth_cls: &Class = meth_cls_tobj.cast()?;
+                self.exec_user(meth_cls, pc, args)
+            }
         }
     }
 
@@ -146,6 +150,9 @@ impl VM {
                     let r = self.send(rcv, &name, &args)?;
                     frame.stack_push(r);
                     pc += 1;
+                }
+                Instr::Return => {
+                    return Ok(frame.stack_pop());
                 }
                 _ => unimplemented!(),
             }

@@ -83,8 +83,8 @@ MethodBody -> Result<MethodBody, ()>:
 BlockExprs -> Result<Vec<Expr>, ()>:
       Exprs DotOpt "^" Expr DotOpt { unimplemented!() }
     | Exprs DotOpt { $1 }
-    | "^" Expr DotOpt { unimplemented!() }
-    | { unimplemented!() }
+    | "^" Expr DotOpt { Ok(vec![$2?, Expr::Return]) }
+    | { Ok(vec![]) }
     ;
 DotOpt -> Result<(), ()>:
       "." { unimplemented!() }
