@@ -98,8 +98,8 @@ impl VM {
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> Result<Val, VMError> {
-        let cls_gcobj = rcv.gc_obj(self)?.get_class(self).gc_obj(self)?;
-        let cls: &Class = cls_gcobj.cast()?;
+        let cls_tobj = rcv.tobj(self)?.get_class(self).tobj(self)?;
+        let cls: &Class = cls_tobj.cast()?;
         let meth = cls.get_method(self, msg)?;
 
         match meth.body {
@@ -111,8 +111,8 @@ impl VM {
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> Result<Val, VMError> {
         match prim {
             Primitive::Concatenate => {
-                let rcv_gcobj = rcv.gc_obj(self)?;
-                let rcv_str: &String_ = rcv_gcobj.cast()?;
+                let rcv_tobj = rcv.tobj(self)?;
+                let rcv_str: &String_ = rcv_tobj.cast()?;
                 rcv_str.concatenate(self, args[0].clone())
             }
             Primitive::New => {
@@ -121,9 +121,9 @@ impl VM {
             }
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string
-                let str_gcobj = rcv.gc_obj(self)?;
-                let string: &String_ = str_gcobj.cast()?;
-                println!("{}", string.as_str());
+                let str_tobj = rcv.tobj(self)?;
+                let str_: &String_ = str_tobj.cast()?;
+                println!("{}", str_.as_str());
                 Ok(rcv)
             }
         }

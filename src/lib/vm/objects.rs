@@ -15,14 +15,14 @@
 //!
 //! ```rust,ignore
 //! let x = Val::from_obj(vm, String_{ s: "a".to_owned() });
-//! dbg!(x.gc_obj().as_str());
+//! dbg!(x.tobj().as_str());
 //! ```
 //!
 //! but this leads to undefined behaviour:
 //!
 //! ```rust,ignore
 //! let x = String_{ s: "a".to_owned() };
-//! dbg!(x.gc_obj().as_str());
+//! dbg!(x.tobj().as_str());
 //! ```
 //!
 //! The reason for this is that methods on `Obj`s can call `Val::restore` which converts an `Obj`
@@ -99,7 +99,7 @@ impl Val {
     }
 
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Obj::from_off` and
-    /// then turned into an actual object with `gc_obj`: failure to follow these steps results in
+    /// then turned into an actual object with `tobj`: failure to follow these steps results in
     /// undefined behaviour.
     pub fn recover(obj: &Obj) -> Self {
         unsafe {
@@ -125,7 +125,7 @@ impl Val {
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
-    pub fn gc_obj(&self, vm: &VM) -> Result<Gc<ThinObj>, VMError> {
+    pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, VMError> {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(ValKind::GCBOX as usize, 0);
@@ -133,14 +133,14 @@ impl Val {
                 debug_assert_ne!(self.val, 0);
                 Ok(unsafe { Gc::clone_from_raw(self.val as *const _) })
             }
-            ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap())?.gc_obj(vm),
+            ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap())?.tobj(vm),
         }
     }
 
     /// If possible, return this `Val` as an `isize`.
     pub fn as_isize(&self, vm: &VM) -> Result<isize, VMError> {
         match self.valkind() {
-            ValKind::GCBOX => Ok(self.gc_obj(vm)?.as_isize()?),
+            ValKind::GCBOX => Ok(self.tobj(vm)?.as_isize()?),
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
                     Ok((self.val >> TAG_BITSIZE) as isize)
@@ -158,7 +158,7 @@ impl Val {
     /// If possible, return this `Val` as an `usize`.
     pub fn as_usize(&self, vm: &VM) -> Result<usize, VMError> {
         match self.valkind() {
-            ValKind::GCBOX => Ok(self.gc_obj(vm)?.as_usize()?),
+            ValKind::GCBOX => Ok(self.tobj(vm)?.as_usize()?),
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
                     Ok(self.val >> TAG_BITSIZE)
@@ -540,8 +540,8 @@ impl String_ {
 
     /// Concatenate this string with another string and return the result.
     pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, VMError> {
-        let other_gcobj = other.gc_obj(vm)?;
-        let other_str: &String_ = other_gcobj.cast()?;
+        let other_tobj = other.tobj(vm)?;
+        let other_str: &String_ = other_tobj.cast()?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.
@@ -640,7 +640,7 @@ mod tests {
 
         let v = Int::from_isize(&vm, 12345).unwrap();
         assert_eq!(
-            v.gc_obj(&vm).unwrap().as_usize().unwrap(),
+            v.tobj(&vm).unwrap().as_usize().unwrap(),
             v.as_usize(&vm).unwrap()
         );
     }
@@ -651,24 +651,24 @@ mod tests {
 
         let v = {
             let v = String_::new(&vm, "s".to_owned());
-            let v_gcobj = v.gc_obj(&vm).unwrap();
-            let v_int: &Obj = v_gcobj.deref().deref();
+            let v_tobj = v.tobj(&vm).unwrap();
+            let v_int: &Obj = v_tobj.deref().deref();
             let v_recovered = Val::recover(v_int);
             assert_eq!(v_recovered.val, v.val);
             v_recovered
         };
         // At this point, we will have dropped one of the references to the String above so the
         // assertion below is really checking that we're not doing a read after free.
-        assert_eq!(v.gc_obj(&vm).unwrap().cast::<String_>().unwrap().s, "s");
+        assert_eq!(v.tobj(&vm).unwrap().cast::<String_>().unwrap().s, "s");
     }
 
     #[test]
     fn test_cast() {
         let vm = VM::new_no_bootstrap();
         let v = String_::new(&vm, "s".to_owned());
-        assert!(v.gc_obj(&vm).unwrap().cast::<String_>().is_ok());
+        assert!(v.tobj(&vm).unwrap().cast::<String_>().is_ok());
         assert_eq!(
-            v.gc_obj(&vm).unwrap().cast::<Class>().unwrap_err(),
+            v.tobj(&vm).unwrap().cast::<Class>().unwrap_err(),
             VMError::TypeError {
                 expected: TypeId::of::<Class>(),
                 got: TypeId::of::<String_>()
