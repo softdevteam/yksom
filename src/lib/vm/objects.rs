@@ -303,7 +303,7 @@ impl Drop for ThinObj {
         unsafe {
             let obj_ptr = self_ptr.add(size_of::<ThinObj>());
             let fat_ptr =
-                transmute::<(*mut u8, usize), &mut dyn Obj>((obj_ptr as *mut u8, self.vtable));
+                transmute::<(*mut u8, usize), *mut dyn Obj>((obj_ptr as *mut u8, self.vtable));
             ptr::drop_in_place(fat_ptr);
         }
     }
