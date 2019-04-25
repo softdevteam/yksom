@@ -80,14 +80,14 @@ impl<T: GcLayout> Gc<T> {
 
 impl<T: GcLayout> Drop for Gc<T> {
     fn drop(&mut self) {
-        let clones = unsafe { &mut *self.ptr }.clones;
+        let clones = unsafe { &*self.ptr }.clones;
         if clones == 1 {
             unsafe {
                 ptr::drop_in_place(self.ptr);
                 dealloc(self.ptr as *mut u8, self.layout());
             }
         } else {
-            unsafe { &mut *self.ptr }.clones = clones - 1;
+            unsafe { &mut *self.ptr }.clones -= 1;
         }
     }
 }
