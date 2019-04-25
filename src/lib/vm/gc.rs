@@ -28,6 +28,17 @@ pub struct Gc<T: GcLayout> {
 }
 
 impl<T: GcLayout> Gc<T> {
+    /// Create a `Gc` from `v`.
+    pub fn new(v: T) -> Self {
+        let (gcbptr, vptr): (_, *mut T) = GcBox::<T>::alloc_blank(Layout::new::<T>());
+        let gc = unsafe {
+            vptr.copy_from_nonoverlapping(&v, 1);
+            Gc::from_raw(gcbptr)
+        };
+        forget(v);
+        gc
+    }
+
     /// Consumes the `Gc` returning a pointer which can be later used to recreate a `Gc` using
     /// either `from_raw` or `clone_from_raw`. Failing to recreate the `Gc` will lead to a memory
     /// leak.
@@ -137,5 +148,33 @@ impl<T> Drop for GcBox<T> {
             let valptr = (self as *mut GcBox<T> as *mut u8).add(size_of::<GcBox<T>>()) as *mut T;
             ptr::drop_in_place(valptr);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! gclayout {
+        ($(#[$attr:meta])* $n: ident) => {
+            impl GcLayout for $n {
+                fn layout(&self) -> std::alloc::Layout {
+                    std::alloc::Layout::new::<$n>()
+                }
+            }
+        };
+    }
+
+    gclayout!(i64);
+
+    #[test]
+    fn test_gc_new() {
+        let v1 = Gc::new(42);
+        assert_eq!(unsafe { (&*v1.ptr) }.clones, 1);
+        {
+            let v2 = Gc::clone(&v1);
+            assert_eq!(unsafe { (&*v1.ptr) }.clones, 2);
+        }
+        assert_eq!(unsafe { (&*v1.ptr) }.clones, 1);
     }
 }
