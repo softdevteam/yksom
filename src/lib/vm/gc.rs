@@ -174,6 +174,7 @@ mod tests {
         {
             let v2 = Gc::clone(&v1);
             assert_eq!(unsafe { (&*v1.ptr) }.clones, 2);
+            assert_eq!(unsafe { (&*v2.ptr) }.clones, 2);
         }
         assert_eq!(unsafe { (&*v1.ptr) }.clones, 1);
     }
