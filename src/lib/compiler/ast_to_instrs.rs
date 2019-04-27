@@ -12,10 +12,11 @@ use std::{collections::hash_map::HashMap, path::Path};
 use indexmap::map::{Entry, IndexMap};
 use itertools::Itertools;
 use lrpar::{Lexeme, Lexer};
+use static_assertions::const_assert_eq;
 
 use super::{
     ast, cobjects,
-    instrs::{Instr, Primitive},
+    instrs::{Instr, Primitive, SELF_VAR},
     StorageT,
 };
 
@@ -115,7 +116,8 @@ impl<'a> Compiler<'a> {
         astmeth: &ast::Method,
     ) -> Result<cobjects::Method, Vec<(Lexeme<StorageT>, String)>> {
         let mut vars = HashMap::new();
-        vars.insert("self", 0);
+        const_assert_eq!(SELF_VAR, 0);
+        vars.insert("self", SELF_VAR);
         self.vars_stack.push(vars);
         let (name, args) = match astmeth.name {
             ast::MethodName::Id(lexeme) => {
@@ -152,6 +154,7 @@ impl<'a> Compiler<'a> {
             },
             ast::MethodBody::Body { exprs } => {
                 let body_idx = self.instrs.len();
+                // We implicitly assume that the VM sets SELF_VAR to self.
                 for e in exprs {
                     // We deliberately bomb out at the first error in a method on the basis that
                     // it's likely to lead to many repetitive errors.
