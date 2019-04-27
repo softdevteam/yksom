@@ -114,6 +114,10 @@ impl VM {
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> Result<Val, VMError> {
         match prim {
+            Primitive::Class => {
+                let rcv_tobj = rcv.tobj(self)?;
+                Ok(rcv_tobj.get_class(self))
+            }
             Primitive::Concatenate => {
                 let rcv_tobj = rcv.tobj(self)?;
                 let rcv_str: &String_ = rcv_tobj.cast()?;
