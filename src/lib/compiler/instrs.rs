@@ -19,6 +19,7 @@ pub enum Instr {
 #[derive(Clone, Copy, Debug)]
 pub enum Primitive {
     Concatenate,
+    Name,
     New,
     PrintLn,
 }

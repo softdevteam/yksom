@@ -311,6 +311,7 @@ impl Drop for ThinObj {
 
 #[derive(Debug)]
 pub struct Class {
+    pub name: Val,
     pub path: PathBuf,
     pub supercls: Val,
     pub methods: HashMap<String, Gc<Method>>,
@@ -367,6 +368,7 @@ impl Class {
         Val::from_obj(
             vm,
             Class {
+                name: String_::new(vm, ccls.name),
                 path: ccls.path,
                 supercls,
                 methods,
@@ -375,6 +377,10 @@ impl Class {
                 sends: ccls.sends,
             },
         )
+    }
+
+    pub fn name(&self, _: &VM) -> Result<Val, VMError> {
+        Ok(self.name.clone())
     }
 
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, Gc<Method>), VMError> {

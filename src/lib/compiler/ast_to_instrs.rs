@@ -78,6 +78,7 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(cobjects::Class {
+            name: lexer.lexeme_str(&astcls.name).to_owned(),
             path: compiler.path.to_path_buf(),
             supercls,
             methods,
@@ -143,6 +144,7 @@ impl<'a> Compiler<'a> {
         match body {
             ast::MethodBody::Primitive => match name.1 {
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
+                "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),

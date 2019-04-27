@@ -119,6 +119,7 @@ impl VM {
                 let rcv_str: &String_ = rcv_tobj.cast()?;
                 rcv_str.concatenate(self, args[0].clone())
             }
+            Primitive::Name => rcv.tobj(self)?.cast::<Class>()?.name(self),
             Primitive::New => {
                 assert_eq!(args.len(), 0);
                 Ok(Inst::new(self, rcv))
