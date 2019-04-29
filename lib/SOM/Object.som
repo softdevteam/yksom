@@ -1,2 +1,4 @@
 Object = nil (
+    class = primitive
+    asString  = ( ^'instance of ' concatenate: (self class asString) )
 )

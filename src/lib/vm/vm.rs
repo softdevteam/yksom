@@ -9,16 +9,19 @@
 
 use std::{
     any::TypeId,
+    mem::size_of,
     ops::RangeBounds,
     path::{Path, PathBuf},
     process,
     vec::Drain,
 };
 
+use static_assertions::const_assert_eq;
+
 use super::objects::{Class, Inst, MethodBody, String_, Val};
 use crate::compiler::{
     compile,
-    instrs::{Instr, Primitive},
+    instrs::{Instr, Primitive, SELF_VAR},
 };
 
 pub const SOM_EXTENSION: &str = "som";
@@ -56,8 +59,8 @@ impl VM {
         };
         // XXX wrong class!
         vm.nil = Inst::new(&vm, Val::illegal());
-        vm.cls_cls = vm.init_builtin_class("Class");
         vm.obj_cls = vm.init_builtin_class("Object");
+        vm.cls_cls = vm.init_builtin_class("Class");
         vm.str_cls = vm.init_builtin_class("String");
 
         vm
@@ -100,21 +103,30 @@ impl VM {
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> Result<Val, VMError> {
         let cls_tobj = rcv.tobj(self)?.get_class(self).tobj(self)?;
         let cls: &Class = cls_tobj.cast()?;
-        let meth = cls.get_method(self, msg)?;
+        let (meth_cls_val, meth) = cls.get_method(self, msg)?;
 
         match meth.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
-            MethodBody::User(pc) => self.exec_user(cls, pc, args),
+            MethodBody::User(pc) => {
+                let meth_cls_tobj = meth_cls_val.tobj(self)?;
+                let meth_cls: &Class = meth_cls_tobj.cast()?;
+                self.exec_user(meth_cls, pc, rcv, args)
+            }
         }
     }
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> Result<Val, VMError> {
         match prim {
+            Primitive::Class => {
+                let rcv_tobj = rcv.tobj(self)?;
+                Ok(rcv_tobj.get_class(self))
+            }
             Primitive::Concatenate => {
                 let rcv_tobj = rcv.tobj(self)?;
                 let rcv_str: &String_ = rcv_tobj.cast()?;
                 rcv_str.concatenate(self, args[0].clone())
             }
+            Primitive::Name => rcv.tobj(self)?.cast::<Class>()?.name(self),
             Primitive::New => {
                 assert_eq!(args.len(), 0);
                 Ok(Inst::new(self, rcv))
@@ -129,8 +141,14 @@ impl VM {
         }
     }
 
-    fn exec_user(&self, cls: &Class, mut pc: usize, _args: &[Val]) -> Result<Val, VMError> {
-        let mut frame = Frame::new();
+    fn exec_user(
+        &self,
+        cls: &Class,
+        mut pc: usize,
+        rcv: Val,
+        _args: &[Val],
+    ) -> Result<Val, VMError> {
+        let mut frame = Frame::new(rcv);
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Const(coff) => {
@@ -147,6 +165,19 @@ impl VM {
                     frame.stack_push(r);
                     pc += 1;
                 }
+                Instr::Return => {
+                    return Ok(frame.stack_pop());
+                }
+                Instr::VarLookup(n) => {
+                    let val = frame.var_lookup(n);
+                    frame.stack_push(val);
+                    pc += 1;
+                }
+                Instr::VarSet(n) => {
+                    let val = frame.stack_pop();
+                    frame.var_set(n, val);
+                    pc += 1;
+                }
                 _ => unimplemented!(),
             }
         }
@@ -156,11 +187,16 @@ impl VM {
 
 pub struct Frame {
     stack: Vec<Val>,
+    vars: Vec<Val>,
 }
 
 impl Frame {
-    fn new() -> Self {
-        Frame { stack: Vec::new() }
+    fn new(self_val: Val) -> Self {
+        const_assert_eq!(SELF_VAR, 0);
+        Frame {
+            stack: Vec::new(),
+            vars: vec![self_val],
+        }
     }
 
     fn stack_len(&self) -> usize {
@@ -181,6 +217,16 @@ impl Frame {
     {
         self.stack.drain(range)
     }
+
+    fn var_lookup(&mut self, var: u32) -> Val {
+        debug_assert!(size_of::<usize>() > size_of::<u32>());
+        self.vars[var as usize].clone()
+    }
+
+    fn var_set(&mut self, var: u32, val: Val) {
+        debug_assert!(size_of::<usize>() > size_of::<u32>());
+        self.vars[var as usize] = val;
+    }
 }
 
 #[cfg(test)]
@@ -193,5 +239,18 @@ impl VM {
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{super::objects::Int, *};
+
+    #[test]
+    fn test_frame() {
+        let vm = VM::new_no_bootstrap();
+        let v = Int::from_isize(&vm, 42).unwrap();
+        let mut f = Frame::new(v);
+        assert_eq!(f.var_lookup(SELF_VAR).as_isize(&vm), Ok(42));
     }
 }

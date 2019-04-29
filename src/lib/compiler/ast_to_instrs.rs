@@ -12,10 +12,11 @@ use std::{collections::hash_map::HashMap, path::Path};
 use indexmap::map::{Entry, IndexMap};
 use itertools::Itertools;
 use lrpar::{Lexeme, Lexer};
+use static_assertions::const_assert_eq;
 
 use super::{
     ast, cobjects,
-    instrs::{Instr, Primitive},
+    instrs::{Instr, Primitive, SELF_VAR},
     StorageT,
 };
 
@@ -43,8 +44,10 @@ impl<'a> Compiler<'a> {
             vars_stack: Vec::new(),
         };
 
-        let mut methods = Vec::with_capacity(astcls.methods.len());
         let mut errs = vec![];
+        let supercls = astcls.supername.map(|x| lexer.lexeme_str(&x).to_owned());
+
+        let mut methods = Vec::with_capacity(astcls.methods.len());
         for astmeth in &astcls.methods {
             match compiler.c_method(&astmeth) {
                 Ok(m) => {
@@ -76,7 +79,9 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(cobjects::Class {
+            name: lexer.lexeme_str(&astcls.name).to_owned(),
             path: compiler.path.to_path_buf(),
+            supercls,
             methods,
             instrs: compiler.instrs,
             consts: compiler.consts.into_iter().map(|(k, _)| k).collect(),
@@ -111,7 +116,8 @@ impl<'a> Compiler<'a> {
         astmeth: &ast::Method,
     ) -> Result<cobjects::Method, Vec<(Lexeme<StorageT>, String)>> {
         let mut vars = HashMap::new();
-        vars.insert("self", 0);
+        const_assert_eq!(SELF_VAR, 0);
+        vars.insert("self", SELF_VAR);
         self.vars_stack.push(vars);
         let (name, args) = match astmeth.name {
             ast::MethodName::Id(lexeme) => {
@@ -139,13 +145,16 @@ impl<'a> Compiler<'a> {
     ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
         match body {
             ast::MethodBody::Primitive => match name.1 {
+                "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
+                "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
             ast::MethodBody::Body { exprs } => {
                 let body_idx = self.instrs.len();
+                // We implicitly assume that the VM sets SELF_VAR to self.
                 for e in exprs {
                     // We deliberately bomb out at the first error in a method on the basis that
                     // it's likely to lead to many repetitive errors.
@@ -175,6 +184,10 @@ impl<'a> Compiler<'a> {
                     let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
                     self.instrs.push(Instr::Send(send_off));
                 }
+                Ok(())
+            }
+            ast::Expr::Return => {
+                self.instrs.push(Instr::Return);
                 Ok(())
             }
             ast::Expr::String(lexeme) => {

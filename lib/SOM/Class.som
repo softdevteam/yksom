@@ -1,3 +1,7 @@
 Class = (
     new = primitive
+
+    name     = primitive
+
+    asString = ( ^self name )
 )

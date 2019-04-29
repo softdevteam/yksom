@@ -47,6 +47,7 @@ pub enum Expr {
         receiver: Box<Expr>,
         ids: Vec<Lexeme<StorageT>>,
     },
+    Return,
     String(Lexeme<StorageT>),
     VarLookup(Lexeme<StorageT>),
 }

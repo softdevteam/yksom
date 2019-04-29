@@ -311,8 +311,10 @@ impl Drop for ThinObj {
 
 #[derive(Debug)]
 pub struct Class {
+    pub name: Val,
     pub path: PathBuf,
-    pub methods: HashMap<String, Method>,
+    pub supercls: Val,
+    pub methods: HashMap<String, Gc<Method>>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Val>,
     pub sends: Vec<(String, usize)>,
@@ -338,6 +340,12 @@ impl Obj for Class {
 
 impl Class {
     pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Val {
+        let supercls = match ccls.supercls {
+            Some(ref x) if x == "nil" => vm.nil.clone(),
+            None => vm.obj_cls.clone(),
+            _ => unimplemented!(),
+        };
+
         let mut methods = HashMap::with_capacity(ccls.methods.len());
         for cmeth in ccls.methods.into_iter() {
             let body = match cmeth.body {
@@ -348,7 +356,7 @@ impl Class {
                 name: cmeth.name.clone(),
                 body,
             };
-            methods.insert(cmeth.name, meth);
+            methods.insert(cmeth.name, Gc::new(meth));
         }
         let consts = ccls
             .consts
@@ -360,7 +368,9 @@ impl Class {
         Val::from_obj(
             vm,
             Class {
+                name: String_::new(vm, ccls.name),
                 path: ccls.path,
+                supercls,
                 methods,
                 instrs: ccls.instrs,
                 consts,
@@ -369,10 +379,22 @@ impl Class {
         )
     }
 
-    pub fn get_method(&self, _: &VM, msg: &str) -> Result<&Method, VMError> {
+    pub fn name(&self, _: &VM) -> Result<Val, VMError> {
+        Ok(self.name.clone())
+    }
+
+    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, Gc<Method>), VMError> {
         self.methods
             .get(msg)
-            .ok_or_else(|| VMError::UnknownMethod(msg.to_owned()))
+            .map(|x| Ok((Val::recover(self), Gc::clone(x))))
+            .unwrap_or_else(|| {
+                let sc_tobj = self.supercls.tobj(vm)?;
+                if let Ok(scls) = sc_tobj.cast::<Class>() {
+                    scls.get_method(vm, msg)
+                } else {
+                    Err(VMError::UnknownMethod(msg.to_owned()))
+                }
+            })
     }
 }
 
