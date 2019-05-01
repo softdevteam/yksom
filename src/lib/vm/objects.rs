@@ -261,6 +261,7 @@ impl ThinObj {
         unsafe { Gc::from_raw(gcbptr) }
     }
 
+    /// Turn an `Obj` pointer into a `Gc<ThinObj>`.
     pub unsafe fn recover(o: &Obj) -> Gc<ThinObj> {
         let thinptr = (o as *const _ as *const u8).sub(size_of::<ThinObj>()) as *const ThinObj;
         Gc::recover(thinptr)
