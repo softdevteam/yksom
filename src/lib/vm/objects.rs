@@ -74,9 +74,7 @@ enum ValKind {
 }
 
 /// The core struct representing values in the language runtime: boxed and unboxed values are
-/// hidden behind this, such that they can be treated in exactly the same way. The contents of this
-/// struct are deliberately opaque, and may change, but it is guaranteed that this struct will
-/// always be `Copy`able.
+/// hidden behind this, such that they can be treated in exactly the same way.
 #[derive(Debug)]
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
