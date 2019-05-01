@@ -266,13 +266,29 @@ impl ThinObj {
 
     /// Cast this `ThinObj` to a concrete `Obj` instance.
     pub fn cast<T: Obj + 'static>(&self) -> Result<&T, VMError> {
-        self.deref()
-            .as_any()
-            .downcast_ref()
-            .ok_or_else(|| VMError::TypeError {
+        // This is a cunning hack based on the fact that vtable pointers are a proxy for a type
+        // identifier. In other words, if two distinct objects have the same vtable pointer, they
+        // are instances of the same type; if their vtable pointers are different, they are
+        // instances of different types. We can thus use vtable pointers as a proxy for type
+        // equality.
+
+        // We need to get `T`'s vtable. We cheat, creating a dummy pointer that forces the compiler
+        // to create a trait object, from which we can then fish out the vtable pointer.
+        let t_vtable = {
+            let t: &dyn Obj = unsafe { &*(0 as *const T) };
+            unsafe { transmute::<&dyn Obj, (usize, usize)>(t) }.1
+        };
+
+        if t_vtable == self.vtable {
+            let self_ptr = self as *const Self as *const u8;
+            let obj_ptr = unsafe { self_ptr.add(size_of::<ThinObj>()) };
+            Ok(unsafe { &*(obj_ptr as *const T) })
+        } else {
+            Err(VMError::TypeError {
                 expected: TypeId::of::<T>(),
                 got: self.deref().as_any().type_id(),
             })
+        }
     }
 }
 
