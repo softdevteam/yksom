@@ -104,6 +104,10 @@ impl<T: GcLayout> Deref for Gc<T> {
 pub struct GcBox<T> {
     clones: usize,
     phantom: PhantomData<T>,
+    // The GcBox is followed by the actual contents of the object itself. In other words, on a 64
+    // bit machine the layout is:
+    //   0..7: clones
+    //   8.. : object
 }
 
 impl<T: GcLayout> GcBox<T> {

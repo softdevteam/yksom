@@ -234,6 +234,10 @@ gclayout!(String_);
 #[repr(C)]
 pub struct ThinObj {
     vtable: usize,
+    // The ThinObj `vtable` is followed by the actual contents of the object itself. In other
+    // words, on a 64 bit machine the layout is:
+    //   0..7: vtable
+    //   8..: object
 }
 
 impl ThinObj {
