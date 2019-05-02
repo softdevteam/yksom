@@ -74,9 +74,7 @@ enum ValKind {
 }
 
 /// The core struct representing values in the language runtime: boxed and unboxed values are
-/// hidden behind this, such that they can be treated in exactly the same way. The contents of this
-/// struct are deliberately opaque, and may change, but it is guaranteed that this struct will
-/// always be `Copy`able.
+/// hidden behind this, such that they can be treated in exactly the same way.
 #[derive(Debug)]
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
@@ -236,6 +234,10 @@ gclayout!(String_);
 #[repr(C)]
 pub struct ThinObj {
     vtable: usize,
+    // The ThinObj `vtable` is followed by the actual contents of the object itself. In other
+    // words, on a 64 bit machine the layout is:
+    //   0..7: vtable
+    //   8..: object
 }
 
 impl ThinObj {
@@ -259,6 +261,7 @@ impl ThinObj {
         unsafe { Gc::from_raw(gcbptr) }
     }
 
+    /// Turn an `Obj` pointer into a `Gc<ThinObj>`.
     pub unsafe fn recover(o: &Obj) -> Gc<ThinObj> {
         let thinptr = (o as *const _ as *const u8).sub(size_of::<ThinObj>()) as *const ThinObj;
         Gc::recover(thinptr)
