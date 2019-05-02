@@ -231,6 +231,14 @@ gclayout!(Inst);
 gclayout!(Int);
 gclayout!(String_);
 
+macro_rules! obj_boilerplate {
+    () => {
+        fn as_any(&self) -> &Any {
+            self
+        }
+    }
+}
+
 /// A GCable object that stores the vtable pointer alongside the object, meaning that a thin
 /// pointer can be used to store to the ThinCell itself.
 #[repr(C)]
@@ -337,9 +345,7 @@ pub struct Class {
 }
 
 impl Obj for Class {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -430,9 +436,7 @@ pub enum MethodBody {
 }
 
 impl Obj for Method {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -454,9 +458,7 @@ pub struct Inst {
 }
 
 impl Obj for Inst {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         unimplemented!()
@@ -483,9 +485,7 @@ pub struct Int {
 }
 
 impl Obj for Int {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Ok(self.val)
@@ -550,9 +550,7 @@ pub struct String_ {
 }
 
 impl Obj for String_ {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
