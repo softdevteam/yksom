@@ -205,8 +205,8 @@ impl Drop for Val {
 
 /// The main SOM Object trait.
 pub trait Obj: Debug + GcLayout {
-    /// Return this object as an `Any` that can then be safely turned into a specific struct.
-    fn as_any(&self) -> &Any;
+    /// Return the `TypeId` of the struct implementing this trait.
+    fn struct_type_id(&self) -> TypeId;
     /// If possible, return this `Obj` as an `isize`.
     fn as_isize(&self) -> Result<isize, VMError>;
     /// If possible, return this `Obj` as an `usize`.
@@ -233,8 +233,8 @@ gclayout!(String_);
 
 macro_rules! obj_boilerplate {
     () => {
-        fn as_any(&self) -> &Any {
-            self
+        fn struct_type_id(&self) -> TypeId {
+            self.type_id()
         }
     }
 }
@@ -294,7 +294,7 @@ impl ThinObj {
         } else {
             Err(VMError::TypeError {
                 expected: TypeId::of::<T>(),
-                got: self.deref().as_any().type_id(),
+                got: self.deref().struct_type_id(),
             })
         }
     }
@@ -710,5 +710,11 @@ mod tests {
                 got: TypeId::of::<String_>()
             }
         );
+
+        let v_tobj = v.tobj(&vm).unwrap();
+        let v_obj: &dyn Obj = v_tobj.deref().deref();
+        let v_str_: &String_ = v_tobj.cast().unwrap();
+        assert_ne!(v_obj.type_id(), v_str_.type_id());
+        assert_eq!(v_obj.struct_type_id(), v_str_.type_id());
     }
 }
