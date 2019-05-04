@@ -86,7 +86,7 @@ impl Val {
     ///
     /// [In an ideal world, this would be a function on `Obj` itself, but that would mean that
     /// `Obj` couldn't be a trait object. Oh well.]
-    pub fn from_obj<T: Obj + 'static>(_: &VM, obj: T) -> Self {
+    pub fn from_obj<T: Obj>(_: &VM, obj: T) -> Self {
         debug_assert_eq!(ValKind::GCBOX as usize, 0);
         debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
@@ -258,10 +258,10 @@ pub struct ThinObj {
 }
 
 impl ThinObj {
-    pub fn new<U>(v: U) -> Gc<ThinObj>
+    pub fn new<'a, U>(v: U) -> Gc<ThinObj>
     where
-        *const U: CoerceUnsized<*const Obj>,
-        U: Obj,
+        *const U: CoerceUnsized<*const (Obj + 'a)>,
+        U: Obj + 'a,
     {
         let (layout, uoff) = Layout::new::<ThinObj>().extend(Layout::new::<U>()).unwrap();
         debug_assert_eq!(uoff, size_of::<ThinObj>());
@@ -285,7 +285,7 @@ impl ThinObj {
     }
 
     /// Cast this `ThinObj` to a concrete `Obj` instance.
-    pub fn cast<T: Obj + StaticObjType + 'static>(&self) -> Result<&T, VMError> {
+    pub fn cast<T: Obj + StaticObjType>(&self) -> Result<&T, VMError> {
         // This is a cunning hack based on the fact that vtable pointers are a proxy for a type
         // identifier. In other words, if two distinct objects have the same vtable pointer, they
         // are instances of the same type; if their vtable pointers are different, they are
