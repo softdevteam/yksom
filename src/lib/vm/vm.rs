@@ -33,6 +33,9 @@ pub enum VMError {
     CantRepresentAsUsize,
     /// The VM is trying to exit.
     Exit,
+    /// Tried to perform a `Val::gcbox_cast` operation on a non-boxed `Val`. Note that `expected`
+    /// and `got` can reference the same `ObjType`.
+    GcBoxTypeError { expected: ObjType, got: ObjType },
     /// A dynamic type error.
     TypeError { expected: ObjType, got: ObjType },
     /// An unknown method.
@@ -68,7 +71,13 @@ impl VM {
     /// Compile the file at `path`.
     pub fn compile(&self, path: &Path) -> Val {
         let ccls = compile(path);
-        Class::from_ccls(self, ccls)
+        Class::from_ccls(self, ccls).unwrap_or_else(|e| {
+            panic!(
+                "Fatal compilation error for {}: {:?}",
+                path.to_str().unwrap(),
+                e
+            )
+        })
     }
 
     fn find_class(&self, name: &str) -> Result<PathBuf, ()> {

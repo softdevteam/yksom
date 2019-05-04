@@ -121,6 +121,26 @@ impl Val {
         }
     }
 
+    /// If this `Val` is a `GCBOX`, and that `GCBOX` is of type `T`, cast the `Val` to `&T`. If
+    /// this `Val` is not a `GCBOX` or the `GCBOX` is not of type `T`, `VMError` will be returned.
+    /// Note that, in general, you should use `Val::tobj()` as that can box values as needed
+    /// whereas `gcbox_cast` cannot.
+    pub fn gcbox_cast<T: Obj + StaticObjType>(&self, _: &VM) -> Result<&T, VMError> {
+        match self.valkind() {
+            ValKind::GCBOX => {
+                debug_assert_eq!(ValKind::GCBOX as usize, 0);
+                debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
+                debug_assert_ne!(self.val, 0);
+                let tobj = unsafe { &*transmute::<usize, *const GcBox<ThinObj>>(self.val) };
+                tobj.deref().cast()
+            }
+            ValKind::INT => Err(VMError::GcBoxTypeError {
+                expected: T::static_objtype(),
+                got: Int::static_objtype(),
+            }),
+        }
+    }
+
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
     pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, VMError> {
         match self.valkind() {
@@ -240,7 +260,17 @@ macro_rules! gclayout {
     };
 }
 
-gclayout!(Class);
+macro_rules! gclayout_lifetime {
+    ($(#[$attr:meta])* $n: ident) => {
+        impl<'a> GcLayout for $n<'a> {
+            fn layout(&self) -> std::alloc::Layout {
+                std::alloc::Layout::new::<$n>()
+            }
+        }
+    };
+}
+
+gclayout_lifetime!(Class);
 gclayout!(Method);
 gclayout!(Inst);
 gclayout!(Int);
@@ -346,17 +376,17 @@ impl Drop for ThinObj {
 }
 
 #[derive(Debug)]
-pub struct Class {
+pub struct Class<'a> {
     pub name: Val,
     pub path: PathBuf,
-    pub supercls: Val,
+    pub supercls: Option<&'a Class<'a>>,
     pub methods: HashMap<String, Gc<Method>>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Val>,
     pub sends: Vec<(String, usize)>,
 }
 
-impl Obj for Class {
+impl<'a> Obj for Class<'a> {
     fn dyn_objtype(&self) -> ObjType {
         ObjType::Class
     }
@@ -374,17 +404,17 @@ impl Obj for Class {
     }
 }
 
-impl StaticObjType for Class {
+impl<'a> StaticObjType for Class<'a> {
     fn static_objtype() -> ObjType {
         ObjType::Class
     }
 }
 
-impl Class {
-    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Val {
+impl<'a> Class<'a> {
+    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, VMError> {
         let supercls = match ccls.supercls {
-            Some(ref x) if x == "nil" => vm.nil.clone(),
-            None => vm.obj_cls.clone(),
+            Some(ref x) if x == "nil" => None,
+            None => (Some(vm.obj_cls.gcbox_cast(vm)?)),
             _ => unimplemented!(),
         };
 
@@ -407,7 +437,7 @@ impl Class {
                 cobjects::Const::String(s) => String_::new(vm, s),
             })
             .collect();
-        Val::from_obj(
+        Ok(Val::from_obj(
             vm,
             Class {
                 name: String_::new(vm, ccls.name),
@@ -418,7 +448,7 @@ impl Class {
                 consts,
                 sends: ccls.sends,
             },
-        )
+        ))
     }
 
     pub fn name(&self, _: &VM) -> Result<Val, VMError> {
@@ -429,13 +459,9 @@ impl Class {
         self.methods
             .get(msg)
             .map(|x| Ok((Val::recover(self), Gc::clone(x))))
-            .unwrap_or_else(|| {
-                let sc_tobj = self.supercls.tobj(vm)?;
-                if let Ok(scls) = sc_tobj.cast::<Class>() {
-                    scls.get_method(vm, msg)
-                } else {
-                    Err(VMError::UnknownMethod(msg.to_owned()))
-                }
+            .unwrap_or_else(|| match self.supercls {
+                Some(scls) => scls.get_method(vm, msg),
+                None => Err(VMError::UnknownMethod(msg.to_owned())),
             })
     }
 }
@@ -760,6 +786,21 @@ mod tests {
             VMError::TypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_
+            }
+        );
+    }
+
+    #[test]
+    fn test_gcbox_cast() {
+        let vm = VM::new_no_bootstrap();
+        let v = String_::new(&vm, "s".to_owned());
+        assert!(v.gcbox_cast::<String_>(&vm).is_ok());
+        let v = Int::from_usize(&vm, 0).unwrap();
+        assert_eq!(
+            v.gcbox_cast::<Int>(&vm).unwrap_err(),
+            VMError::GcBoxTypeError {
+                expected: ObjType::Int,
+                got: ObjType::Int
             }
         );
     }
