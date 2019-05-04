@@ -33,7 +33,6 @@
 
 use std::{
     alloc::Layout,
-    any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
     mem::{forget, size_of, transmute},
@@ -201,16 +200,34 @@ impl Drop for Val {
     }
 }
 
+/// The SOM type of objects.
+///
+/// It might seem that we should use `TypeId` for this, but that requires types to have a 'static
+/// lifetime, which is an annoying restriction.
+#[derive(Debug, PartialEq)]
+pub enum ObjType {
+    Class,
+    Method,
+    Inst,
+    Int,
+    String_,
+}
+
 /// The main SOM Object trait.
 pub trait Obj: Debug + GcLayout {
-    /// Return the `TypeId` of the struct implementing this trait.
-    fn struct_type_id(&self) -> TypeId;
+    /// Return the `ObjType` of this object.
+    fn dyn_objtype(&self) -> ObjType;
     /// If possible, return this `Obj` as an `isize`.
     fn as_isize(&self) -> Result<isize, VMError>;
     /// If possible, return this `Obj` as an `usize`.
     fn as_usize(&self) -> Result<usize, VMError>;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
+}
+
+pub trait StaticObjType {
+    /// Return this trait type's static `ObjType`
+    fn static_objtype() -> ObjType;
 }
 
 macro_rules! gclayout {
@@ -228,14 +245,6 @@ gclayout!(Method);
 gclayout!(Inst);
 gclayout!(Int);
 gclayout!(String_);
-
-macro_rules! obj_boilerplate {
-    () => {
-        fn struct_type_id(&self) -> TypeId {
-            self.type_id()
-        }
-    }
-}
 
 /// A GCable object that stores the vtable pointer alongside the object, meaning that a thin
 /// pointer can be used to store to the ThinCell itself.
@@ -276,7 +285,7 @@ impl ThinObj {
     }
 
     /// Cast this `ThinObj` to a concrete `Obj` instance.
-    pub fn cast<T: Obj + 'static>(&self) -> Result<&T, VMError> {
+    pub fn cast<T: Obj + StaticObjType + 'static>(&self) -> Result<&T, VMError> {
         // This is a cunning hack based on the fact that vtable pointers are a proxy for a type
         // identifier. In other words, if two distinct objects have the same vtable pointer, they
         // are instances of the same type; if their vtable pointers are different, they are
@@ -296,8 +305,8 @@ impl ThinObj {
             Ok(unsafe { &*(obj_ptr as *const T) })
         } else {
             Err(VMError::TypeError {
-                expected: TypeId::of::<T>(),
-                got: self.deref().struct_type_id(),
+                expected: T::static_objtype(),
+                got: self.deref().dyn_objtype(),
             })
         }
     }
@@ -348,7 +357,9 @@ pub struct Class {
 }
 
 impl Obj for Class {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Class
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -360,6 +371,12 @@ impl Obj for Class {
 
     fn get_class(&self, vm: &VM) -> Val {
         vm.cls_cls.clone()
+    }
+}
+
+impl StaticObjType for Class {
+    fn static_objtype() -> ObjType {
+        ObjType::Class
     }
 }
 
@@ -439,7 +456,9 @@ pub enum MethodBody {
 }
 
 impl Obj for Method {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Method
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -454,6 +473,12 @@ impl Obj for Method {
     }
 }
 
+impl StaticObjType for Method {
+    fn static_objtype() -> ObjType {
+        ObjType::Method
+    }
+}
+
 /// An instance of a user class.
 #[derive(Debug)]
 pub struct Inst {
@@ -461,7 +486,9 @@ pub struct Inst {
 }
 
 impl Obj for Inst {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Inst
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         unimplemented!()
@@ -473,6 +500,12 @@ impl Obj for Inst {
 
     fn get_class(&self, _: &VM) -> Val {
         self.class.clone()
+    }
+}
+
+impl StaticObjType for Inst {
+    fn static_objtype() -> ObjType {
+        ObjType::Inst
     }
 }
 
@@ -488,7 +521,9 @@ pub struct Int {
 }
 
 impl Obj for Int {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Int
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Ok(self.val)
@@ -504,6 +539,12 @@ impl Obj for Int {
 
     fn get_class(&self, _: &VM) -> Val {
         unimplemented!();
+    }
+}
+
+impl StaticObjType for Int {
+    fn static_objtype() -> ObjType {
+        ObjType::Int
     }
 }
 
@@ -553,7 +594,9 @@ pub struct String_ {
 }
 
 impl Obj for String_ {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::String_
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -565,6 +608,12 @@ impl Obj for String_ {
 
     fn get_class(&self, vm: &VM) -> Val {
         vm.str_cls.clone()
+    }
+}
+
+impl StaticObjType for String_ {
+    fn static_objtype() -> ObjType {
+        ObjType::String_
     }
 }
 
@@ -709,15 +758,9 @@ mod tests {
         assert_eq!(
             v.tobj(&vm).unwrap().cast::<Class>().unwrap_err(),
             VMError::TypeError {
-                expected: TypeId::of::<Class>(),
-                got: TypeId::of::<String_>()
+                expected: ObjType::Class,
+                got: ObjType::String_
             }
         );
-
-        let v_tobj = v.tobj(&vm).unwrap();
-        let v_obj: &dyn Obj = v_tobj.deref().deref();
-        let v_str_: &String_ = v_tobj.cast().unwrap();
-        assert_ne!(v_obj.type_id(), v_str_.type_id());
-        assert_eq!(v_obj.struct_type_id(), v_str_.type_id());
     }
 }

@@ -8,7 +8,6 @@
 // terms.
 
 use std::{
-    any::TypeId,
     mem::size_of,
     ops::RangeBounds,
     path::{Path, PathBuf},
@@ -18,7 +17,7 @@ use std::{
 
 use static_assertions::const_assert_eq;
 
-use super::objects::{Class, Inst, MethodBody, String_, Val};
+use super::objects::{Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
     compile,
     instrs::{Instr, Primitive, SELF_VAR},
@@ -35,7 +34,7 @@ pub enum VMError {
     /// The VM is trying to exit.
     Exit,
     /// A dynamic type error.
-    TypeError { expected: TypeId, got: TypeId },
+    TypeError { expected: ObjType, got: ObjType },
     /// An unknown method.
     UnknownMethod(String),
 }
