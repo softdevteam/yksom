@@ -380,7 +380,7 @@ pub struct Class<'a> {
     pub name: Val,
     pub path: PathBuf,
     pub supercls: Option<&'a Class<'a>>,
-    pub methods: HashMap<String, Gc<Method>>,
+    pub methods: HashMap<String, Method>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Val>,
     pub sends: Vec<(String, usize)>,
@@ -428,7 +428,7 @@ impl<'a> Class<'a> {
                 name: cmeth.name.clone(),
                 body,
             };
-            methods.insert(cmeth.name, Gc::new(meth));
+            methods.insert(cmeth.name, meth);
         }
         let consts = ccls
             .consts
@@ -455,10 +455,10 @@ impl<'a> Class<'a> {
         Ok(self.name.clone())
     }
 
-    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, Gc<Method>), VMError> {
+    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, &Method), VMError> {
         self.methods
             .get(msg)
-            .map(|x| Ok((Val::recover(self), Gc::clone(x))))
+            .map(|x| Ok((Val::recover(self), x)))
             .unwrap_or_else(|| match self.supercls {
                 Some(scls) => scls.get_method(vm, msg),
                 None => Err(VMError::UnknownMethod(msg.to_owned())),
