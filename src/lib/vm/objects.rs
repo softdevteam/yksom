@@ -203,8 +203,8 @@ impl Drop for Val {
 
 /// The main SOM Object trait.
 pub trait Obj: Debug + GcLayout {
-    /// Return this object as an `Any` that can then be safely turned into a specific struct.
-    fn as_any(&self) -> &Any;
+    /// Return the `TypeId` of the struct implementing this trait.
+    fn struct_type_id(&self) -> TypeId;
     /// If possible, return this `Obj` as an `isize`.
     fn as_isize(&self) -> Result<isize, VMError>;
     /// If possible, return this `Obj` as an `usize`.
@@ -228,6 +228,14 @@ gclayout!(Method);
 gclayout!(Inst);
 gclayout!(Int);
 gclayout!(String_);
+
+macro_rules! obj_boilerplate {
+    () => {
+        fn struct_type_id(&self) -> TypeId {
+            self.type_id()
+        }
+    }
+}
 
 /// A GCable object that stores the vtable pointer alongside the object, meaning that a thin
 /// pointer can be used to store to the ThinCell itself.
@@ -269,13 +277,29 @@ impl ThinObj {
 
     /// Cast this `ThinObj` to a concrete `Obj` instance.
     pub fn cast<T: Obj + 'static>(&self) -> Result<&T, VMError> {
-        self.deref()
-            .as_any()
-            .downcast_ref()
-            .ok_or_else(|| VMError::TypeError {
+        // This is a cunning hack based on the fact that vtable pointers are a proxy for a type
+        // identifier. In other words, if two distinct objects have the same vtable pointer, they
+        // are instances of the same type; if their vtable pointers are different, they are
+        // instances of different types. We can thus use vtable pointers as a proxy for type
+        // equality.
+
+        // We need to get `T`'s vtable. We cheat, creating a dummy pointer that forces the compiler
+        // to create a trait object, from which we can then fish out the vtable pointer.
+        let t_vtable = {
+            let t: &dyn Obj = unsafe { &*(0 as *const T) };
+            unsafe { transmute::<&dyn Obj, (usize, usize)>(t) }.1
+        };
+
+        if t_vtable == self.vtable {
+            let self_ptr = self as *const Self as *const u8;
+            let obj_ptr = unsafe { self_ptr.add(size_of::<ThinObj>()) };
+            Ok(unsafe { &*(obj_ptr as *const T) })
+        } else {
+            Err(VMError::TypeError {
                 expected: TypeId::of::<T>(),
-                got: self.deref().as_any().type_id(),
+                got: self.deref().struct_type_id(),
             })
+        }
     }
 }
 
@@ -324,9 +348,7 @@ pub struct Class {
 }
 
 impl Obj for Class {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -417,9 +439,7 @@ pub enum MethodBody {
 }
 
 impl Obj for Method {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -441,9 +461,7 @@ pub struct Inst {
 }
 
 impl Obj for Inst {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         unimplemented!()
@@ -470,9 +488,7 @@ pub struct Int {
 }
 
 impl Obj for Int {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Ok(self.val)
@@ -537,9 +553,7 @@ pub struct String_ {
 }
 
 impl Obj for String_ {
-    fn as_any(&self) -> &Any {
-        self
-    }
+    obj_boilerplate!();
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -699,5 +713,11 @@ mod tests {
                 got: TypeId::of::<String_>()
             }
         );
+
+        let v_tobj = v.tobj(&vm).unwrap();
+        let v_obj: &dyn Obj = v_tobj.deref().deref();
+        let v_str_: &String_ = v_tobj.cast().unwrap();
+        assert_ne!(v_obj.type_id(), v_str_.type_id());
+        assert_eq!(v_obj.struct_type_id(), v_str_.type_id());
     }
 }
