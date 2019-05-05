@@ -11,20 +11,12 @@
 %avoid_insert "DOUBLE" "INT" "STRING" "KEYWORD" "PARAM" "ID"
 %%
 ClassDef -> Result<Class, ()>:
-      "ID" "=" SuperClass "(" InstanceFields MethodsOpt ClassMethods ")"
+      "ID" "=" SuperClass "(" NameDefs MethodsOpt ClassMethods ")"
       { Ok(Class{ name: map_err($1)?, supername: $3?, methods: $6? }) }
     ;
 SuperClass -> Result<Option<Lexeme<StorageT>>, ()>:
       "ID" { Ok(Some(map_err($1)?)) }
     | { Ok(None) }
-    ;
-InstanceFields -> Result<(), ()>:
-      "|" InstanceFieldNames "|" { unimplemented!() }
-    | { Ok(()) }
-    ;
-InstanceFieldNames -> Result<(), ()>:
-      "ID" { unimplemented!() }
-    | InstanceFieldNames "ID" { unimplemented!() }
     ;
 MethodsOpt -> Result<Vec<Method>, ()>:
       Methods { $1 }
@@ -35,14 +27,14 @@ Methods -> Result<Vec<Method>, ()>:
     | Methods Method { flattenr($1, $2) }
     ;
 ClassMethods -> Result<(), ()>:
-          "SEPARATOR" InstanceFields MethodsOpt { unimplemented!() }
+          "SEPARATOR" NameDefs MethodsOpt { unimplemented!() }
     | { Ok(()) }
     ;
 Method -> Result<Method, ()>:
-      MethodName "=" Temps MethodBody
-      { Ok(Method{ name: $1?, temps: $3?, body: $4? }) }
+      MethodName "=" MethodBody
+      { Ok(Method{ name: $1?, body: $3? }) }
     ;
-Temps -> Result<Vec<Lexeme<StorageT>>, ()>:
+NameDefs -> Result<Vec<Lexeme<StorageT>>, ()>:
       "|" IdListOpt "|" { Ok($2?) }
     | { Ok(vec![]) }
     ;
@@ -58,8 +50,8 @@ MethodNameKeywords -> Result<Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>, ()>:
 MethodNameBin -> Result<(), ()>:
       MethodNameBinOp Argument { unimplemented!() };
 // We'd like to just use BinOp here, rather than introducing MethodNameBinOp,
-// but then the "|" symbol conflicts with InstanceFields. In other words, you
-// can't have "|" as a method name in SOM.
+// but then the "|" symbol conflicts with NameDefs. In other words, you can't
+// have "|" as a method name in SOM.
 MethodNameBinOp -> Result<(), ()>:
       "BINOPSEQ" { unimplemented!() }
     | "~" { unimplemented!() }
@@ -78,7 +70,7 @@ MethodNameBinOp -> Result<(), ()>:
     ;
 MethodBody -> Result<MethodBody, ()>:
       "PRIMITIVE" { Ok(MethodBody::Primitive) }
-    | "(" InstanceFields BlockExprs ")" { Ok(MethodBody::Body{ exprs: $3? }) }
+    | "(" NameDefs BlockExprs ")" { Ok(MethodBody::Body{ locals: $2?, exprs: $3? }) }
     ;
 BlockExprs -> Result<Vec<Expr>, ()>:
       Exprs DotOpt "^" Expr DotOpt { unimplemented!() }
@@ -155,7 +147,7 @@ Literal -> Result<Expr, ()>:
     | ArrayConst { unimplemented!() }
     ;
 Block -> Result<(), ()>:
-      "[" BlockParamsOpt Temps BlockExprs "]" { unimplemented!() };
+      "[" BlockParamsOpt NameDefs BlockExprs "]" { unimplemented!() };
 BlockParamsOpt -> Result<(), ()>:
       BlockParams "|" { unimplemented!() }
     | { unimplemented!() }

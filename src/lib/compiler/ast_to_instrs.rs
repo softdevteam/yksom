@@ -152,7 +152,8 @@ impl<'a> Compiler<'a> {
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
-            ast::MethodBody::Body { exprs } => {
+            ast::MethodBody::Body { locals, exprs } => {
+                assert!(locals.is_empty());
                 let body_idx = self.instrs.len();
                 // We implicitly assume that the VM sets SELF_VAR to self.
                 for e in exprs {

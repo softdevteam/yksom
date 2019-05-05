@@ -21,7 +21,6 @@ pub struct Class {
 #[derive(Debug)]
 pub struct Method {
     pub name: MethodName,
-    pub temps: Vec<Lexeme<StorageT>>,
     pub body: MethodBody,
 }
 
@@ -34,7 +33,10 @@ pub enum MethodName {
 #[derive(Debug)]
 pub enum MethodBody {
     Primitive,
-    Body { exprs: Vec<Expr> },
+    Body {
+        locals: Vec<Lexeme<StorageT>>,
+        exprs: Vec<Expr>,
+    },
 }
 
 #[derive(Debug)]
