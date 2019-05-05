@@ -34,13 +34,17 @@ pub enum MethodName {
 pub enum MethodBody {
     Primitive,
     Body {
-        locals: Vec<Lexeme<StorageT>>,
+        vars: Vec<Lexeme<StorageT>>,
         exprs: Vec<Expr>,
     },
 }
 
 #[derive(Debug)]
 pub enum Expr {
+    Assign {
+        id: Lexeme<StorageT>,
+        expr: Box<Expr>,
+    },
     KeywordMsg {
         receiver: Box<Expr>,
         msglist: Vec<(Lexeme<StorageT>, Expr)>,

@@ -34,7 +34,11 @@ pub struct Method {
 pub enum MethodBody {
     /// A built-in primitive.
     Primitive(Primitive),
-    /// User bytecode: the `usize` gives the starting offset of this method's bytecode in the
-    /// parent class.
-    User(usize),
+    /// User bytecode.
+    User {
+        /// How many variables does this method define?
+        num_vars: usize,
+        /// The offset of this method's bytecode in its parent class.
+        bytecode_off: usize,
+    },
 }

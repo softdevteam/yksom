@@ -26,7 +26,7 @@ pub struct Compiler<'a> {
     instrs: Vec<Instr>,
     sends: IndexMap<(String, usize), usize>,
     consts: IndexMap<cobjects::Const, usize>,
-    vars_stack: Vec<HashMap<&'a str, u32>>,
+    vars_stack: Vec<HashMap<&'a str, usize>>,
 }
 
 impl<'a> Compiler<'a> {
@@ -115,10 +115,6 @@ impl<'a> Compiler<'a> {
         &mut self,
         astmeth: &ast::Method,
     ) -> Result<cobjects::Method, Vec<(Lexeme<StorageT>, String)>> {
-        let mut vars = HashMap::new();
-        const_assert_eq!(SELF_VAR, 0);
-        vars.insert("self", SELF_VAR);
-        self.vars_stack.push(vars);
         let (name, args) = match astmeth.name {
             ast::MethodName::Id(lexeme) => {
                 ((lexeme, self.lexer.lexeme_str(&lexeme).to_string()), vec![])
@@ -133,7 +129,6 @@ impl<'a> Compiler<'a> {
             }
         };
         let body = self.c_body((name.0, &name.1), args, &astmeth.body)?;
-        self.vars_stack.pop();
         Ok(cobjects::Method { name: name.1, body })
     }
 
@@ -152,22 +147,47 @@ impl<'a> Compiler<'a> {
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
-            ast::MethodBody::Body { locals, exprs } => {
-                assert!(locals.is_empty());
-                let body_idx = self.instrs.len();
+            ast::MethodBody::Body {
+                vars: vars_lexemes,
+                exprs,
+            } => {
+                let mut vars = HashMap::new();
+                const_assert_eq!(SELF_VAR, 0);
+                vars.insert("self", SELF_VAR);
+                for lexeme in vars_lexemes {
+                    let vars_len = vars.len();
+                    vars.insert(self.lexer.lexeme_str(&lexeme), vars_len);
+                }
+                let num_vars = vars.len();
+                self.vars_stack.push(vars);
+                let bytecode_off = self.instrs.len();
                 // We implicitly assume that the VM sets SELF_VAR to self.
                 for e in exprs {
                     // We deliberately bomb out at the first error in a method on the basis that
                     // it's likely to lead to many repetitive errors.
                     self.c_expr(e)?;
                 }
-                Ok(cobjects::MethodBody::User(body_idx))
+                self.vars_stack.pop();
+                Ok(cobjects::MethodBody::User {
+                    num_vars,
+                    bytecode_off,
+                })
             }
         }
     }
 
     fn c_expr(&mut self, expr: &ast::Expr) -> Result<(), Vec<(Lexeme<StorageT>, String)>> {
         match expr {
+            ast::Expr::Assign { id, expr } => {
+                let id_str = self.lexer.lexeme_str(id);
+                let id_idx = *match self.vars_stack.last().unwrap().get(id_str) {
+                    Some(n) => n,
+                    None => return Err(vec![(*id, format!("Unknown variable '{}'", id_str))]),
+                };
+                self.c_expr(expr)?;
+                self.instrs.push(Instr::VarSet(id_idx));
+                Ok(())
+            }
             ast::Expr::KeywordMsg { receiver, msglist } => {
                 self.c_expr(receiver)?;
                 let mut mn = String::new();

@@ -13,8 +13,8 @@ pub enum Instr {
     Primitive(Primitive),
     Return,
     Send(usize),
-    VarLookup(u32),
-    VarSet(u32),
+    VarLookup(usize),
+    VarSet(usize),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -27,4 +27,4 @@ pub enum Primitive {
 }
 
 /// The index of the "self" variable.
-pub const SELF_VAR: u32 = 0;
+pub const SELF_VAR: usize = 0;

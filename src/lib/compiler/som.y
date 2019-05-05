@@ -70,7 +70,7 @@ MethodNameBinOp -> Result<(), ()>:
     ;
 MethodBody -> Result<MethodBody, ()>:
       "PRIMITIVE" { Ok(MethodBody::Primitive) }
-    | "(" NameDefs BlockExprs ")" { Ok(MethodBody::Body{ locals: $2?, exprs: $3? }) }
+    | "(" NameDefs BlockExprs ")" { Ok(MethodBody::Body{ vars: $2?, exprs: $3? }) }
     ;
 BlockExprs -> Result<Vec<Expr>, ()>:
       Exprs DotOpt "^" Expr DotOpt { unimplemented!() }
@@ -79,7 +79,7 @@ BlockExprs -> Result<Vec<Expr>, ()>:
     | { Ok(vec![]) }
     ;
 DotOpt -> Result<(), ()>:
-      "." { unimplemented!() }
+      "." { Ok(()) }
     | { Ok(()) }
     ;
 Exprs -> Result<Vec<Expr>, ()>:
@@ -87,11 +87,11 @@ Exprs -> Result<Vec<Expr>, ()>:
     | Exprs "." Expr { flattenr($1, $3) }
     ;
 Expr -> Result<Expr, ()>:
-      Assign { unimplemented!() }
+      Assign { $1 }
     | KeywordMsg { $1 }
     ;
-Assign -> Result<(), ()>:
-      "ID" ":=" Expr { unimplemented!() };
+Assign -> Result<Expr, ()>:
+      "ID" ":=" Expr { Ok(Expr::Assign{id: map_err($1)?, expr: Box::new($3?)}) };
 Unit -> Result<Expr, ()>:
       "ID" { Ok(Expr::VarLookup(map_err($1)?)) }
     | Literal { $1 }
