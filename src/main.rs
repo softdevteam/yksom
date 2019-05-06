@@ -46,7 +46,7 @@ fn main() {
     match vm.send(obj, "run", &[]) {
         Ok(_) | Err(VMError::Exit) => (),
         Err(e) => {
-            println!("{:?}", e);
+            eprintln!("{:?}", e);
             process::exit(1);
         }
     }
