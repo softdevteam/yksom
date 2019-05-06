@@ -1,0 +1,12 @@
+"
+Compile-time error:
+  ...unknown_var.som', line 10, column 9:
+    unknown := '1'.
+  Unknown variable 'unknown'
+"
+
+UnknownVar = (
+    run = (
+        unknown := '1'.
+    )
+)
