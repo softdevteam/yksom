@@ -33,7 +33,6 @@
 
 use std::{
     alloc::Layout,
-    any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
     mem::{forget, size_of, transmute},
@@ -87,7 +86,7 @@ impl Val {
     ///
     /// [In an ideal world, this would be a function on `Obj` itself, but that would mean that
     /// `Obj` couldn't be a trait object. Oh well.]
-    pub fn from_obj<T: Obj + 'static>(_: &VM, obj: T) -> Self {
+    pub fn from_obj<T: Obj>(_: &VM, obj: T) -> Self {
         debug_assert_eq!(ValKind::GCBOX as usize, 0);
         debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
@@ -119,6 +118,26 @@ impl Val {
             x if x == ValKind::GCBOX as usize => ValKind::GCBOX,
             x if x == ValKind::INT as usize => ValKind::INT,
             _ => unreachable!(),
+        }
+    }
+
+    /// If this `Val` is a `GCBOX`, and that `GCBOX` is of type `T`, cast the `Val` to `&T`. If
+    /// this `Val` is not a `GCBOX` or the `GCBOX` is not of type `T`, `VMError` will be returned.
+    /// Note that, in general, you should use `Val::tobj()` as that can box values as needed
+    /// whereas `gcbox_cast` cannot.
+    pub fn gcbox_cast<T: Obj + StaticObjType>(&self, _: &VM) -> Result<&T, VMError> {
+        match self.valkind() {
+            ValKind::GCBOX => {
+                debug_assert_eq!(ValKind::GCBOX as usize, 0);
+                debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
+                debug_assert_ne!(self.val, 0);
+                let tobj = unsafe { &*transmute::<usize, *const GcBox<ThinObj>>(self.val) };
+                tobj.deref().cast()
+            }
+            ValKind::INT => Err(VMError::GcBoxTypeError {
+                expected: T::static_objtype(),
+                got: Int::static_objtype(),
+            }),
         }
     }
 
@@ -201,16 +220,34 @@ impl Drop for Val {
     }
 }
 
+/// The SOM type of objects.
+///
+/// It might seem that we should use `TypeId` for this, but that requires types to have a 'static
+/// lifetime, which is an annoying restriction.
+#[derive(Debug, PartialEq)]
+pub enum ObjType {
+    Class,
+    Method,
+    Inst,
+    Int,
+    String_,
+}
+
 /// The main SOM Object trait.
 pub trait Obj: Debug + GcLayout {
-    /// Return the `TypeId` of the struct implementing this trait.
-    fn struct_type_id(&self) -> TypeId;
+    /// Return the `ObjType` of this object.
+    fn dyn_objtype(&self) -> ObjType;
     /// If possible, return this `Obj` as an `isize`.
     fn as_isize(&self) -> Result<isize, VMError>;
     /// If possible, return this `Obj` as an `usize`.
     fn as_usize(&self) -> Result<usize, VMError>;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
+}
+
+pub trait StaticObjType {
+    /// Return this trait type's static `ObjType`
+    fn static_objtype() -> ObjType;
 }
 
 macro_rules! gclayout {
@@ -223,19 +260,21 @@ macro_rules! gclayout {
     };
 }
 
-gclayout!(Class);
+macro_rules! gclayout_lifetime {
+    ($(#[$attr:meta])* $n: ident) => {
+        impl<'a> GcLayout for $n<'a> {
+            fn layout(&self) -> std::alloc::Layout {
+                std::alloc::Layout::new::<$n>()
+            }
+        }
+    };
+}
+
+gclayout_lifetime!(Class);
 gclayout!(Method);
 gclayout!(Inst);
 gclayout!(Int);
 gclayout!(String_);
-
-macro_rules! obj_boilerplate {
-    () => {
-        fn struct_type_id(&self) -> TypeId {
-            self.type_id()
-        }
-    }
-}
 
 /// A GCable object that stores the vtable pointer alongside the object, meaning that a thin
 /// pointer can be used to store to the ThinCell itself.
@@ -249,10 +288,10 @@ pub struct ThinObj {
 }
 
 impl ThinObj {
-    pub fn new<U>(v: U) -> Gc<ThinObj>
+    pub fn new<'a, U>(v: U) -> Gc<ThinObj>
     where
-        *const U: CoerceUnsized<*const Obj>,
-        U: Obj,
+        *const U: CoerceUnsized<*const (Obj + 'a)>,
+        U: Obj + 'a,
     {
         let (layout, uoff) = Layout::new::<ThinObj>().extend(Layout::new::<U>()).unwrap();
         debug_assert_eq!(uoff, size_of::<ThinObj>());
@@ -276,7 +315,7 @@ impl ThinObj {
     }
 
     /// Cast this `ThinObj` to a concrete `Obj` instance.
-    pub fn cast<T: Obj + 'static>(&self) -> Result<&T, VMError> {
+    pub fn cast<T: Obj + StaticObjType>(&self) -> Result<&T, VMError> {
         // This is a cunning hack based on the fact that vtable pointers are a proxy for a type
         // identifier. In other words, if two distinct objects have the same vtable pointer, they
         // are instances of the same type; if their vtable pointers are different, they are
@@ -296,8 +335,8 @@ impl ThinObj {
             Ok(unsafe { &*(obj_ptr as *const T) })
         } else {
             Err(VMError::TypeError {
-                expected: TypeId::of::<T>(),
-                got: self.deref().struct_type_id(),
+                expected: T::static_objtype(),
+                got: self.deref().dyn_objtype(),
             })
         }
     }
@@ -337,18 +376,20 @@ impl Drop for ThinObj {
 }
 
 #[derive(Debug)]
-pub struct Class {
+pub struct Class<'a> {
     pub name: Val,
     pub path: PathBuf,
-    pub supercls: Val,
-    pub methods: HashMap<String, Gc<Method>>,
+    pub supercls: Option<&'a Class<'a>>,
+    pub methods: HashMap<String, Method>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Val>,
     pub sends: Vec<(String, usize)>,
 }
 
-impl Obj for Class {
-    obj_boilerplate!();
+impl<'a> Obj for Class<'a> {
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Class
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -363,11 +404,17 @@ impl Obj for Class {
     }
 }
 
-impl Class {
-    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Val {
+impl<'a> StaticObjType for Class<'a> {
+    fn static_objtype() -> ObjType {
+        ObjType::Class
+    }
+}
+
+impl<'a> Class<'a> {
+    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, VMError> {
         let supercls = match ccls.supercls {
-            Some(ref x) if x == "nil" => vm.nil.clone(),
-            None => vm.obj_cls.clone(),
+            Some(ref x) if x == "nil" => None,
+            None => (Some(vm.obj_cls.gcbox_cast(vm)?)),
             _ => unimplemented!(),
         };
 
@@ -381,7 +428,7 @@ impl Class {
                 name: cmeth.name.clone(),
                 body,
             };
-            methods.insert(cmeth.name, Gc::new(meth));
+            methods.insert(cmeth.name, meth);
         }
         let consts = ccls
             .consts
@@ -390,7 +437,7 @@ impl Class {
                 cobjects::Const::String(s) => String_::new(vm, s),
             })
             .collect();
-        Val::from_obj(
+        Ok(Val::from_obj(
             vm,
             Class {
                 name: String_::new(vm, ccls.name),
@@ -401,24 +448,20 @@ impl Class {
                 consts,
                 sends: ccls.sends,
             },
-        )
+        ))
     }
 
     pub fn name(&self, _: &VM) -> Result<Val, VMError> {
         Ok(self.name.clone())
     }
 
-    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, Gc<Method>), VMError> {
+    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, &Method), VMError> {
         self.methods
             .get(msg)
-            .map(|x| Ok((Val::recover(self), Gc::clone(x))))
-            .unwrap_or_else(|| {
-                let sc_tobj = self.supercls.tobj(vm)?;
-                if let Ok(scls) = sc_tobj.cast::<Class>() {
-                    scls.get_method(vm, msg)
-                } else {
-                    Err(VMError::UnknownMethod(msg.to_owned()))
-                }
+            .map(|x| Ok((Val::recover(self), x)))
+            .unwrap_or_else(|| match self.supercls {
+                Some(scls) => scls.get_method(vm, msg),
+                None => Err(VMError::UnknownMethod(msg.to_owned())),
             })
     }
 }
@@ -439,7 +482,9 @@ pub enum MethodBody {
 }
 
 impl Obj for Method {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Method
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -454,6 +499,12 @@ impl Obj for Method {
     }
 }
 
+impl StaticObjType for Method {
+    fn static_objtype() -> ObjType {
+        ObjType::Method
+    }
+}
+
 /// An instance of a user class.
 #[derive(Debug)]
 pub struct Inst {
@@ -461,7 +512,9 @@ pub struct Inst {
 }
 
 impl Obj for Inst {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Inst
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         unimplemented!()
@@ -473,6 +526,12 @@ impl Obj for Inst {
 
     fn get_class(&self, _: &VM) -> Val {
         self.class.clone()
+    }
+}
+
+impl StaticObjType for Inst {
+    fn static_objtype() -> ObjType {
+        ObjType::Inst
     }
 }
 
@@ -488,7 +547,9 @@ pub struct Int {
 }
 
 impl Obj for Int {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Int
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Ok(self.val)
@@ -504,6 +565,12 @@ impl Obj for Int {
 
     fn get_class(&self, _: &VM) -> Val {
         unimplemented!();
+    }
+}
+
+impl StaticObjType for Int {
+    fn static_objtype() -> ObjType {
+        ObjType::Int
     }
 }
 
@@ -553,7 +620,9 @@ pub struct String_ {
 }
 
 impl Obj for String_ {
-    obj_boilerplate!();
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::String_
+    }
 
     fn as_isize(&self) -> Result<isize, VMError> {
         Err(VMError::CantRepresentAsUsize)
@@ -565,6 +634,12 @@ impl Obj for String_ {
 
     fn get_class(&self, vm: &VM) -> Val {
         vm.str_cls.clone()
+    }
+}
+
+impl StaticObjType for String_ {
+    fn static_objtype() -> ObjType {
+        ObjType::String_
     }
 }
 
@@ -709,15 +784,24 @@ mod tests {
         assert_eq!(
             v.tobj(&vm).unwrap().cast::<Class>().unwrap_err(),
             VMError::TypeError {
-                expected: TypeId::of::<Class>(),
-                got: TypeId::of::<String_>()
+                expected: ObjType::Class,
+                got: ObjType::String_
             }
         );
+    }
 
-        let v_tobj = v.tobj(&vm).unwrap();
-        let v_obj: &dyn Obj = v_tobj.deref().deref();
-        let v_str_: &String_ = v_tobj.cast().unwrap();
-        assert_ne!(v_obj.type_id(), v_str_.type_id());
-        assert_eq!(v_obj.struct_type_id(), v_str_.type_id());
+    #[test]
+    fn test_gcbox_cast() {
+        let vm = VM::new_no_bootstrap();
+        let v = String_::new(&vm, "s".to_owned());
+        assert!(v.gcbox_cast::<String_>(&vm).is_ok());
+        let v = Int::from_usize(&vm, 0).unwrap();
+        assert_eq!(
+            v.gcbox_cast::<Int>(&vm).unwrap_err(),
+            VMError::GcBoxTypeError {
+                expected: ObjType::Int,
+                got: ObjType::Int
+            }
+        );
     }
 }
