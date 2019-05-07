@@ -113,6 +113,11 @@ impl Val {
         Val { val: 0 }
     }
 
+    /// Is this `Var` illegal i.e. is it an empty placeholder waiting for a "proper" value?
+    pub fn is_illegal(&self) -> bool {
+        self.val == 0
+    }
+
     fn valkind(&self) -> ValKind {
         match self.val & TAG_BITMASK {
             x if x == ValKind::GCBOX as usize => ValKind::GCBOX,
@@ -422,7 +427,13 @@ impl<'a> Class<'a> {
         for cmeth in ccls.methods.into_iter() {
             let body = match cmeth.body {
                 cobjects::MethodBody::Primitive(p) => MethodBody::Primitive(p),
-                cobjects::MethodBody::User(idx) => MethodBody::User(idx),
+                cobjects::MethodBody::User {
+                    num_vars,
+                    bytecode_off,
+                } => MethodBody::User {
+                    num_vars,
+                    bytecode_off,
+                },
             };
             let meth = Method {
                 name: cmeth.name.clone(),
@@ -476,9 +487,13 @@ pub struct Method {
 pub enum MethodBody {
     /// A built-in primitive.
     Primitive(Primitive),
-    /// User bytecode: the `usize` gives the starting offset of this method's bytecode in the
-    /// parent class.
-    User(usize),
+    /// User bytecode.
+    User {
+        /// How many variables does this method define?
+        num_vars: usize,
+        /// The offset of this method's bytecode in its parent class.
+        bytecode_off: usize,
+    },
 }
 
 impl Obj for Method {

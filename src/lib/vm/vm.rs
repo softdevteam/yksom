@@ -8,14 +8,11 @@
 // terms.
 
 use std::{
-    mem::size_of,
     ops::RangeBounds,
     path::{Path, PathBuf},
     process,
     vec::Drain,
 };
-
-use static_assertions::const_assert_eq;
 
 use super::objects::{Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
@@ -38,6 +35,8 @@ pub enum VMError {
     GcBoxTypeError { expected: ObjType, got: ObjType },
     /// A dynamic type error.
     TypeError { expected: ObjType, got: ObjType },
+    /// Tried to read from a local variable that hasn't had a value assigned to it yet.
+    UnassignedVar(usize),
     /// An unknown method.
     UnknownMethod(String),
 }
@@ -115,10 +114,13 @@ impl VM {
 
         match meth.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
-            MethodBody::User(pc) => {
+            MethodBody::User {
+                num_vars,
+                bytecode_off,
+            } => {
                 let meth_cls_tobj = meth_cls_val.tobj(self)?;
                 let meth_cls: &Class = meth_cls_tobj.cast()?;
-                self.exec_user(meth_cls, pc, rcv, args)
+                self.exec_user(meth_cls, bytecode_off, rcv, num_vars, args)
             }
         }
     }
@@ -154,9 +156,10 @@ impl VM {
         cls: &Class,
         mut pc: usize,
         rcv: Val,
+        num_vars: usize,
         _args: &[Val],
     ) -> Result<Val, VMError> {
-        let mut frame = Frame::new(rcv);
+        let mut frame = Frame::new(self, num_vars, rcv);
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Const(coff) => {
@@ -177,7 +180,7 @@ impl VM {
                     return Ok(frame.stack_pop());
                 }
                 Instr::VarLookup(n) => {
-                    let val = frame.var_lookup(n);
+                    let val = frame.var_lookup(n)?;
                     frame.stack_push(val);
                     pc += 1;
                 }
@@ -199,12 +202,15 @@ pub struct Frame {
 }
 
 impl Frame {
-    fn new(self_val: Val) -> Self {
-        const_assert_eq!(SELF_VAR, 0);
-        Frame {
+    fn new(_: &VM, num_vars: usize, self_val: Val) -> Self {
+        let mut vars = Vec::new();
+        vars.resize(num_vars, Val::illegal());
+        let mut f = Frame {
             stack: Vec::new(),
-            vars: vec![self_val],
-        }
+            vars,
+        };
+        f.var_set(SELF_VAR, self_val);
+        f
     }
 
     fn stack_len(&self) -> usize {
@@ -226,13 +232,16 @@ impl Frame {
         self.stack.drain(range)
     }
 
-    fn var_lookup(&mut self, var: u32) -> Val {
-        debug_assert!(size_of::<usize>() > size_of::<u32>());
-        self.vars[var as usize].clone()
+    fn var_lookup(&mut self, var: usize) -> Result<Val, VMError> {
+        let v = &self.vars[var as usize];
+        if v.is_illegal() {
+            Err(VMError::UnassignedVar(var))
+        } else {
+            Ok(v.clone())
+        }
     }
 
-    fn var_set(&mut self, var: u32, val: Val) {
-        debug_assert!(size_of::<usize>() > size_of::<u32>());
+    fn var_set(&mut self, var: usize, val: Val) {
         self.vars[var as usize] = val;
     }
 }
@@ -258,7 +267,8 @@ mod tests {
     fn test_frame() {
         let vm = VM::new_no_bootstrap();
         let v = Int::from_isize(&vm, 42).unwrap();
-        let mut f = Frame::new(v);
-        assert_eq!(f.var_lookup(SELF_VAR).as_isize(&vm), Ok(42));
+        let mut f = Frame::new(&vm, 2, v);
+        assert_eq!(f.var_lookup(SELF_VAR).unwrap().as_isize(&vm), Ok(42));
+        assert!(f.var_lookup(1).is_err());
     }
 }
