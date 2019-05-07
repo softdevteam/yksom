@@ -1,0 +1,8 @@
+"
+Run-time output:
+  Hello world
+"
+
+Hello_World1 = (
+    run = ( 'Hello world' println )
+)
