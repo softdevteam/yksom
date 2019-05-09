@@ -18,9 +18,9 @@ path = "lang_tests/run.rs"
 harness = false
 
 [build-dependencies]
-cfgrammar = "0.3"
-lrlex = "0.3"
-lrpar = "0.3"
+cfgrammar = "0.4"
+lrlex = "0.4"
+lrpar = "0.4"
 
 [dev-dependencies]
 lang_tester = "0.1"
@@ -28,12 +28,12 @@ lazy_static = "1.3"
 regex = "1.1"
 
 [dependencies]
-cfgrammar = "0.3"
+cfgrammar = "0.4"
 enum-primitive-derive = "0.1"
 getopts = "0.2"
 indexmap = "1.0"
 itertools = "0.8"
-lrlex = "0.3"
-lrpar = "0.3"
+lrlex = "0.4"
+lrpar = "0.4"
 num-traits = "0.2"
 static_assertions = "0.3"
