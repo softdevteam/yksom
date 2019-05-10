@@ -33,6 +33,7 @@
 
 use std::{
     alloc::Layout,
+    cell::UnsafeCell,
     collections::HashMap,
     fmt::Debug,
     mem::{forget, size_of, transmute},
@@ -385,6 +386,7 @@ pub struct Class<'a> {
     pub name: Val,
     pub path: PathBuf,
     pub supercls: Option<&'a Class<'a>>,
+    pub num_inst_vars: usize,
     pub methods: HashMap<String, Method>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Val>,
@@ -423,6 +425,9 @@ impl<'a> Class<'a> {
             _ => unimplemented!(),
         };
 
+        let mut inst_vars = Vec::with_capacity(ccls.num_inst_vars);
+        inst_vars.resize(ccls.num_inst_vars, Val::illegal());
+
         let mut methods = HashMap::with_capacity(ccls.methods.len());
         for cmeth in ccls.methods.into_iter() {
             let body = match cmeth.body {
@@ -454,6 +459,7 @@ impl<'a> Class<'a> {
                 name: String_::new(vm, ccls.name),
                 path: ccls.path,
                 supercls,
+                num_inst_vars: ccls.num_inst_vars,
                 methods,
                 instrs: ccls.instrs,
                 consts,
@@ -524,6 +530,7 @@ impl StaticObjType for Method {
 #[derive(Debug)]
 pub struct Inst {
     class: Val,
+    inst_vars: UnsafeCell<Vec<Val>>,
 }
 
 impl Obj for Inst {
@@ -552,7 +559,24 @@ impl StaticObjType for Inst {
 
 impl Inst {
     pub fn new(vm: &VM, class: Val) -> Val {
-        Val::from_obj(vm, Inst { class })
+        let cls: &Class = class.gcbox_cast(vm).unwrap();
+        let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
+        inst_vars.resize(cls.num_inst_vars, Val::illegal());
+        let inst = Inst {
+            class,
+            inst_vars: UnsafeCell::new(inst_vars),
+        };
+        Val::from_obj(vm, inst)
+    }
+
+    pub fn inst_var_lookup(&self, n: usize) -> Val {
+        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+        inst_vars[n].clone()
+    }
+
+    pub fn inst_var_set(&self, n: usize, v: Val) {
+        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+        inst_vars[n] = v;
     }
 }
 

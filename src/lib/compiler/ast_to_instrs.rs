@@ -47,6 +47,13 @@ impl<'a> Compiler<'a> {
         let mut errs = vec![];
         let supercls = astcls.supername.map(|x| lexer.lexeme_str(&x).to_owned());
 
+        let mut inst_vars = HashMap::with_capacity(astcls.inst_vars.len());
+        for lexeme in &astcls.inst_vars {
+            let vars_len = inst_vars.len();
+            inst_vars.insert(lexer.lexeme_str(&lexeme), vars_len);
+        }
+        compiler.vars_stack.push(inst_vars);
+
         let mut methods = Vec::with_capacity(astcls.methods.len());
         for astmeth in &astcls.methods {
             match compiler.c_method(&astmeth) {
@@ -82,6 +89,7 @@ impl<'a> Compiler<'a> {
             name: lexer.lexeme_str(&astcls.name).to_owned(),
             path: compiler.path.to_path_buf(),
             supercls,
+            num_inst_vars: astcls.inst_vars.len(),
             methods,
             instrs: compiler.instrs,
             consts: compiler.consts.into_iter().map(|(k, _)| k).collect(),
@@ -162,10 +170,15 @@ impl<'a> Compiler<'a> {
                 self.vars_stack.push(vars);
                 let bytecode_off = self.instrs.len();
                 // We implicitly assume that the VM sets SELF_VAR to self.
-                for e in exprs {
+                for (i, e) in exprs.iter().enumerate() {
                     // We deliberately bomb out at the first error in a method on the basis that
                     // it's likely to lead to many repetitive errors.
                     self.c_expr(e)?;
+                    if i == exprs.len() - 1 {
+                        self.instrs.push(Instr::Return);
+                    } else {
+                        self.instrs.push(Instr::Pop);
+                    }
                 }
                 self.vars_stack.pop();
                 Ok(cobjects::MethodBody::User {
@@ -179,13 +192,13 @@ impl<'a> Compiler<'a> {
     fn c_expr(&mut self, expr: &ast::Expr) -> Result<(), Vec<(Lexeme<StorageT>, String)>> {
         match expr {
             ast::Expr::Assign { id, expr } => {
-                let id_str = self.lexer.lexeme_str(id);
-                let id_idx = *match self.vars_stack.last().unwrap().get(id_str) {
-                    Some(n) => n,
-                    None => return Err(vec![(*id, format!("Unknown variable '{}'", id_str))]),
-                };
+                let (depth, var_num) = self.find_var(&id)?;
                 self.c_expr(expr)?;
-                self.instrs.push(Instr::VarSet(id_idx));
+                debug_assert_eq!(self.vars_stack.len(), 2);
+                match depth {
+                    0 => self.instrs.push(Instr::InstVarSet(var_num)),
+                    _ => self.instrs.push(Instr::VarSet(var_num)),
+                }
                 Ok(())
             }
             ast::Expr::KeywordMsg { receiver, msglist } => {
@@ -221,15 +234,31 @@ impl<'a> Compiler<'a> {
                 Ok(())
             }
             ast::Expr::VarLookup(lexeme) => {
-                let name = self.lexer.lexeme_str(&lexeme);
-                match self.vars_stack.last().unwrap().get(name) {
-                    Some(n) => {
-                        self.instrs.push(Instr::VarLookup(*n));
-                        Ok(())
-                    }
-                    None => Err(vec![(*lexeme, format!("Unknown variable '{}'", name))]),
+                let (depth, var_num) = self.find_var(&lexeme)?;
+                debug_assert_eq!(self.vars_stack.len(), 2);
+                match depth {
+                    0 => self.instrs.push(Instr::InstVarLookup(var_num)),
+                    _ => self.instrs.push(Instr::VarLookup(var_num)),
                 }
+                Ok(())
             }
         }
+    }
+
+    /// Find the variable `name` in the variable stack returning a tuple `Some((depth, var_num))`
+    /// or `Err` if the variable isn't found. `depth` is the depth of the `HashMap` in `vars_stack`
+    /// (i.e. if `name` is found in the first element of the stack this will be 0). `var_num` is
+    /// the variable number within that `HashMap`.
+    fn find_var(
+        &self,
+        lexeme: &Lexeme<StorageT>,
+    ) -> Result<(usize, usize), Vec<(Lexeme<StorageT>, String)>> {
+        let name = self.lexer.lexeme_str(lexeme);
+        for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
+            if let Some(n) = vars.get(name) {
+                return Ok((depth, *n));
+            }
+        }
+        Err(vec![(*lexeme, format!("Unknown variable '{}'", name))])
     }
 }

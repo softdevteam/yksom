@@ -12,7 +12,7 @@
 %%
 ClassDef -> Result<Class, ()>:
       "ID" "=" SuperClass "(" NameDefs MethodsOpt ClassMethods ")"
-      { Ok(Class{ name: map_err($1)?, supername: $3?, methods: $6? }) }
+      { Ok(Class{ name: map_err($1)?, supername: $3?, inst_vars: $5?, methods: $6? }) }
     ;
 SuperClass -> Result<Option<Lexeme<StorageT>>, ()>:
       "ID" { Ok(Some(map_err($1)?)) }
@@ -75,7 +75,7 @@ MethodBody -> Result<MethodBody, ()>:
 BlockExprs -> Result<Vec<Expr>, ()>:
       Exprs DotOpt "^" Expr DotOpt { unimplemented!() }
     | Exprs DotOpt { $1 }
-    | "^" Expr DotOpt { Ok(vec![$2?, Expr::Return]) }
+    | "^" Expr DotOpt { Ok(vec![$2?]) }
     | { Ok(vec![]) }
     ;
 DotOpt -> Result<(), ()>:

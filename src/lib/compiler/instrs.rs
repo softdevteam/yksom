@@ -10,6 +10,9 @@
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
     Const(usize),
+    InstVarLookup(usize),
+    InstVarSet(usize),
+    Pop,
     Return,
     Send(usize),
     VarLookup(usize),

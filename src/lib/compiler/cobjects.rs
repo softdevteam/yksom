@@ -20,6 +20,7 @@ pub struct Class {
     pub name: String,
     pub path: PathBuf,
     pub supercls: Option<String>,
+    pub num_inst_vars: usize,
     pub methods: Vec<Method>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Const>,

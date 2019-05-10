@@ -64,29 +64,33 @@ impl VM {
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
-            nil: Val::illegal()
+            nil: Val::illegal(),
         };
 
         // The very delicate phase.
         //
         // Nothing in this phase must store references to the nil object or any classes earlier
         // than it in the phase.
-        vm.obj_cls = vm.init_builtin_class("Object");
-        vm.cls_cls = vm.init_builtin_class("Class");
-        vm.nil_cls = vm.init_builtin_class("Nil");
+        vm.obj_cls = vm.init_builtin_class("Object", false);
+        vm.cls_cls = vm.init_builtin_class("Class", false);
+        vm.nil_cls = vm.init_builtin_class("Nil", true);
         vm.nil = Inst::new(&vm, vm.nil_cls.clone());
 
         // The slightly delicate phase.
         //
         // Nothing in this phase must store references to any classes earlier than it in the phase.
-        vm.str_cls = vm.init_builtin_class("String");
+        vm.str_cls = vm.init_builtin_class("String", false);
 
         vm
     }
 
-    /// Compile the file at `path`.
-    pub fn compile(&self, path: &Path) -> Val {
+    /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
+    /// builtin classes which do not lead to run-time instances of `Inst`.
+    pub fn compile(&self, path: &Path, inst_vars_allowed: bool) -> Val {
         let ccls = compile(path);
+        if !inst_vars_allowed && ccls.num_inst_vars > 0 {
+            panic!("No instance vars allowed in {}", path.to_str().unwrap());
+        }
         Class::from_ccls(self, ccls).unwrap_or_else(|e| {
             panic!(
                 "Fatal compilation error for {}: {:?}",
@@ -110,11 +114,11 @@ impl VM {
     }
 
     /// Find and compile the builtin class 'name'.
-    fn init_builtin_class(&self, name: &str) -> Val {
+    fn init_builtin_class(&self, name: &str, inst_vars_allowed: bool) -> Val {
         let path = self
             .find_class(name)
             .unwrap_or_else(|_| panic!("Can't find builtin class '{}'", name));
-        self.compile(&path)
+        self.compile(&path, inst_vars_allowed)
     }
 
     /// Inform the user of the error string `error` and then exit.
@@ -176,11 +180,25 @@ impl VM {
         num_vars: usize,
         _args: &[Val],
     ) -> Result<Val, VMError> {
-        let mut frame = Frame::new(self, num_vars, rcv);
+        let mut frame = Frame::new(self, num_vars, rcv.clone());
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Const(coff) => {
                     frame.stack_push(cls.consts[coff].clone());
+                    pc += 1;
+                }
+                Instr::InstVarLookup(n) => {
+                    let inst: &Inst = rcv.gcbox_cast(self).unwrap();
+                    frame.stack_push(inst.inst_var_lookup(n));
+                    pc += 1;
+                }
+                Instr::InstVarSet(n) => {
+                    let inst: &Inst = rcv.gcbox_cast(self).unwrap();
+                    inst.inst_var_set(n, frame.stack_peek());
+                    pc += 1;
+                }
+                Instr::Pop => {
+                    frame.stack_pop();
                     pc += 1;
                 }
                 Instr::Send(moff) => {
@@ -202,11 +220,10 @@ impl VM {
                     pc += 1;
                 }
                 Instr::VarSet(n) => {
-                    let val = frame.stack_pop();
+                    let val = frame.stack_peek();
                     frame.var_set(n, val);
                     pc += 1;
                 }
-                _ => unimplemented!(),
             }
         }
         Err(VMError::Exit)
@@ -236,6 +253,10 @@ impl Frame {
 
     fn stack_push(&mut self, v: Val) {
         self.stack.push(v);
+    }
+
+    fn stack_peek(&mut self) -> Val {
+        self.stack[self.stack.len() - 1].clone()
     }
 
     fn stack_pop(&mut self) -> Val {
