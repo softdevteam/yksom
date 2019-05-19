@@ -1,6 +1,7 @@
 "
-Run-time error:
-  UnassignedVar(1)
+VM:
+  status: error
+  stderr: UnassignedVar(1)
 "
 
 Unassigned_Var = (

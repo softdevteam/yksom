@@ -1,6 +1,7 @@
 "
-Run-time output:
-  Hello world
+VM:
+  status: success
+  stdout: Hello world
 "
 
 Hello = (
