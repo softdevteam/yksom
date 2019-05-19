@@ -43,25 +43,42 @@ pub enum VMError {
 
 pub struct VM {
     classpath: Vec<String>,
-    pub nil: Val,
     pub cls_cls: Val,
+    pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
+    pub nil: Val,
 }
 
 impl VM {
     pub fn new(classpath: Vec<String>) -> Self {
+        // The bootstrapping phase is delicate: we need to bootstrap the Object, Class, and Nil
+        // classes before we can create basic objects like nil. We thus perform bootstrapping in
+        // two phases: the "very delicate" phase (with very strict rules on what is possible)
+        // followed by the "slightly delicate phase" (with looser, but still fairly strict, rules
+        // on what is possible).
+        //
         let mut vm = VM {
             classpath,
-            nil: Val::illegal(),
             cls_cls: Val::illegal(),
+            nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            nil: Val::illegal()
         };
-        // XXX wrong class!
-        vm.nil = Inst::new(&vm, Val::illegal());
+
+        // The very delicate phase.
+        //
+        // Nothing in this phase must store references to the nil object or any classes earlier
+        // than it in the phase.
         vm.obj_cls = vm.init_builtin_class("Object");
         vm.cls_cls = vm.init_builtin_class("Class");
+        vm.nil_cls = vm.init_builtin_class("Nil");
+        vm.nil = Inst::new(&vm, vm.nil_cls.clone());
+
+        // The slightly delicate phase.
+        //
+        // Nothing in this phase must store references to any classes earlier than it in the phase.
         vm.str_cls = vm.init_builtin_class("String");
 
         vm
@@ -251,10 +268,11 @@ impl VM {
     pub fn new_no_bootstrap() -> Self {
         VM {
             classpath: vec![],
-            nil: Val::illegal(),
             cls_cls: Val::illegal(),
             obj_cls: Val::illegal(),
+            nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            nil: Val::illegal(),
         }
     }
 }
