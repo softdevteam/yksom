@@ -23,7 +23,7 @@ lrlex = "0.4"
 lrpar = "0.4"
 
 [dev-dependencies]
-lang_tester = "0.1"
+lang_tester = "0.2"
 lazy_static = "1.3"
 regex = "1.1"
 
