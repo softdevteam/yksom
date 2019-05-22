@@ -10,7 +10,7 @@
 use std::{
     ops::RangeBounds,
     path::{Path, PathBuf},
-    process,
+    process, ptr,
     vec::Drain,
 };
 
@@ -256,11 +256,22 @@ impl Frame {
     }
 
     fn stack_peek(&mut self) -> Val {
-        self.stack[self.stack.len() - 1].clone()
+        debug_assert!(self.stack.len() > 0);
+        let i = self.stack.len() - 1;
+        unsafe { self.stack.get_unchecked(i) }.clone()
     }
 
     fn stack_pop(&mut self) -> Val {
-        self.stack.pop().unwrap()
+        debug_assert!(self.stack.len() > 0);
+        // Since we know that there will be at least one element in the stack, we can use our own
+        // simplified version of pop() which avoids a branch and the wrapping of values in an
+        // Option.
+        let i = self.stack.len() - 1;
+        unsafe {
+            let v = ptr::read(self.stack.get_unchecked(i));
+            self.stack.set_len(i);
+            v
+        }
     }
 
     fn stack_drain<R>(&mut self, range: R) -> Drain<'_, Val>
