@@ -15,6 +15,7 @@ type StorageT = u32;
 pub struct Class {
     pub name: Lexeme<StorageT>,
     pub supername: Option<Lexeme<StorageT>>,
+    pub inst_vars: Vec<Lexeme<StorageT>>,
     pub methods: Vec<Method>,
 }
 
