@@ -420,9 +420,12 @@ impl<'a> StaticObjType for Class<'a> {
 impl<'a> Class<'a> {
     pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, VMError> {
         let supercls = match ccls.supercls {
-            Some(ref x) if x == "nil" => None,
+            Some(ref x) => match x.as_str() {
+                "Boolean" => Some(vm.bool_cls.gcbox_cast(vm)?),
+                "nil" => None,
+                _ => unimplemented!(),
+            },
             None => (Some(vm.obj_cls.gcbox_cast(vm)?)),
-            _ => unimplemented!(),
         };
 
         let mut inst_vars = Vec::with_capacity(ccls.num_inst_vars);

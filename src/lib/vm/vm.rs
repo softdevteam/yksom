@@ -17,7 +17,7 @@ use std::{
 use super::objects::{Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
     compile,
-    instrs::{Instr, Primitive, SELF_VAR},
+    instrs::{Builtin, Instr, Primitive, SELF_VAR},
 };
 
 pub const SOM_EXTENSION: &str = "som";
@@ -43,11 +43,16 @@ pub enum VMError {
 
 pub struct VM {
     classpath: Vec<String>,
+    pub bool_cls: Val,
     pub cls_cls: Val,
+    pub false_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
+    pub true_cls: Val,
+    pub false_: Val,
     pub nil: Val,
+    pub true_: Val,
 }
 
 impl VM {
@@ -60,11 +65,16 @@ impl VM {
         //
         let mut vm = VM {
             classpath,
+            bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
+            false_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            true_cls: Val::illegal(),
+            false_: Val::illegal(),
             nil: Val::illegal(),
+            true_: Val::illegal(),
         };
 
         // The very delicate phase.
@@ -79,7 +89,12 @@ impl VM {
         // The slightly delicate phase.
         //
         // Nothing in this phase must store references to any classes earlier than it in the phase.
+        vm.bool_cls = vm.init_builtin_class("Boolean", false);
+        vm.false_cls = vm.init_builtin_class("False", false);
         vm.str_cls = vm.init_builtin_class("String", false);
+        vm.true_cls = vm.init_builtin_class("True", false);
+        vm.false_ = Inst::new(&vm, vm.false_cls.clone());
+        vm.true_ = Inst::new(&vm, vm.true_cls.clone());
 
         vm
     }
@@ -183,6 +198,13 @@ impl VM {
         let mut frame = Frame::new(self, num_vars, rcv.clone());
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
+                Instr::Builtin(b) => {
+                    frame.stack_push(match b {
+                        Builtin::False => self.false_.clone(),
+                        Builtin::True => self.true_.clone(),
+                    });
+                    pc += 1;
+                }
                 Instr::Const(coff) => {
                     frame.stack_push(cls.consts[coff].clone());
                     pc += 1;
@@ -300,11 +322,16 @@ impl VM {
     pub fn new_no_bootstrap() -> Self {
         VM {
             classpath: vec![],
+            bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
+            false_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            true_cls: Val::illegal(),
+            false_: Val::illegal(),
             nil: Val::illegal(),
+            true_: Val::illegal(),
         }
     }
 }

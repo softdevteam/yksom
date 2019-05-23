@@ -9,6 +9,7 @@
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
+    Builtin(Builtin),
     Const(usize),
     InstVarLookup(usize),
     InstVarSet(usize),
@@ -17,6 +18,12 @@ pub enum Instr {
     Send(usize),
     VarLookup(usize),
     VarSet(usize),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Builtin {
+    False,
+    True,
 }
 
 #[derive(Clone, Copy, Debug)]

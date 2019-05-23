@@ -16,7 +16,7 @@ use static_assertions::const_assert_eq;
 
 use super::{
     ast, cobjects,
-    instrs::{Instr, Primitive, SELF_VAR},
+    instrs::{Builtin, Instr, Primitive, SELF_VAR},
     StorageT,
 };
 
@@ -234,11 +234,19 @@ impl<'a> Compiler<'a> {
                 Ok(())
             }
             ast::Expr::VarLookup(lexeme) => {
-                let (depth, var_num) = self.find_var(&lexeme)?;
-                debug_assert_eq!(self.vars_stack.len(), 2);
-                match depth {
-                    0 => self.instrs.push(Instr::InstVarLookup(var_num)),
-                    _ => self.instrs.push(Instr::VarLookup(var_num)),
+                match self.find_var(&lexeme) {
+                    Ok((depth, var_num)) => {
+                        debug_assert_eq!(self.vars_stack.len(), 2);
+                        match depth {
+                            0 => self.instrs.push(Instr::InstVarLookup(var_num)),
+                            _ => self.instrs.push(Instr::VarLookup(var_num)),
+                        }
+                    }
+                    Err(e) => match self.lexer.lexeme_str(&lexeme) {
+                        "false" => self.instrs.push(Instr::Builtin(Builtin::False)),
+                        "true" => self.instrs.push(Instr::Builtin(Builtin::True)),
+                        _ => return Err(e),
+                    },
                 }
                 Ok(())
             }

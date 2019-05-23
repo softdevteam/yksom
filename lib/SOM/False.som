@@ -1,0 +1,4 @@
+False = Boolean (
+    asString = ( ^'false' )
+    not = ( ^true )
+)
