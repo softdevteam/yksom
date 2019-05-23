@@ -48,7 +48,7 @@ impl<T: GcLayout> Gc<T> {
         ptr
     }
 
-    /// Create a `Gc` from a raw pointer previously created by `blank_alloc` or `into_raw`. Note
+    /// Create a `Gc` from a raw pointer previously created by `alloc_blank` or `into_raw`. Note
     /// that this does not increment the reference count.
     pub unsafe fn from_raw(ptr: *const GcBox<T>) -> Self {
         Gc {
