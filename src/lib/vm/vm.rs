@@ -200,6 +200,7 @@ impl VM {
             match cls.instrs[pc] {
                 Instr::Builtin(b) => {
                     frame.stack_push(match b {
+                        Builtin::Nil => self.nil.clone(),
                         Builtin::False => self.false_.clone(),
                         Builtin::True => self.true_.clone(),
                     });

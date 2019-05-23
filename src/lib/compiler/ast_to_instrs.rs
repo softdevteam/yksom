@@ -243,6 +243,7 @@ impl<'a> Compiler<'a> {
                         }
                     }
                     Err(e) => match self.lexer.lexeme_str(&lexeme) {
+                        "nil" => self.instrs.push(Instr::Builtin(Builtin::Nil)),
                         "false" => self.instrs.push(Instr::Builtin(Builtin::False)),
                         "true" => self.instrs.push(Instr::Builtin(Builtin::True)),
                         _ => return Err(e),

@@ -23,6 +23,7 @@ pub enum Instr {
 #[derive(Clone, Copy, Debug)]
 pub enum Builtin {
     False,
+    Nil,
     True,
 }
 
