@@ -7,16 +7,18 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-use std::{collections::hash_map::HashMap, path::Path};
+use std::{
+    collections::hash_map::{self, HashMap},
+    path::Path,
+};
 
-use indexmap::map::{Entry, IndexMap};
+use indexmap::{self, map::IndexMap};
 use itertools::Itertools;
 use lrpar::{Lexeme, Lexer};
-use static_assertions::const_assert_eq;
 
 use super::{
     ast, cobjects,
-    instrs::{Builtin, Instr, Primitive, SELF_VAR},
+    instrs::{Builtin, Instr, Primitive},
     StorageT,
 };
 
@@ -100,8 +102,8 @@ impl<'a> Compiler<'a> {
     fn const_off(&mut self, c: cobjects::Const) -> usize {
         let off = self.consts.len();
         match self.consts.entry(c) {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
+            indexmap::map::Entry::Occupied(e) => *e.get(),
+            indexmap::map::Entry::Vacant(e) => {
                 e.insert(off);
                 off
             }
@@ -111,8 +113,8 @@ impl<'a> Compiler<'a> {
     fn send_off(&mut self, m: (String, usize)) -> usize {
         let off = self.sends.len();
         match self.sends.entry(m) {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
+            indexmap::map::Entry::Occupied(e) => *e.get(),
+            indexmap::map::Entry::Vacant(e) => {
                 e.insert(off);
                 off
             }
@@ -143,7 +145,7 @@ impl<'a> Compiler<'a> {
     fn c_body(
         &mut self,
         name: (Lexeme<StorageT>, &str),
-        _args: Vec<Lexeme<StorageT>>,
+        args: Vec<Lexeme<StorageT>>,
         body: &ast::MethodBody,
     ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
         match body {
@@ -160,16 +162,38 @@ impl<'a> Compiler<'a> {
                 exprs,
             } => {
                 let mut vars = HashMap::new();
-                const_assert_eq!(SELF_VAR, 0);
-                vars.insert("self", SELF_VAR);
-                for lexeme in vars_lexemes {
+                // The VM makes some strong assumptions about variables: that the first variable is
+                // "self" and that arguments 1..n+1 are the first n arguments to the method in
+                // reverse order.
+                vars.insert("self", 0);
+
+                let mut process_var = |lexeme| {
                     let vars_len = vars.len();
-                    vars.insert(self.lexer.lexeme_str(&lexeme), vars_len);
+                    let var_str = self.lexer.lexeme_str(&lexeme);
+                    match vars.entry(var_str) {
+                        hash_map::Entry::Occupied(_) => Err(vec![(
+                            lexeme,
+                            format!("Variable '{}' shadows another of the same name", var_str),
+                        )]),
+                        hash_map::Entry::Vacant(e) => {
+                            e.insert(vars_len);
+                            Ok(vars_len)
+                        }
+                    }
+                };
+
+                for lexeme in args.iter().rev() {
+                    process_var(*lexeme)?;
                 }
+                for lexeme in vars_lexemes {
+                    process_var(*lexeme)?;
+                }
+
                 let num_vars = vars.len();
                 self.vars_stack.push(vars);
                 let bytecode_off = self.instrs.len();
-                // We implicitly assume that the VM sets SELF_VAR to self.
+                // We implicitly assume that the VM sets the 0th var to self and the next n args to
+                // the function parameters (in reverse order).
                 for (i, e) in exprs.iter().enumerate() {
                     // We deliberately bomb out at the first error in a method on the basis that
                     // it's likely to lead to many repetitive errors.

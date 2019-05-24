@@ -17,7 +17,7 @@ use std::{
 use super::objects::{Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
     compile,
-    instrs::{Builtin, Instr, Primitive, SELF_VAR},
+    instrs::{Builtin, Instr, Primitive},
 };
 
 pub const SOM_EXTENSION: &str = "som";
@@ -193,9 +193,9 @@ impl VM {
         mut pc: usize,
         rcv: Val,
         num_vars: usize,
-        _args: &[Val],
+        args: &[Val],
     ) -> Result<Val, VMError> {
-        let mut frame = Frame::new(self, num_vars, rcv.clone());
+        let mut frame = Frame::new(self, num_vars, rcv.clone(), args);
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Builtin(b) => {
@@ -228,6 +228,7 @@ impl VM {
                     let (ref name, nargs) = &cls.sends[moff];
                     let args = frame
                         .stack_drain(frame.stack_len() - nargs..)
+                        .rev()
                         .collect::<Vec<_>>();
                     let rcv = frame.stack_pop();
                     let r = self.send(rcv, &name, &args)?;
@@ -259,14 +260,20 @@ pub struct Frame {
 }
 
 impl Frame {
-    fn new(_: &VM, num_vars: usize, self_val: Val) -> Self {
+    fn new(_: &VM, num_vars: usize, self_val: Val, args: &[Val]) -> Self {
         let mut vars = Vec::new();
         vars.resize(num_vars, Val::illegal());
         let mut f = Frame {
             stack: Vec::new(),
             vars,
         };
-        f.var_set(SELF_VAR, self_val);
+        // The VM makes some strong assumptions about variables: that the first variable is
+        // "self" and that arguments 1..n+1 are the first n arguments to the method in
+        // reverse order.
+        f.var_set(0, self_val);
+        for (i, arg) in args.iter().enumerate() {
+            f.var_set(i + 1, arg.clone());
+        }
         f
     }
 
@@ -344,9 +351,13 @@ mod tests {
     #[test]
     fn test_frame() {
         let vm = VM::new_no_bootstrap();
-        let v = Int::from_isize(&vm, 42).unwrap();
-        let mut f = Frame::new(&vm, 2, v);
-        assert_eq!(f.var_lookup(SELF_VAR).unwrap().as_isize(&vm), Ok(42));
-        assert!(f.var_lookup(1).is_err());
+        let selfv = Int::from_isize(&vm, 42).unwrap();
+        let v1 = Int::from_isize(&vm, 43).unwrap();
+        let v2 = Int::from_isize(&vm, 44).unwrap();
+        let mut f = Frame::new(&vm, 4, selfv, &[v1, v2]);
+        assert_eq!(f.var_lookup(0).unwrap().as_isize(&vm), Ok(42));
+        assert_eq!(f.var_lookup(1).unwrap().as_isize(&vm), Ok(43));
+        assert_eq!(f.var_lookup(2).unwrap().as_isize(&vm), Ok(44));
+        assert!(f.var_lookup(3).is_err());
     }
 }

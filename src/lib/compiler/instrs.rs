@@ -35,6 +35,3 @@ pub enum Primitive {
     New,
     PrintLn,
 }
-
-/// The index of the "self" variable.
-pub const SELF_VAR: usize = 0;

@@ -45,7 +45,7 @@ MethodName -> Result<MethodName, ()>:
     ;
 MethodNameKeywords -> Result<Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>, ()>:
       "KEYWORD" "ID" { Ok(vec![(map_err($1)?, map_err($2)?)]) }
-    | MethodNameKeywords "KEYWORD" "ID" { unimplemented!() }
+    | MethodNameKeywords "KEYWORD" "ID" { flattenr($1, Ok((map_err($2)?, map_err($3)?))) }
     ;
 MethodNameBin -> Result<(), ()>:
       MethodNameBinOp Argument { unimplemented!() };
