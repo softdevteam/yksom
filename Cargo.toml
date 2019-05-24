@@ -21,6 +21,7 @@ harness = false
 cfgrammar = "0.4"
 lrlex = "0.4"
 lrpar = "0.4"
+rerun_except = "0.1"
 
 [dev-dependencies]
 lang_tester = "0.2"
