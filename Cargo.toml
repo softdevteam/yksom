@@ -24,7 +24,7 @@ lrpar = "0.4"
 rerun_except = "0.1"
 
 [dev-dependencies]
-lang_tester = "0.2"
+lang_tester = "0.3"
 lazy_static = "1.3"
 regex = "1.1"
 
