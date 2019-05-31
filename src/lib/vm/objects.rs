@@ -96,8 +96,8 @@ impl Val {
         }
     }
 
-    /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Obj::from_off` and
-    /// then turned into an actual object with `tobj`: failure to follow these steps results in
+    /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
+    /// then turned into an actual object with `tobj`: failure to follow these steps will result in
     /// undefined behaviour.
     pub fn recover(obj: &Obj) -> Self {
         unsafe {
