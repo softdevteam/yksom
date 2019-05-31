@@ -28,6 +28,7 @@ pub struct Compiler<'a> {
     instrs: Vec<Instr>,
     sends: IndexMap<(String, usize), usize>,
     consts: IndexMap<cobjects::Const, usize>,
+    blocks: Vec<cobjects::Block>,
     vars_stack: Vec<HashMap<&'a str, usize>>,
 }
 
@@ -43,6 +44,7 @@ impl<'a> Compiler<'a> {
             instrs: Vec::new(),
             sends: IndexMap::new(),
             consts: IndexMap::new(),
+            blocks: Vec::new(),
             vars_stack: Vec::new(),
         };
 
@@ -95,6 +97,7 @@ impl<'a> Compiler<'a> {
             methods,
             instrs: compiler.instrs,
             consts: compiler.consts.into_iter().map(|(k, _)| k).collect(),
+            blocks: compiler.blocks,
             sends: compiler.sends.into_iter().map(|(k, _)| k).collect(),
         })
     }
@@ -145,7 +148,7 @@ impl<'a> Compiler<'a> {
     fn c_body(
         &mut self,
         name: (Lexeme<StorageT>, &str),
-        args: Vec<Lexeme<StorageT>>,
+        params: Vec<Lexeme<StorageT>>,
         body: &ast::MethodBody,
     ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
         match body {
@@ -155,56 +158,15 @@ impl<'a> Compiler<'a> {
                 "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
+                "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
             ast::MethodBody::Body {
                 vars: vars_lexemes,
                 exprs,
             } => {
-                let mut vars = HashMap::new();
-                // The VM makes some strong assumptions about variables: that the first variable is
-                // "self" and that arguments 1..n+1 are the first n arguments to the method in
-                // reverse order.
-                vars.insert("self", 0);
-
-                let mut process_var = |lexeme| {
-                    let vars_len = vars.len();
-                    let var_str = self.lexer.lexeme_str(&lexeme);
-                    match vars.entry(var_str) {
-                        hash_map::Entry::Occupied(_) => Err(vec![(
-                            lexeme,
-                            format!("Variable '{}' shadows another of the same name", var_str),
-                        )]),
-                        hash_map::Entry::Vacant(e) => {
-                            e.insert(vars_len);
-                            Ok(vars_len)
-                        }
-                    }
-                };
-
-                for lexeme in args.iter().rev() {
-                    process_var(*lexeme)?;
-                }
-                for lexeme in vars_lexemes {
-                    process_var(*lexeme)?;
-                }
-
-                let num_vars = vars.len();
-                self.vars_stack.push(vars);
                 let bytecode_off = self.instrs.len();
-                // We implicitly assume that the VM sets the 0th var to self and the next n args to
-                // the function parameters (in reverse order).
-                for (i, e) in exprs.iter().enumerate() {
-                    // We deliberately bomb out at the first error in a method on the basis that
-                    // it's likely to lead to many repetitive errors.
-                    self.c_expr(e)?;
-                    if i == exprs.len() - 1 {
-                        self.instrs.push(Instr::Return);
-                    } else {
-                        self.instrs.push(Instr::Pop);
-                    }
-                }
-                self.vars_stack.pop();
+                let num_vars = self.c_block(&params, vars_lexemes, exprs)?;
                 Ok(cobjects::MethodBody::User {
                     num_vars,
                     bytecode_off,
@@ -223,6 +185,23 @@ impl<'a> Compiler<'a> {
                     0 => self.instrs.push(Instr::InstVarSet(var_num)),
                     _ => self.instrs.push(Instr::VarSet(var_num)),
                 }
+                Ok(())
+            }
+            ast::Expr::Block {
+                params,
+                vars,
+                exprs,
+            } => {
+                let block_off = self.blocks.len();
+                self.instrs.push(Instr::Block(block_off));
+                self.blocks.push(cobjects::Block {
+                    bytecode_off: self.instrs.len(),
+                    bytecode_end: 0,
+                    num_vars: 0,
+                });
+                let num_vars = self.c_block(params, vars, exprs)?;
+                self.blocks[block_off].bytecode_end = self.instrs.len();
+                self.blocks[block_off].num_vars = num_vars;
                 Ok(())
             }
             ast::Expr::KeywordMsg { receiver, msglist } => {
@@ -276,6 +255,59 @@ impl<'a> Compiler<'a> {
                 Ok(())
             }
         }
+    }
+
+    fn c_block(
+        &mut self,
+        params: &[Lexeme<StorageT>],
+        vars_lexemes: &[Lexeme<StorageT>],
+        exprs: &[ast::Expr],
+    ) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
+        let mut vars = HashMap::new();
+        // The VM makes some strong assumptions about variables: that the first variable is
+        // "self" and that arguments 1..n+1 are the first n arguments to the method in
+        // reverse order.
+        vars.insert("self", 0);
+
+        let mut process_var = |lexeme| {
+            let vars_len = vars.len();
+            let var_str = self.lexer.lexeme_str(&lexeme);
+            match vars.entry(var_str) {
+                hash_map::Entry::Occupied(_) => Err(vec![(
+                    lexeme,
+                    format!("Variable '{}' shadows another of the same name", var_str),
+                )]),
+                hash_map::Entry::Vacant(e) => {
+                    e.insert(vars_len);
+                    Ok(vars_len)
+                }
+            }
+        };
+
+        for lexeme in params.iter().rev() {
+            process_var(*lexeme)?;
+        }
+        for lexeme in vars_lexemes {
+            process_var(*lexeme)?;
+        }
+
+        let num_vars = vars.len();
+        self.vars_stack.push(vars);
+        // We implicitly assume that the VM sets the 0th var to self and the next n args to
+        // the function parameters (in reverse order).
+        for (i, e) in exprs.iter().enumerate() {
+            // We deliberately bomb out at the first error in a method on the basis that
+            // it's likely to lead to many repetitive errors.
+            self.c_expr(e)?;
+            if i == exprs.len() - 1 {
+                self.instrs.push(Instr::Return);
+            } else {
+                self.instrs.push(Instr::Pop);
+            }
+        }
+        self.vars_stack.pop();
+
+        Ok(num_vars)
     }
 
     /// Find the variable `name` in the variable stack returning a tuple `Some((depth, var_num))`

@@ -95,7 +95,7 @@ Assign -> Result<Expr, ()>:
 Unit -> Result<Expr, ()>:
       "ID" { Ok(Expr::VarLookup(map_err($1)?)) }
     | Literal { $1 }
-    | Block { unimplemented!() }
+    | Block { $1 }
     | "(" Expr ")" { $2 }
     ;
 KeywordMsg -> Result<Expr, ()>:
@@ -146,11 +146,11 @@ Literal -> Result<Expr, ()>:
     | StringConst { unimplemented!() }
     | ArrayConst { unimplemented!() }
     ;
-Block -> Result<(), ()>:
-      "[" BlockParamsOpt NameDefs BlockExprs "]" { unimplemented!() };
-BlockParamsOpt -> Result<(), ()>:
+Block -> Result<Expr, ()>:
+      "[" BlockParamsOpt NameDefs BlockExprs "]" { Ok(Expr::Block{ params: $2?, vars: $3?, exprs: $4? }) };
+BlockParamsOpt -> Result<Vec<Lexeme<StorageT>>, ()>:
       BlockParams "|" { unimplemented!() }
-    | { unimplemented!() }
+    | { Ok(vec![]) }
     ;
 BlockParams -> Result<(), ()>:
       "PARAM" Argument { unimplemented!() }

@@ -46,6 +46,11 @@ pub enum Expr {
         id: Lexeme<StorageT>,
         expr: Box<Expr>,
     },
+    Block {
+        params: Vec<Lexeme<StorageT>>,
+        vars: Vec<Lexeme<StorageT>>,
+        exprs: Vec<Expr>,
+    },
     KeywordMsg {
         receiver: Box<Expr>,
         msglist: Vec<(Lexeme<StorageT>, Expr)>,

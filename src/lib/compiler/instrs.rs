@@ -9,6 +9,7 @@
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
+    Block(usize),
     Builtin(Builtin),
     Const(usize),
     InstVarLookup(usize),
@@ -34,4 +35,5 @@ pub enum Primitive {
     Name,
     New,
     PrintLn,
+    Value,
 }

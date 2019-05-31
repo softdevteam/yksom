@@ -14,7 +14,7 @@ use std::{
     vec::Drain,
 };
 
-use super::objects::{Class, Inst, MethodBody, ObjType, String_, Val};
+use super::objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
     compile,
     instrs::{Builtin, Instr, Primitive},
@@ -43,6 +43,7 @@ pub enum VMError {
 
 pub struct VM {
     classpath: Vec<String>,
+    pub block_cls: Val,
     pub bool_cls: Val,
     pub cls_cls: Val,
     pub false_cls: Val,
@@ -65,6 +66,7 @@ impl VM {
         //
         let mut vm = VM {
             classpath,
+            block_cls: Val::illegal(),
             bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
             false_cls: Val::illegal(),
@@ -89,6 +91,7 @@ impl VM {
         // The slightly delicate phase.
         //
         // Nothing in this phase must store references to any classes earlier than it in the phase.
+        vm.block_cls = vm.init_builtin_class("Block", false);
         vm.bool_cls = vm.init_builtin_class("Boolean", false);
         vm.false_cls = vm.init_builtin_class("False", false);
         vm.str_cls = vm.init_builtin_class("String", false);
@@ -184,6 +187,14 @@ impl VM {
                 println!("{}", str_.as_str());
                 Ok(rcv)
             }
+            Primitive::Value => {
+                let rcv_tobj = rcv.tobj(self)?;
+                let rcv_blk: &Block = rcv_tobj.cast()?;
+                let blk_cls_tobj = rcv_blk.blockinfo_cls.tobj(self)?;
+                let blk_cls: &Class = blk_cls_tobj.cast()?;
+                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
+                self.exec_user(blk_cls, blkinfo.bytecode_off, rcv, blkinfo.num_vars, &[])
+            }
         }
     }
 
@@ -198,6 +209,10 @@ impl VM {
         let mut frame = Frame::new(self, num_vars, rcv.clone(), args);
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
+                Instr::Block(blkinfo_off) => {
+                    frame.stack_push(Block::new(self, Val::recover(cls), blkinfo_off));
+                    pc = cls.blockinfo(blkinfo_off).bytecode_end;
+                }
                 Instr::Builtin(b) => {
                     frame.stack_push(match b {
                         Builtin::Nil => self.nil.clone(),
@@ -330,6 +345,7 @@ impl VM {
     pub fn new_no_bootstrap() -> Self {
         VM {
             classpath: vec![],
+            block_cls: Val::illegal(),
             bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
             false_cls: Val::illegal(),
