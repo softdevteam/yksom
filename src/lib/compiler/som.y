@@ -73,7 +73,7 @@ MethodBody -> Result<MethodBody, ()>:
     | "(" NameDefs BlockExprs ")" { Ok(MethodBody::Body{ vars: $2?, exprs: $3? }) }
     ;
 BlockExprs -> Result<Vec<Expr>, ()>:
-      Exprs DotOpt "^" Expr DotOpt { unimplemented!() }
+      Exprs DotOpt "^" Expr DotOpt { flattenr($1, $4) }
     | Exprs DotOpt { $1 }
     | "^" Expr DotOpt { Ok(vec![$2?]) }
     | { Ok(vec![]) }

@@ -8,13 +8,17 @@
 // terms.
 
 use std::{
+    cell::UnsafeCell,
     ops::RangeBounds,
     path::{Path, PathBuf},
     process, ptr,
     vec::Drain,
 };
 
-use super::objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val};
+use super::{
+    gc::{Gc, GcLayout},
+    objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val},
+};
 use crate::compiler::{
     compile,
     instrs::{Builtin, Instr, Primitive},
@@ -159,7 +163,7 @@ impl VM {
             } => {
                 let meth_cls_tobj = meth_cls_val.tobj(self)?;
                 let meth_cls: &Class = meth_cls_tobj.cast()?;
-                self.exec_user(meth_cls, bytecode_off, rcv, num_vars, args)
+                self.exec_user(meth_cls, bytecode_off, rcv, None, num_vars, args)
             }
         }
     }
@@ -193,7 +197,14 @@ impl VM {
                 let blk_cls_tobj = rcv_blk.blockinfo_cls.tobj(self)?;
                 let blk_cls: &Class = blk_cls_tobj.cast()?;
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
-                self.exec_user(blk_cls, blkinfo.bytecode_off, rcv, blkinfo.num_vars, &[])
+                self.exec_user(
+                    blk_cls,
+                    blkinfo.bytecode_off,
+                    rcv,
+                    Some(Gc::clone(&rcv_blk.parent_closure)),
+                    blkinfo.num_vars,
+                    &[],
+                )
             }
         }
     }
@@ -203,14 +214,20 @@ impl VM {
         cls: &Class,
         mut pc: usize,
         rcv: Val,
+        parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
         args: &[Val],
     ) -> Result<Val, VMError> {
-        let mut frame = Frame::new(self, num_vars, rcv.clone(), args);
+        let mut frame = Frame::new(self, parent_closure, num_vars, rcv.clone(), args);
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Block(blkinfo_off) => {
-                    frame.stack_push(Block::new(self, Val::recover(cls), blkinfo_off));
+                    frame.stack_push(Block::new(
+                        self,
+                        Val::recover(cls),
+                        blkinfo_off,
+                        Gc::clone(&frame.closure),
+                    ));
                     pc = cls.blockinfo(blkinfo_off).bytecode_end;
                 }
                 Instr::Builtin(b) => {
@@ -253,14 +270,14 @@ impl VM {
                 Instr::Return => {
                     return Ok(frame.stack_pop());
                 }
-                Instr::VarLookup(n) => {
-                    let val = frame.var_lookup(n)?;
+                Instr::VarLookup(d, n) => {
+                    let val = frame.var_lookup(d, n)?;
                     frame.stack_push(val);
                     pc += 1;
                 }
-                Instr::VarSet(n) => {
+                Instr::VarSet(d, n) => {
                     let val = frame.stack_peek();
-                    frame.var_set(n, val);
+                    frame.var_set(d, n, val);
                     pc += 1;
                 }
             }
@@ -271,25 +288,31 @@ impl VM {
 
 pub struct Frame {
     stack: Vec<Val>,
-    vars: Vec<Val>,
+    closure: Gc<Closure>,
 }
 
 impl Frame {
-    fn new(_: &VM, num_vars: usize, self_val: Val, args: &[Val]) -> Self {
+    fn new(
+        _: &VM,
+        parent_closure: Option<Gc<Closure>>,
+        num_vars: usize,
+        self_val: Val,
+        args: &[Val],
+    ) -> Self {
         let mut vars = Vec::new();
         vars.resize(num_vars, Val::illegal());
-        let mut f = Frame {
-            stack: Vec::new(),
-            vars,
-        };
         // The VM makes some strong assumptions about variables: that the first variable is
         // "self" and that arguments 1..n+1 are the first n arguments to the method in
         // reverse order.
-        f.var_set(0, self_val);
+        vars[0] = self_val;
         for (i, arg) in args.iter().enumerate() {
-            f.var_set(i + 1, arg.clone());
+            vars[i + 1] = arg.clone();
         }
-        f
+
+        Frame {
+            stack: Vec::new(),
+            closure: Gc::new(Closure::new(parent_closure, vars)),
+        }
     }
 
     fn stack_len(&self) -> usize {
@@ -326,8 +349,9 @@ impl Frame {
         self.stack.drain(range)
     }
 
-    fn var_lookup(&mut self, var: usize) -> Result<Val, VMError> {
-        let v = &self.vars[var as usize];
+    fn var_lookup(&mut self, depth: usize, var: usize) -> Result<Val, VMError> {
+        let cl = self.closure(depth);
+        let v = cl.get_var(var);
         if v.is_illegal() {
             Err(VMError::UnassignedVar(var))
         } else {
@@ -335,8 +359,54 @@ impl Frame {
         }
     }
 
-    fn var_set(&mut self, var: usize, val: Val) {
-        self.vars[var as usize] = val;
+    fn var_set(&mut self, depth: usize, var: usize, val: Val) {
+        self.closure(depth).set_var(var, val);
+    }
+
+    /// Return the closure `depth` closures up from this frame's closure (where `depth` can be 0
+    /// which returns this frame's closure).
+    fn closure(&self, mut depth: usize) -> Gc<Closure> {
+        let mut c = Gc::clone(&self.closure);
+        while depth > 0 {
+            c = Gc::clone(c.parent.as_ref().unwrap());
+            depth -= 1;
+        }
+        c
+    }
+}
+
+#[derive(Debug)]
+pub struct Closure {
+    parent: Option<Gc<Closure>>,
+    vars: Gc<UnsafeCell<Vec<Val>>>,
+}
+
+impl Closure {
+    fn new(parent: Option<Gc<Closure>>, vars: Vec<Val>) -> Closure {
+        Closure {
+            parent,
+            vars: Gc::new(UnsafeCell::new(vars)),
+        }
+    }
+
+    fn get_var(&self, var: usize) -> Val {
+        unsafe { (&*self.vars.get()).get_unchecked(var) }.clone()
+    }
+
+    fn set_var(&self, var: usize, val: Val) {
+        unsafe { *(&mut *self.vars.get()).get_unchecked_mut(var) = val };
+    }
+}
+
+impl GcLayout for Closure {
+    fn layout(&self) -> std::alloc::Layout {
+        std::alloc::Layout::new::<Self>()
+    }
+}
+
+impl GcLayout for UnsafeCell<Vec<Val>> {
+    fn layout(&self) -> std::alloc::Layout {
+        std::alloc::Layout::new::<Self>()
     }
 }
 
@@ -370,10 +440,10 @@ mod tests {
         let selfv = Int::from_isize(&vm, 42).unwrap();
         let v1 = Int::from_isize(&vm, 43).unwrap();
         let v2 = Int::from_isize(&vm, 44).unwrap();
-        let mut f = Frame::new(&vm, 4, selfv, &[v1, v2]);
-        assert_eq!(f.var_lookup(0).unwrap().as_isize(&vm), Ok(42));
-        assert_eq!(f.var_lookup(1).unwrap().as_isize(&vm), Ok(43));
-        assert_eq!(f.var_lookup(2).unwrap().as_isize(&vm), Ok(44));
-        assert!(f.var_lookup(3).is_err());
+        let mut f = Frame::new(&vm, None, 4, selfv, &[v1, v2]);
+        assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm), Ok(42));
+        assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm), Ok(43));
+        assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm), Ok(44));
+        assert!(f.var_lookup(0, 3).is_err());
     }
 }

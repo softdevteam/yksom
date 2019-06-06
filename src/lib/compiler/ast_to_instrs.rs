@@ -180,10 +180,10 @@ impl<'a> Compiler<'a> {
             ast::Expr::Assign { id, expr } => {
                 let (depth, var_num) = self.find_var(&id)?;
                 self.c_expr(expr)?;
-                debug_assert_eq!(self.vars_stack.len(), 2);
-                match depth {
-                    0 => self.instrs.push(Instr::InstVarSet(var_num)),
-                    _ => self.instrs.push(Instr::VarSet(var_num)),
+                if depth == self.vars_stack.len() - 1 {
+                    self.instrs.push(Instr::InstVarSet(var_num));
+                } else {
+                    self.instrs.push(Instr::VarSet(depth, var_num));
                 }
                 Ok(())
             }
@@ -239,10 +239,10 @@ impl<'a> Compiler<'a> {
             ast::Expr::VarLookup(lexeme) => {
                 match self.find_var(&lexeme) {
                     Ok((depth, var_num)) => {
-                        debug_assert_eq!(self.vars_stack.len(), 2);
-                        match depth {
-                            0 => self.instrs.push(Instr::InstVarLookup(var_num)),
-                            _ => self.instrs.push(Instr::VarLookup(var_num)),
+                        if depth == self.vars_stack.len() - 1 {
+                            self.instrs.push(Instr::InstVarLookup(var_num));
+                        } else {
+                            self.instrs.push(Instr::VarLookup(depth, var_num));
                         }
                     }
                     Err(e) => match self.lexer.lexeme_str(&lexeme) {
@@ -311,9 +311,8 @@ impl<'a> Compiler<'a> {
     }
 
     /// Find the variable `name` in the variable stack returning a tuple `Some((depth, var_num))`
-    /// or `Err` if the variable isn't found. `depth` is the depth of the `HashMap` in `vars_stack`
-    /// (i.e. if `name` is found in the first element of the stack this will be 0). `var_num` is
-    /// the variable number within that `HashMap`.
+    /// or `Err` if the variable isn't found. `depth` is the number of closures away from the
+    /// "current" one that the variable is found.
     fn find_var(
         &self,
         lexeme: &Lexeme<StorageT>,
@@ -321,7 +320,7 @@ impl<'a> Compiler<'a> {
         let name = self.lexer.lexeme_str(lexeme);
         for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
             if let Some(n) = vars.get(name) {
-                return Ok((depth, *n));
+                return Ok((self.vars_stack.len() - depth - 1, *n));
             }
         }
         Err(vec![(*lexeme, format!("Unknown variable '{}'", name))])

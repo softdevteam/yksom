@@ -17,8 +17,8 @@ pub enum Instr {
     Pop,
     Return,
     Send(usize),
-    VarLookup(usize),
-    VarSet(usize),
+    VarLookup(usize, usize),
+    VarSet(usize, usize),
 }
 
 #[derive(Clone, Copy, Debug)]

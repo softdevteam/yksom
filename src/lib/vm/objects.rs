@@ -46,7 +46,7 @@ use enum_primitive_derive::Primitive;
 
 use super::{
     gc::{Gc, GcBox, GcLayout},
-    vm::{VMError, VM},
+    vm::{Closure, VMError, VM},
 };
 use crate::compiler::{
     cobjects,
@@ -387,6 +387,7 @@ impl Drop for ThinObj {
 pub struct Block {
     pub blockinfo_cls: Val,
     pub blockinfo_off: usize,
+    pub parent_closure: Gc<Closure>,
 }
 
 impl Obj for Block {
@@ -414,12 +415,18 @@ impl StaticObjType for Block {
 }
 
 impl Block {
-    pub fn new(vm: &VM, blockinfo_cls: Val, blockinfo_off: usize) -> Val {
+    pub fn new(
+        vm: &VM,
+        blockinfo_cls: Val,
+        blockinfo_off: usize,
+        parent_closure: Gc<Closure>,
+    ) -> Val {
         Val::from_obj(
             vm,
             Block {
                 blockinfo_cls,
                 blockinfo_off,
+                parent_closure,
             },
         )
     }
