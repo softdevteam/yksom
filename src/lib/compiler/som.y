@@ -73,9 +73,13 @@ MethodBody -> Result<MethodBody, ()>:
     | "(" NameDefs BlockExprs ")" { Ok(MethodBody::Body{ vars: $2?, exprs: $3? }) }
     ;
 BlockExprs -> Result<Vec<Expr>, ()>:
-      Exprs DotOpt "^" Expr DotOpt { flattenr($1, $4) }
+      Exprs DotOpt "^" Expr DotOpt {
+          let mut exprs = $1?;
+          exprs.push(Expr::Return(Box::new($4?)));
+          Ok(exprs)
+      }
     | Exprs DotOpt { $1 }
-    | "^" Expr DotOpt { Ok(vec![$2?]) }
+    | "^" Expr DotOpt { Ok(vec![Expr::Return(Box::new($2?))]) }
     | { Ok(vec![]) }
     ;
 DotOpt -> Result<(), ()>:

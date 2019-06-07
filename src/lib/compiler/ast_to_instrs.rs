@@ -166,7 +166,7 @@ impl<'a> Compiler<'a> {
                 exprs,
             } => {
                 let bytecode_off = self.instrs.len();
-                let num_vars = self.c_block(&params, vars_lexemes, exprs)?;
+                let num_vars = self.c_block(true, &params, vars_lexemes, exprs)?;
                 Ok(cobjects::MethodBody::User {
                     num_vars,
                     bytecode_off,
@@ -199,7 +199,7 @@ impl<'a> Compiler<'a> {
                     bytecode_end: 0,
                     num_vars: 0,
                 });
-                let num_vars = self.c_block(params, vars, exprs)?;
+                let num_vars = self.c_block(false, params, vars, exprs)?;
                 self.blocks[block_off].bytecode_end = self.instrs.len();
                 self.blocks[block_off].num_vars = num_vars;
                 Ok(())
@@ -223,7 +223,8 @@ impl<'a> Compiler<'a> {
                 }
                 Ok(())
             }
-            ast::Expr::Return => {
+            ast::Expr::Return(expr) => {
+                self.c_expr(expr)?;
                 self.instrs.push(Instr::Return);
                 Ok(())
             }
@@ -259,6 +260,7 @@ impl<'a> Compiler<'a> {
 
     fn c_block(
         &mut self,
+        is_method: bool,
         params: &[Lexeme<StorageT>],
         vars_lexemes: &[Lexeme<StorageT>],
         exprs: &[ast::Expr],
@@ -299,12 +301,17 @@ impl<'a> Compiler<'a> {
             // We deliberately bomb out at the first error in a method on the basis that
             // it's likely to lead to many repetitive errors.
             self.c_expr(e)?;
-            if i == exprs.len() - 1 {
-                self.instrs.push(Instr::Return);
-            } else {
+            if i != exprs.len() - 1 {
                 self.instrs.push(Instr::Pop);
             }
         }
+        // Blocks return the value of the last statement, but methods return `self`.
+        if is_method {
+            self.instrs.push(Instr::Pop);
+            debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
+            self.instrs.push(Instr::VarLookup(0, 0));
+        }
+        self.instrs.push(Instr::Return);
         self.vars_stack.pop();
 
         Ok(num_vars)
