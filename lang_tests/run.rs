@@ -7,7 +7,7 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-use std::process::Command;
+use std::{env, path::PathBuf, process::Command};
 
 use lang_tester::LangTester;
 use lazy_static::lazy_static;
@@ -33,17 +33,18 @@ fn main() {
                 .map(|x| x.get(1).unwrap().as_str().trim().to_owned())
         })
         .test_cmds(|p| {
-            let mut vm = Command::new("cargo");
-            vm.args(&[
-                "run",
-                "-q",
-                #[cfg(not(debug_assertions))]
-                "--release",
-                "--",
-                "--cp",
-                SOM_LIBS_PATH,
-                p.to_str().unwrap(),
-            ]);
+            // We call target/[debug|release]/yksom directly, because it's noticeably faster than
+            // calling `cargo run`.
+            let mut yksom_bin = PathBuf::new();
+            yksom_bin.push(env::var("CARGO_MANIFEST_DIR").unwrap());
+            yksom_bin.push("target");
+            #[cfg(debug_assertions)]
+            yksom_bin.push("debug");
+            #[cfg(not(debug_assertions))]
+            yksom_bin.push("release");
+            yksom_bin.push("yksom");
+            let mut vm = Command::new(yksom_bin);
+            vm.args(&["--cp", SOM_LIBS_PATH, p.to_str().unwrap()]);
             vec![("VM", vm)]
         })
         .run();
