@@ -1,2 +1,6 @@
 Boolean = (
+    ifTrue: trueBlock ifFalse: falseBlock = (
+        self ifTrue: [ ^trueBlock value  ].
+        self ifFalse: [ ^falseBlock value ].
+    )
 )

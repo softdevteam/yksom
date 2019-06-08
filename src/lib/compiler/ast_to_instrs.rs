@@ -26,10 +26,20 @@ pub struct Compiler<'a> {
     lexer: &'a Lexer<StorageT>,
     path: &'a Path,
     instrs: Vec<Instr>,
+    /// We collect all message sends together so that repeated calls of e.g. "println" take up
+    /// constant space, no matter how many calls there are.
     sends: IndexMap<(String, usize), usize>,
+    /// We map constants to an offset so that we only store constants once, no matter how many
+    /// times they are reference in source code.
     consts: IndexMap<cobjects::Const, usize>,
+    /// All the blocks a class contains.
     blocks: Vec<cobjects::Block>,
+    /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<&'a str, usize>>,
+    /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
+    /// in a closure -- and, if so, how many nested closures we are inside at the current point of
+    /// evaluation.
+    closure_depth: usize,
 }
 
 impl<'a> Compiler<'a> {
@@ -46,6 +56,7 @@ impl<'a> Compiler<'a> {
             consts: IndexMap::new(),
             blocks: Vec::new(),
             vars_stack: Vec::new(),
+            closure_depth: 0,
         };
 
         let mut errs = vec![];
@@ -199,7 +210,9 @@ impl<'a> Compiler<'a> {
                     bytecode_end: 0,
                     num_vars: 0,
                 });
+                self.closure_depth += 1;
                 let num_vars = self.c_block(false, params, vars, exprs)?;
+                self.closure_depth -= 1;
                 self.blocks[block_off].bytecode_end = self.instrs.len();
                 self.blocks[block_off].num_vars = num_vars;
                 Ok(())
@@ -225,7 +238,7 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::Return(expr) => {
                 self.c_expr(expr)?;
-                self.instrs.push(Instr::Return);
+                self.instrs.push(Instr::Return(self.closure_depth));
                 Ok(())
             }
             ast::Expr::String(lexeme) => {
@@ -311,7 +324,7 @@ impl<'a> Compiler<'a> {
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
             self.instrs.push(Instr::VarLookup(0, 0));
         }
-        self.instrs.push(Instr::Return);
+        self.instrs.push(Instr::Return(0));
         self.vars_stack.pop();
 
         Ok(num_vars)

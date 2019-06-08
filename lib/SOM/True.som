@@ -1,4 +1,6 @@
 True = Boolean (
     asString = ( ^'true' )
     not = ( ^false )
+    ifTrue: block = ( ^block value )
+    ifFalse: block = ( ^nil )
 )

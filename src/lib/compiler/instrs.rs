@@ -15,7 +15,7 @@ pub enum Instr {
     InstVarLookup(usize),
     InstVarSet(usize),
     Pop,
-    Return,
+    Return(usize),
     Send(usize),
     VarLookup(usize, usize),
     VarSet(usize, usize),

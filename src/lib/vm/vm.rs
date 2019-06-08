@@ -9,10 +9,8 @@
 
 use std::{
     cell::UnsafeCell,
-    ops::RangeBounds,
     path::{Path, PathBuf},
     process, ptr,
-    vec::Drain,
 };
 
 use super::{
@@ -37,6 +35,8 @@ pub enum VMError {
     /// Tried to perform a `Val::gcbox_cast` operation on a non-boxed `Val`. Note that `expected`
     /// and `got` can reference the same `ObjType`.
     GcBoxTypeError { expected: ObjType, got: ObjType },
+    /// Percolate a non-local return up the call stack.
+    Return(usize, Val),
     /// A dynamic type error.
     TypeError { expected: ObjType, got: ObjType },
     /// Tried to read from a local variable that hasn't had a value assigned to it yet.
@@ -58,6 +58,7 @@ pub struct VM {
     pub false_: Val,
     pub nil: Val,
     pub true_: Val,
+    frames: UnsafeCell<Vec<Gc<Frame>>>,
 }
 
 impl VM {
@@ -81,6 +82,7 @@ impl VM {
             false_: Val::illegal(),
             nil: Val::illegal(),
             true_: Val::illegal(),
+            frames: UnsafeCell::new(Vec::new()),
         };
 
         // The very delicate phase.
@@ -218,7 +220,14 @@ impl VM {
         num_vars: usize,
         args: &[Val],
     ) -> Result<Val, VMError> {
-        let mut frame = Frame::new(self, parent_closure, num_vars, rcv.clone(), args);
+        let frame = Gc::new(Frame::new(
+            self,
+            parent_closure,
+            num_vars,
+            rcv.clone(),
+            args,
+        ));
+        unsafe { &mut *self.frames.get() }.push(Gc::clone(&frame));
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Block(blkinfo_off) => {
@@ -258,17 +267,48 @@ impl VM {
                 }
                 Instr::Send(moff) => {
                     let (ref name, nargs) = &cls.sends[moff];
-                    let args = frame
-                        .stack_drain(frame.stack_len() - nargs..)
-                        .rev()
-                        .collect::<Vec<_>>();
+                    let args = frame.stack_drain_rev(frame.stack_len() - nargs);
                     let rcv = frame.stack_pop();
-                    let r = self.send(rcv, &name, &args)?;
+                    let r = match self.send(rcv, &name, &args) {
+                        Ok(r) => r,
+                        Err(VMError::Return(depth, val)) => {
+                            if depth == 0 {
+                                val
+                            } else {
+                                unsafe { &mut *self.frames.get() }.pop();
+                                return Err(VMError::Return(depth - 1, val));
+                            }
+                        }
+                        Err(e) => {
+                            unsafe { &mut *self.frames.get() }.pop();
+                            return Err(e);
+                        }
+                    };
                     frame.stack_push(r);
                     pc += 1;
                 }
-                Instr::Return => {
-                    return Ok(frame.stack_pop());
+                Instr::Return(closure_depth) => {
+                    let v = frame.stack_pop();
+                    if closure_depth == 0 {
+                        unsafe { &mut *self.frames.get() }.pop();
+                        return Ok(v);
+                    } else {
+                        // We want to do a non-local return. Before we attempt that, we need to
+                        // check that the block hasn't escaped its function (and we know we're in a
+                        // block because only a block can attempt a non-local return).
+                        // Fortunately, the `closure` pointer in a frame is a perfect proxy for
+                        // determining this: if this frame's (i.e. block's!) parent closure is not
+                        // consistent with the frame stack, then the block has escaped.
+                        let parent_closure = frame.closure(closure_depth);
+                        for (frame_depth, pframe) in
+                            unsafe { &*self.frames.get() }.iter().rev().enumerate()
+                        {
+                            if Gc::ptr_eq(&parent_closure, &pframe.closure) {
+                                return Err(VMError::Return(frame_depth, v));
+                            }
+                        }
+                        panic!("Return from escaped block");
+                    }
                 }
                 Instr::VarLookup(d, n) => {
                     let val = frame.var_lookup(d, n)?;
@@ -286,9 +326,16 @@ impl VM {
     }
 }
 
+#[derive(Debug)]
 pub struct Frame {
-    stack: Vec<Val>,
+    stack: UnsafeCell<Vec<Val>>,
     closure: Gc<Closure>,
+}
+
+impl GcLayout for Frame {
+    fn layout(&self) -> std::alloc::Layout {
+        std::alloc::Layout::new::<Self>()
+    }
 }
 
 impl Frame {
@@ -310,46 +357,48 @@ impl Frame {
         }
 
         Frame {
-            stack: Vec::new(),
+            stack: UnsafeCell::new(Vec::new()),
             closure: Gc::new(Closure::new(parent_closure, vars)),
         }
     }
 
     fn stack_len(&self) -> usize {
-        self.stack.len()
+        unsafe { &*self.stack.get() }.len()
     }
 
-    fn stack_push(&mut self, v: Val) {
-        self.stack.push(v);
+    fn stack_push(&self, v: Val) {
+        unsafe { &mut *self.stack.get() }.push(v);
     }
 
-    fn stack_peek(&mut self) -> Val {
-        debug_assert!(self.stack.len() > 0);
-        let i = self.stack.len() - 1;
-        unsafe { self.stack.get_unchecked(i) }.clone()
+    fn stack_peek(&self) -> Val {
+        let stack = unsafe { &*self.stack.get() };
+        debug_assert!(stack.len() > 0);
+        let i = stack.len() - 1;
+        unsafe { stack.get_unchecked(i) }.clone()
     }
 
-    fn stack_pop(&mut self) -> Val {
-        debug_assert!(self.stack.len() > 0);
+    fn stack_pop(&self) -> Val {
         // Since we know that there will be at least one element in the stack, we can use our own
         // simplified version of pop() which avoids a branch and the wrapping of values in an
         // Option.
-        let i = self.stack.len() - 1;
         unsafe {
-            let v = ptr::read(self.stack.get_unchecked(i));
-            self.stack.set_len(i);
+            let stack = &mut *self.stack.get();
+            debug_assert!(stack.len() > 0);
+            let i = stack.len() - 1;
+            let v = ptr::read(stack.get_unchecked(i));
+            stack.set_len(i);
             v
         }
     }
 
-    fn stack_drain<R>(&mut self, range: R) -> Drain<'_, Val>
-    where
-        R: RangeBounds<usize>,
-    {
-        self.stack.drain(range)
+    fn stack_drain_rev(&self, start: usize) -> Vec<Val> {
+        unsafe { &mut *self.stack.get() }
+            .drain(start..)
+            .rev()
+            .collect()
     }
 
-    fn var_lookup(&mut self, depth: usize, var: usize) -> Result<Val, VMError> {
+    fn var_lookup(&self, depth: usize, var: usize) -> Result<Val, VMError> {
         let cl = self.closure(depth);
         let v = cl.get_var(var);
         if v.is_illegal() {
@@ -359,7 +408,7 @@ impl Frame {
         }
     }
 
-    fn var_set(&mut self, depth: usize, var: usize, val: Val) {
+    fn var_set(&self, depth: usize, var: usize, val: Val) {
         self.closure(depth).set_var(var, val);
     }
 
@@ -426,6 +475,7 @@ impl VM {
             false_: Val::illegal(),
             nil: Val::illegal(),
             true_: Val::illegal(),
+            frames: UnsafeCell::new(Vec::new()),
         }
     }
 }
@@ -440,10 +490,10 @@ mod tests {
         let selfv = Int::from_isize(&vm, 42).unwrap();
         let v1 = Int::from_isize(&vm, 43).unwrap();
         let v2 = Int::from_isize(&vm, 44).unwrap();
-        let mut f = Frame::new(&vm, None, 4, selfv, &[v1, v2]);
-        assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm), Ok(42));
-        assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm), Ok(43));
-        assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm), Ok(44));
+        let f = Frame::new(&vm, None, 4, selfv, &[v1, v2]);
+        assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
+        assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
+        assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);
         assert!(f.var_lookup(0, 3).is_err());
     }
 }
