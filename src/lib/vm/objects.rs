@@ -99,7 +99,7 @@ impl Val {
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Obj::from_off` and
     /// then turned into an actual object with `tobj`: failure to follow these steps results in
     /// undefined behaviour.
-    pub fn recover(obj: &Obj) -> Self {
+    pub fn recover(obj: &dyn Obj) -> Self {
         unsafe {
             let ptr = ThinObj::recover(obj).into_raw();
             Val {
@@ -296,15 +296,15 @@ pub struct ThinObj {
 impl ThinObj {
     pub fn new<'a, U>(v: U) -> Gc<ThinObj>
     where
-        *const U: CoerceUnsized<*const (Obj + 'a)>,
+        *const U: CoerceUnsized<*const (dyn Obj + 'a)>,
         U: Obj + 'a,
     {
         let (layout, uoff) = Layout::new::<ThinObj>().extend(Layout::new::<U>()).unwrap();
         debug_assert_eq!(uoff, size_of::<ThinObj>());
         let (gcbptr, objptr) = GcBox::<ThinObj>::alloc_blank(layout);
-        let t: &Obj = &v;
+        let t: &dyn Obj = &v;
         unsafe {
-            (*objptr).vtable = transmute::<*const Obj, (usize, usize)>(t).1;
+            (*objptr).vtable = transmute::<*const dyn Obj, (usize, usize)>(t).1;
             let buf_v = (objptr as *mut u8).add(uoff);
             if size_of::<U>() != 0 {
                 buf_v.copy_from_nonoverlapping(&v as *const U as *const u8, size_of::<U>());
@@ -315,7 +315,7 @@ impl ThinObj {
     }
 
     /// Turn an `Obj` pointer into a `Gc<ThinObj>`.
-    pub unsafe fn recover(o: &Obj) -> Gc<ThinObj> {
+    pub unsafe fn recover(o: &dyn Obj) -> Gc<ThinObj> {
         let thinptr = (o as *const _ as *const u8).sub(size_of::<ThinObj>()) as *const ThinObj;
         Gc::recover(thinptr)
     }
@@ -358,7 +358,7 @@ impl GcLayout for ThinObj {
 }
 
 impl Deref for ThinObj {
-    type Target = Obj;
+    type Target = dyn Obj;
 
     fn deref(&self) -> &(dyn Obj + 'static) {
         unsafe {
@@ -805,7 +805,7 @@ mod tests {
         let v = {
             let v = String_::new(&vm, "s".to_owned());
             let v_tobj = v.tobj(&vm).unwrap();
-            let v_int: &Obj = v_tobj.deref().deref();
+            let v_int: &dyn Obj = v_tobj.deref().deref();
             let v_recovered = Val::recover(v_int);
             assert_eq!(v_recovered.val, v.val);
             v_recovered
