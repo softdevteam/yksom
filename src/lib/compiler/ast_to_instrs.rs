@@ -21,7 +21,7 @@ use super::{
 };
 
 pub struct Compiler<'a> {
-    lexer: &'a Lexer<StorageT>,
+    lexer: &'a dyn Lexer<StorageT>,
     path: &'a Path,
     instrs: Vec<Instr>,
     sends: IndexMap<(String, usize), usize>,
@@ -31,7 +31,7 @@ pub struct Compiler<'a> {
 
 impl<'a> Compiler<'a> {
     pub fn compile(
-        lexer: &Lexer<StorageT>,
+        lexer: &dyn Lexer<StorageT>,
         path: &Path,
         astcls: &ast::Class,
     ) -> Result<cobjects::Class, String> {
