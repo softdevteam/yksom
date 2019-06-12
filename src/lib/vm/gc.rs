@@ -76,6 +76,11 @@ impl<T: GcLayout> Gc<T> {
         unsafe { &mut *gcc.ptr }.clones += 1;
         Gc { ptr: gcc.ptr }
     }
+
+    /// Is `this` pointer equal to `other`?
+    pub fn ptr_eq(this: &Gc<T>, other: &Gc<T>) -> bool {
+        ptr::eq(this.deref(), other.deref())
+    }
 }
 
 impl<T: GcLayout> Drop for Gc<T> {

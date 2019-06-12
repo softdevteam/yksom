@@ -46,7 +46,7 @@ use enum_primitive_derive::Primitive;
 
 use super::{
     gc::{Gc, GcBox, GcLayout},
-    vm::{VMError, VM},
+    vm::{Closure, VMError, VM},
 };
 use crate::compiler::{
     cobjects,
@@ -75,7 +75,7 @@ enum ValKind {
 
 /// The core struct representing values in the language runtime: boxed and unboxed values are
 /// hidden behind this, such that they can be treated in exactly the same way.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
@@ -96,8 +96,8 @@ impl Val {
         }
     }
 
-    /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Obj::from_off` and
-    /// then turned into an actual object with `tobj`: failure to follow these steps results in
+    /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
+    /// then turned into an actual object with `tobj`: failure to follow these steps will result in
     /// undefined behaviour.
     pub fn recover(obj: &dyn Obj) -> Self {
         unsafe {
@@ -232,6 +232,7 @@ impl Drop for Val {
 /// lifetime, which is an annoying restriction.
 #[derive(Debug, PartialEq)]
 pub enum ObjType {
+    Block,
     Class,
     Method,
     Inst,
@@ -276,6 +277,7 @@ macro_rules! gclayout_lifetime {
     };
 }
 
+gclayout!(Block);
 gclayout_lifetime!(Class);
 gclayout!(Method);
 gclayout!(Inst);
@@ -382,15 +384,73 @@ impl Drop for ThinObj {
 }
 
 #[derive(Debug)]
+pub struct Block {
+    pub blockinfo_cls: Val,
+    pub blockinfo_off: usize,
+    pub parent_closure: Gc<Closure>,
+}
+
+impl Obj for Block {
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Block
+    }
+
+    fn as_isize(&self) -> Result<isize, VMError> {
+        Err(VMError::CantRepresentAsUsize)
+    }
+
+    fn as_usize(&self) -> Result<usize, VMError> {
+        Err(VMError::CantRepresentAsUsize)
+    }
+
+    fn get_class(&self, vm: &VM) -> Val {
+        vm.block_cls.clone()
+    }
+}
+
+impl StaticObjType for Block {
+    fn static_objtype() -> ObjType {
+        ObjType::Block
+    }
+}
+
+impl Block {
+    pub fn new(
+        vm: &VM,
+        blockinfo_cls: Val,
+        blockinfo_off: usize,
+        parent_closure: Gc<Closure>,
+    ) -> Val {
+        Val::from_obj(
+            vm,
+            Block {
+                blockinfo_cls,
+                blockinfo_off,
+                parent_closure,
+            },
+        )
+    }
+}
+
+#[derive(Debug)]
 pub struct Class<'a> {
     pub name: Val,
     pub path: PathBuf,
     pub supercls: Option<&'a Class<'a>>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Method>,
+    pub blockinfos: Vec<BlockInfo>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Val>,
     pub sends: Vec<(String, usize)>,
+}
+
+/// Minimal information about a SOM block.
+#[derive(Debug)]
+pub struct BlockInfo {
+    pub bytecode_off: usize,
+    pub bytecode_end: usize,
+    pub num_vars: usize,
 }
 
 impl<'a> Obj for Class<'a> {
@@ -420,9 +480,12 @@ impl<'a> StaticObjType for Class<'a> {
 impl<'a> Class<'a> {
     pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, VMError> {
         let supercls = match ccls.supercls {
-            Some(ref x) if x == "nil" => None,
+            Some(ref x) => match x.as_str() {
+                "Boolean" => Some(vm.bool_cls.gcbox_cast(vm)?),
+                "nil" => None,
+                _ => unimplemented!(),
+            },
             None => (Some(vm.obj_cls.gcbox_cast(vm)?)),
-            _ => unimplemented!(),
         };
 
         let mut inst_vars = Vec::with_capacity(ccls.num_inst_vars);
@@ -446,6 +509,17 @@ impl<'a> Class<'a> {
             };
             methods.insert(cmeth.name, meth);
         }
+
+        let blockinfos = ccls
+            .blocks
+            .into_iter()
+            .map(|b| BlockInfo {
+                bytecode_off: b.bytecode_off,
+                bytecode_end: b.bytecode_end,
+                num_vars: b.num_vars,
+            })
+            .collect();
+
         let consts = ccls
             .consts
             .into_iter()
@@ -461,6 +535,7 @@ impl<'a> Class<'a> {
                 supercls,
                 num_inst_vars: ccls.num_inst_vars,
                 methods,
+                blockinfos,
                 instrs: ccls.instrs,
                 consts,
                 sends: ccls.sends,
@@ -480,6 +555,10 @@ impl<'a> Class<'a> {
                 Some(scls) => scls.get_method(vm, msg),
                 None => Err(VMError::UnknownMethod(msg.to_owned())),
             })
+    }
+
+    pub fn blockinfo(&self, blockinfo_off: usize) -> &BlockInfo {
+        &self.blockinfos[blockinfo_off]
     }
 }
 

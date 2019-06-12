@@ -8,16 +8,18 @@
 // terms.
 
 use std::{
-    ops::RangeBounds,
+    cell::UnsafeCell,
     path::{Path, PathBuf},
     process, ptr,
-    vec::Drain,
 };
 
-use super::objects::{Class, Inst, MethodBody, ObjType, String_, Val};
+use super::{
+    gc::{Gc, GcLayout},
+    objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val},
+};
 use crate::compiler::{
     compile,
-    instrs::{Instr, Primitive, SELF_VAR},
+    instrs::{Builtin, Instr, Primitive},
 };
 
 pub const SOM_EXTENSION: &str = "som";
@@ -33,6 +35,8 @@ pub enum VMError {
     /// Tried to perform a `Val::gcbox_cast` operation on a non-boxed `Val`. Note that `expected`
     /// and `got` can reference the same `ObjType`.
     GcBoxTypeError { expected: ObjType, got: ObjType },
+    /// Percolate a non-local return up the call stack.
+    Return(usize, Val),
     /// A dynamic type error.
     TypeError { expected: ObjType, got: ObjType },
     /// Tried to read from a local variable that hasn't had a value assigned to it yet.
@@ -43,11 +47,18 @@ pub enum VMError {
 
 pub struct VM {
     classpath: Vec<String>,
+    pub block_cls: Val,
+    pub bool_cls: Val,
     pub cls_cls: Val,
+    pub false_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
+    pub true_cls: Val,
+    pub false_: Val,
     pub nil: Val,
+    pub true_: Val,
+    frames: UnsafeCell<Vec<Gc<Frame>>>,
 }
 
 impl VM {
@@ -60,11 +71,18 @@ impl VM {
         //
         let mut vm = VM {
             classpath,
+            block_cls: Val::illegal(),
+            bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
+            false_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            true_cls: Val::illegal(),
+            false_: Val::illegal(),
             nil: Val::illegal(),
+            true_: Val::illegal(),
+            frames: UnsafeCell::new(Vec::new()),
         };
 
         // The very delicate phase.
@@ -79,7 +97,13 @@ impl VM {
         // The slightly delicate phase.
         //
         // Nothing in this phase must store references to any classes earlier than it in the phase.
+        vm.block_cls = vm.init_builtin_class("Block", false);
+        vm.bool_cls = vm.init_builtin_class("Boolean", false);
+        vm.false_cls = vm.init_builtin_class("False", false);
         vm.str_cls = vm.init_builtin_class("String", false);
+        vm.true_cls = vm.init_builtin_class("True", false);
+        vm.false_ = Inst::new(&vm, vm.false_cls.clone());
+        vm.true_ = Inst::new(&vm, vm.true_cls.clone());
 
         vm
     }
@@ -141,7 +165,7 @@ impl VM {
             } => {
                 let meth_cls_tobj = meth_cls_val.tobj(self)?;
                 let meth_cls: &Class = meth_cls_tobj.cast()?;
-                self.exec_user(meth_cls, bytecode_off, rcv, num_vars, args)
+                self.exec_user(meth_cls, bytecode_off, rcv, None, num_vars, args)
             }
         }
     }
@@ -169,6 +193,21 @@ impl VM {
                 println!("{}", str_.as_str());
                 Ok(rcv)
             }
+            Primitive::Value => {
+                let rcv_tobj = rcv.tobj(self)?;
+                let rcv_blk: &Block = rcv_tobj.cast()?;
+                let blk_cls_tobj = rcv_blk.blockinfo_cls.tobj(self)?;
+                let blk_cls: &Class = blk_cls_tobj.cast()?;
+                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
+                self.exec_user(
+                    blk_cls,
+                    blkinfo.bytecode_off,
+                    rcv,
+                    Some(Gc::clone(&rcv_blk.parent_closure)),
+                    blkinfo.num_vars,
+                    &[],
+                )
+            }
         }
     }
 
@@ -177,12 +216,37 @@ impl VM {
         cls: &Class,
         mut pc: usize,
         rcv: Val,
+        parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
-        _args: &[Val],
+        args: &[Val],
     ) -> Result<Val, VMError> {
-        let mut frame = Frame::new(self, num_vars, rcv.clone());
+        let frame = Gc::new(Frame::new(
+            self,
+            parent_closure,
+            num_vars,
+            rcv.clone(),
+            args,
+        ));
+        unsafe { &mut *self.frames.get() }.push(Gc::clone(&frame));
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
+                Instr::Block(blkinfo_off) => {
+                    frame.stack_push(Block::new(
+                        self,
+                        Val::recover(cls),
+                        blkinfo_off,
+                        Gc::clone(&frame.closure),
+                    ));
+                    pc = cls.blockinfo(blkinfo_off).bytecode_end;
+                }
+                Instr::Builtin(b) => {
+                    frame.stack_push(match b {
+                        Builtin::Nil => self.nil.clone(),
+                        Builtin::False => self.false_.clone(),
+                        Builtin::True => self.true_.clone(),
+                    });
+                    pc += 1;
+                }
                 Instr::Const(coff) => {
                     frame.stack_push(cls.consts[coff].clone());
                     pc += 1;
@@ -203,25 +267,57 @@ impl VM {
                 }
                 Instr::Send(moff) => {
                     let (ref name, nargs) = &cls.sends[moff];
-                    let args = frame
-                        .stack_drain(frame.stack_len() - nargs..)
-                        .collect::<Vec<_>>();
+                    let args = frame.stack_drain_rev(frame.stack_len() - nargs);
                     let rcv = frame.stack_pop();
-                    let r = self.send(rcv, &name, &args)?;
+                    let r = match self.send(rcv, &name, &args) {
+                        Ok(r) => r,
+                        Err(VMError::Return(depth, val)) => {
+                            if depth == 0 {
+                                val
+                            } else {
+                                unsafe { &mut *self.frames.get() }.pop();
+                                return Err(VMError::Return(depth - 1, val));
+                            }
+                        }
+                        Err(e) => {
+                            unsafe { &mut *self.frames.get() }.pop();
+                            return Err(e);
+                        }
+                    };
                     frame.stack_push(r);
                     pc += 1;
                 }
-                Instr::Return => {
-                    return Ok(frame.stack_pop());
+                Instr::Return(closure_depth) => {
+                    let v = frame.stack_pop();
+                    if closure_depth == 0 {
+                        unsafe { &mut *self.frames.get() }.pop();
+                        return Ok(v);
+                    } else {
+                        // We want to do a non-local return. Before we attempt that, we need to
+                        // check that the block hasn't escaped its function (and we know we're in a
+                        // block because only a block can attempt a non-local return).
+                        // Fortunately, the `closure` pointer in a frame is a perfect proxy for
+                        // determining this: if this frame's (i.e. block's!) parent closure is not
+                        // consistent with the frame stack, then the block has escaped.
+                        let parent_closure = frame.closure(closure_depth);
+                        for (frame_depth, pframe) in
+                            unsafe { &*self.frames.get() }.iter().rev().enumerate()
+                        {
+                            if Gc::ptr_eq(&parent_closure, &pframe.closure) {
+                                return Err(VMError::Return(frame_depth, v));
+                            }
+                        }
+                        panic!("Return from escaped block");
+                    }
                 }
-                Instr::VarLookup(n) => {
-                    let val = frame.var_lookup(n)?;
+                Instr::VarLookup(d, n) => {
+                    let val = frame.var_lookup(d, n)?;
                     frame.stack_push(val);
                     pc += 1;
                 }
-                Instr::VarSet(n) => {
+                Instr::VarSet(d, n) => {
                     let val = frame.stack_peek();
-                    frame.var_set(n, val);
+                    frame.var_set(d, n, val);
                     pc += 1;
                 }
             }
@@ -230,59 +326,81 @@ impl VM {
     }
 }
 
+#[derive(Debug)]
 pub struct Frame {
-    stack: Vec<Val>,
-    vars: Vec<Val>,
+    stack: UnsafeCell<Vec<Val>>,
+    closure: Gc<Closure>,
+}
+
+impl GcLayout for Frame {
+    fn layout(&self) -> std::alloc::Layout {
+        std::alloc::Layout::new::<Self>()
+    }
 }
 
 impl Frame {
-    fn new(_: &VM, num_vars: usize, self_val: Val) -> Self {
+    fn new(
+        _: &VM,
+        parent_closure: Option<Gc<Closure>>,
+        num_vars: usize,
+        self_val: Val,
+        args: &[Val],
+    ) -> Self {
         let mut vars = Vec::new();
         vars.resize(num_vars, Val::illegal());
-        let mut f = Frame {
-            stack: Vec::new(),
-            vars,
-        };
-        f.var_set(SELF_VAR, self_val);
-        f
+        // The VM makes some strong assumptions about variables: that the first variable is
+        // "self" and that arguments 1..n+1 are the first n arguments to the method in
+        // reverse order.
+        vars[0] = self_val;
+        for (i, arg) in args.iter().enumerate() {
+            vars[i + 1] = arg.clone();
+        }
+
+        Frame {
+            stack: UnsafeCell::new(Vec::new()),
+            closure: Gc::new(Closure::new(parent_closure, vars)),
+        }
     }
 
     fn stack_len(&self) -> usize {
-        self.stack.len()
+        unsafe { &*self.stack.get() }.len()
     }
 
-    fn stack_push(&mut self, v: Val) {
-        self.stack.push(v);
+    fn stack_push(&self, v: Val) {
+        unsafe { &mut *self.stack.get() }.push(v);
     }
 
-    fn stack_peek(&mut self) -> Val {
-        debug_assert!(self.stack.len() > 0);
-        let i = self.stack.len() - 1;
-        unsafe { self.stack.get_unchecked(i) }.clone()
+    fn stack_peek(&self) -> Val {
+        let stack = unsafe { &*self.stack.get() };
+        debug_assert!(stack.len() > 0);
+        let i = stack.len() - 1;
+        unsafe { stack.get_unchecked(i) }.clone()
     }
 
-    fn stack_pop(&mut self) -> Val {
-        debug_assert!(self.stack.len() > 0);
+    fn stack_pop(&self) -> Val {
         // Since we know that there will be at least one element in the stack, we can use our own
         // simplified version of pop() which avoids a branch and the wrapping of values in an
         // Option.
-        let i = self.stack.len() - 1;
         unsafe {
-            let v = ptr::read(self.stack.get_unchecked(i));
-            self.stack.set_len(i);
+            let stack = &mut *self.stack.get();
+            debug_assert!(stack.len() > 0);
+            let i = stack.len() - 1;
+            let v = ptr::read(stack.get_unchecked(i));
+            stack.set_len(i);
             v
         }
     }
 
-    fn stack_drain<R>(&mut self, range: R) -> Drain<'_, Val>
-    where
-        R: RangeBounds<usize>,
-    {
-        self.stack.drain(range)
+    fn stack_drain_rev(&self, start: usize) -> Vec<Val> {
+        unsafe { &mut *self.stack.get() }
+            .drain(start..)
+            .rev()
+            .collect()
     }
 
-    fn var_lookup(&mut self, var: usize) -> Result<Val, VMError> {
-        let v = &self.vars[var as usize];
+    fn var_lookup(&self, depth: usize, var: usize) -> Result<Val, VMError> {
+        let cl = self.closure(depth);
+        let v = cl.get_var(var);
         if v.is_illegal() {
             Err(VMError::UnassignedVar(var))
         } else {
@@ -290,8 +408,54 @@ impl Frame {
         }
     }
 
-    fn var_set(&mut self, var: usize, val: Val) {
-        self.vars[var as usize] = val;
+    fn var_set(&self, depth: usize, var: usize, val: Val) {
+        self.closure(depth).set_var(var, val);
+    }
+
+    /// Return the closure `depth` closures up from this frame's closure (where `depth` can be 0
+    /// which returns this frame's closure).
+    fn closure(&self, mut depth: usize) -> Gc<Closure> {
+        let mut c = Gc::clone(&self.closure);
+        while depth > 0 {
+            c = Gc::clone(c.parent.as_ref().unwrap());
+            depth -= 1;
+        }
+        c
+    }
+}
+
+#[derive(Debug)]
+pub struct Closure {
+    parent: Option<Gc<Closure>>,
+    vars: Gc<UnsafeCell<Vec<Val>>>,
+}
+
+impl Closure {
+    fn new(parent: Option<Gc<Closure>>, vars: Vec<Val>) -> Closure {
+        Closure {
+            parent,
+            vars: Gc::new(UnsafeCell::new(vars)),
+        }
+    }
+
+    fn get_var(&self, var: usize) -> Val {
+        unsafe { (&*self.vars.get()).get_unchecked(var) }.clone()
+    }
+
+    fn set_var(&self, var: usize, val: Val) {
+        unsafe { *(&mut *self.vars.get()).get_unchecked_mut(var) = val };
+    }
+}
+
+impl GcLayout for Closure {
+    fn layout(&self) -> std::alloc::Layout {
+        std::alloc::Layout::new::<Self>()
+    }
+}
+
+impl GcLayout for UnsafeCell<Vec<Val>> {
+    fn layout(&self) -> std::alloc::Layout {
+        std::alloc::Layout::new::<Self>()
     }
 }
 
@@ -300,11 +464,18 @@ impl VM {
     pub fn new_no_bootstrap() -> Self {
         VM {
             classpath: vec![],
+            block_cls: Val::illegal(),
+            bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
+            false_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            true_cls: Val::illegal(),
+            false_: Val::illegal(),
             nil: Val::illegal(),
+            true_: Val::illegal(),
+            frames: UnsafeCell::new(Vec::new()),
         }
     }
 }
@@ -316,9 +487,13 @@ mod tests {
     #[test]
     fn test_frame() {
         let vm = VM::new_no_bootstrap();
-        let v = Int::from_isize(&vm, 42).unwrap();
-        let mut f = Frame::new(&vm, 2, v);
-        assert_eq!(f.var_lookup(SELF_VAR).unwrap().as_isize(&vm), Ok(42));
-        assert!(f.var_lookup(1).is_err());
+        let selfv = Int::from_isize(&vm, 42).unwrap();
+        let v1 = Int::from_isize(&vm, 43).unwrap();
+        let v2 = Int::from_isize(&vm, 44).unwrap();
+        let f = Frame::new(&vm, None, 4, selfv, &[v1, v2]);
+        assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
+        assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
+        assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);
+        assert!(f.var_lookup(0, 3).is_err());
     }
 }

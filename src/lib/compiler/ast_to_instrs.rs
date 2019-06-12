@@ -7,16 +7,18 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-use std::{collections::hash_map::HashMap, path::Path};
+use std::{
+    collections::hash_map::{self, HashMap},
+    path::Path,
+};
 
-use indexmap::map::{Entry, IndexMap};
+use indexmap::{self, map::IndexMap};
 use itertools::Itertools;
 use lrpar::{Lexeme, Lexer};
-use static_assertions::const_assert_eq;
 
 use super::{
     ast, cobjects,
-    instrs::{Instr, Primitive, SELF_VAR},
+    instrs::{Builtin, Instr, Primitive},
     StorageT,
 };
 
@@ -24,9 +26,20 @@ pub struct Compiler<'a> {
     lexer: &'a dyn Lexer<StorageT>,
     path: &'a Path,
     instrs: Vec<Instr>,
+    /// We collect all message sends together so that repeated calls of e.g. "println" take up
+    /// constant space, no matter how many calls there are.
     sends: IndexMap<(String, usize), usize>,
+    /// We map constants to an offset so that we only store constants once, no matter how many
+    /// times they are reference in source code.
     consts: IndexMap<cobjects::Const, usize>,
+    /// All the blocks a class contains.
+    blocks: Vec<cobjects::Block>,
+    /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<&'a str, usize>>,
+    /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
+    /// in a closure -- and, if so, how many nested closures we are inside at the current point of
+    /// evaluation.
+    closure_depth: usize,
 }
 
 impl<'a> Compiler<'a> {
@@ -41,7 +54,9 @@ impl<'a> Compiler<'a> {
             instrs: Vec::new(),
             sends: IndexMap::new(),
             consts: IndexMap::new(),
+            blocks: Vec::new(),
             vars_stack: Vec::new(),
+            closure_depth: 0,
         };
 
         let mut errs = vec![];
@@ -93,6 +108,7 @@ impl<'a> Compiler<'a> {
             methods,
             instrs: compiler.instrs,
             consts: compiler.consts.into_iter().map(|(k, _)| k).collect(),
+            blocks: compiler.blocks,
             sends: compiler.sends.into_iter().map(|(k, _)| k).collect(),
         })
     }
@@ -100,8 +116,8 @@ impl<'a> Compiler<'a> {
     fn const_off(&mut self, c: cobjects::Const) -> usize {
         let off = self.consts.len();
         match self.consts.entry(c) {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
+            indexmap::map::Entry::Occupied(e) => *e.get(),
+            indexmap::map::Entry::Vacant(e) => {
                 e.insert(off);
                 off
             }
@@ -111,8 +127,8 @@ impl<'a> Compiler<'a> {
     fn send_off(&mut self, m: (String, usize)) -> usize {
         let off = self.sends.len();
         match self.sends.entry(m) {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
+            indexmap::map::Entry::Occupied(e) => *e.get(),
+            indexmap::map::Entry::Vacant(e) => {
                 e.insert(off);
                 off
             }
@@ -143,7 +159,7 @@ impl<'a> Compiler<'a> {
     fn c_body(
         &mut self,
         name: (Lexeme<StorageT>, &str),
-        _args: Vec<Lexeme<StorageT>>,
+        params: Vec<Lexeme<StorageT>>,
         body: &ast::MethodBody,
     ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
         match body {
@@ -153,34 +169,15 @@ impl<'a> Compiler<'a> {
                 "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
+                "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
             ast::MethodBody::Body {
                 vars: vars_lexemes,
                 exprs,
             } => {
-                let mut vars = HashMap::new();
-                const_assert_eq!(SELF_VAR, 0);
-                vars.insert("self", SELF_VAR);
-                for lexeme in vars_lexemes {
-                    let vars_len = vars.len();
-                    vars.insert(self.lexer.lexeme_str(&lexeme), vars_len);
-                }
-                let num_vars = vars.len();
-                self.vars_stack.push(vars);
                 let bytecode_off = self.instrs.len();
-                // We implicitly assume that the VM sets SELF_VAR to self.
-                for (i, e) in exprs.iter().enumerate() {
-                    // We deliberately bomb out at the first error in a method on the basis that
-                    // it's likely to lead to many repetitive errors.
-                    self.c_expr(e)?;
-                    if i == exprs.len() - 1 {
-                        self.instrs.push(Instr::Return);
-                    } else {
-                        self.instrs.push(Instr::Pop);
-                    }
-                }
-                self.vars_stack.pop();
+                let num_vars = self.c_block(true, &params, vars_lexemes, exprs)?;
                 Ok(cobjects::MethodBody::User {
                     num_vars,
                     bytecode_off,
@@ -194,11 +191,30 @@ impl<'a> Compiler<'a> {
             ast::Expr::Assign { id, expr } => {
                 let (depth, var_num) = self.find_var(&id)?;
                 self.c_expr(expr)?;
-                debug_assert_eq!(self.vars_stack.len(), 2);
-                match depth {
-                    0 => self.instrs.push(Instr::InstVarSet(var_num)),
-                    _ => self.instrs.push(Instr::VarSet(var_num)),
+                if depth == self.vars_stack.len() - 1 {
+                    self.instrs.push(Instr::InstVarSet(var_num));
+                } else {
+                    self.instrs.push(Instr::VarSet(depth, var_num));
                 }
+                Ok(())
+            }
+            ast::Expr::Block {
+                params,
+                vars,
+                exprs,
+            } => {
+                let block_off = self.blocks.len();
+                self.instrs.push(Instr::Block(block_off));
+                self.blocks.push(cobjects::Block {
+                    bytecode_off: self.instrs.len(),
+                    bytecode_end: 0,
+                    num_vars: 0,
+                });
+                self.closure_depth += 1;
+                let num_vars = self.c_block(false, params, vars, exprs)?;
+                self.closure_depth -= 1;
+                self.blocks[block_off].bytecode_end = self.instrs.len();
+                self.blocks[block_off].num_vars = num_vars;
                 Ok(())
             }
             ast::Expr::KeywordMsg { receiver, msglist } => {
@@ -220,8 +236,9 @@ impl<'a> Compiler<'a> {
                 }
                 Ok(())
             }
-            ast::Expr::Return => {
-                self.instrs.push(Instr::Return);
+            ast::Expr::Return(expr) => {
+                self.c_expr(expr)?;
+                self.instrs.push(Instr::Return(self.closure_depth));
                 Ok(())
             }
             ast::Expr::String(lexeme) => {
@@ -234,21 +251,88 @@ impl<'a> Compiler<'a> {
                 Ok(())
             }
             ast::Expr::VarLookup(lexeme) => {
-                let (depth, var_num) = self.find_var(&lexeme)?;
-                debug_assert_eq!(self.vars_stack.len(), 2);
-                match depth {
-                    0 => self.instrs.push(Instr::InstVarLookup(var_num)),
-                    _ => self.instrs.push(Instr::VarLookup(var_num)),
+                match self.find_var(&lexeme) {
+                    Ok((depth, var_num)) => {
+                        if depth == self.vars_stack.len() - 1 {
+                            self.instrs.push(Instr::InstVarLookup(var_num));
+                        } else {
+                            self.instrs.push(Instr::VarLookup(depth, var_num));
+                        }
+                    }
+                    Err(e) => match self.lexer.lexeme_str(&lexeme) {
+                        "nil" => self.instrs.push(Instr::Builtin(Builtin::Nil)),
+                        "false" => self.instrs.push(Instr::Builtin(Builtin::False)),
+                        "true" => self.instrs.push(Instr::Builtin(Builtin::True)),
+                        _ => return Err(e),
+                    },
                 }
                 Ok(())
             }
         }
     }
 
+    fn c_block(
+        &mut self,
+        is_method: bool,
+        params: &[Lexeme<StorageT>],
+        vars_lexemes: &[Lexeme<StorageT>],
+        exprs: &[ast::Expr],
+    ) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
+        let mut vars = HashMap::new();
+        // The VM makes some strong assumptions about variables: that the first variable is
+        // "self" and that arguments 1..n+1 are the first n arguments to the method in
+        // reverse order.
+        vars.insert("self", 0);
+
+        let mut process_var = |lexeme| {
+            let vars_len = vars.len();
+            let var_str = self.lexer.lexeme_str(&lexeme);
+            match vars.entry(var_str) {
+                hash_map::Entry::Occupied(_) => Err(vec![(
+                    lexeme,
+                    format!("Variable '{}' shadows another of the same name", var_str),
+                )]),
+                hash_map::Entry::Vacant(e) => {
+                    e.insert(vars_len);
+                    Ok(vars_len)
+                }
+            }
+        };
+
+        for lexeme in params.iter().rev() {
+            process_var(*lexeme)?;
+        }
+        for lexeme in vars_lexemes {
+            process_var(*lexeme)?;
+        }
+
+        let num_vars = vars.len();
+        self.vars_stack.push(vars);
+        // We implicitly assume that the VM sets the 0th var to self and the next n args to
+        // the function parameters (in reverse order).
+        for (i, e) in exprs.iter().enumerate() {
+            // We deliberately bomb out at the first error in a method on the basis that
+            // it's likely to lead to many repetitive errors.
+            self.c_expr(e)?;
+            if i != exprs.len() - 1 {
+                self.instrs.push(Instr::Pop);
+            }
+        }
+        // Blocks return the value of the last statement, but methods return `self`.
+        if is_method {
+            self.instrs.push(Instr::Pop);
+            debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
+            self.instrs.push(Instr::VarLookup(0, 0));
+        }
+        self.instrs.push(Instr::Return(0));
+        self.vars_stack.pop();
+
+        Ok(num_vars)
+    }
+
     /// Find the variable `name` in the variable stack returning a tuple `Some((depth, var_num))`
-    /// or `Err` if the variable isn't found. `depth` is the depth of the `HashMap` in `vars_stack`
-    /// (i.e. if `name` is found in the first element of the stack this will be 0). `var_num` is
-    /// the variable number within that `HashMap`.
+    /// or `Err` if the variable isn't found. `depth` is the number of closures away from the
+    /// "current" one that the variable is found.
     fn find_var(
         &self,
         lexeme: &Lexeme<StorageT>,
@@ -256,7 +340,7 @@ impl<'a> Compiler<'a> {
         let name = self.lexer.lexeme_str(lexeme);
         for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
             if let Some(n) = vars.get(name) {
-                return Ok((depth, *n));
+                return Ok((self.vars_stack.len() - depth - 1, *n));
             }
         }
         Err(vec![(*lexeme, format!("Unknown variable '{}'", name))])

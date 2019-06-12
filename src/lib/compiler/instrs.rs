@@ -9,14 +9,23 @@
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
+    Block(usize),
+    Builtin(Builtin),
     Const(usize),
     InstVarLookup(usize),
     InstVarSet(usize),
     Pop,
-    Return,
+    Return(usize),
     Send(usize),
-    VarLookup(usize),
-    VarSet(usize),
+    VarLookup(usize, usize),
+    VarSet(usize, usize),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Builtin {
+    False,
+    Nil,
+    True,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -26,7 +35,5 @@ pub enum Primitive {
     Name,
     New,
     PrintLn,
+    Value,
 }
-
-/// The index of the "self" variable.
-pub const SELF_VAR: usize = 0;

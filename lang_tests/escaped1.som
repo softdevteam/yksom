@@ -1,0 +1,15 @@
+"
+VM:
+  status: error
+  stderr:
+    ...Return from escaped block...
+    ...
+"
+
+escaped1 = (
+    f = ( ^[ ^ 'a' ] )
+
+    run = (
+        self f value
+    )
+)

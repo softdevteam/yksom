@@ -45,7 +45,7 @@ MethodName -> Result<MethodName, ()>:
     ;
 MethodNameKeywords -> Result<Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>, ()>:
       "KEYWORD" "ID" { Ok(vec![(map_err($1)?, map_err($2)?)]) }
-    | MethodNameKeywords "KEYWORD" "ID" { unimplemented!() }
+    | MethodNameKeywords "KEYWORD" "ID" { flattenr($1, Ok((map_err($2)?, map_err($3)?))) }
     ;
 MethodNameBin -> Result<(), ()>:
       MethodNameBinOp Argument { unimplemented!() };
@@ -73,9 +73,13 @@ MethodBody -> Result<MethodBody, ()>:
     | "(" NameDefs BlockExprs ")" { Ok(MethodBody::Body{ vars: $2?, exprs: $3? }) }
     ;
 BlockExprs -> Result<Vec<Expr>, ()>:
-      Exprs DotOpt "^" Expr DotOpt { unimplemented!() }
+      Exprs DotOpt "^" Expr DotOpt {
+          let mut exprs = $1?;
+          exprs.push(Expr::Return(Box::new($4?)));
+          Ok(exprs)
+      }
     | Exprs DotOpt { $1 }
-    | "^" Expr DotOpt { Ok(vec![$2?]) }
+    | "^" Expr DotOpt { Ok(vec![Expr::Return(Box::new($2?))]) }
     | { Ok(vec![]) }
     ;
 DotOpt -> Result<(), ()>:
@@ -95,7 +99,7 @@ Assign -> Result<Expr, ()>:
 Unit -> Result<Expr, ()>:
       "ID" { Ok(Expr::VarLookup(map_err($1)?)) }
     | Literal { $1 }
-    | Block { unimplemented!() }
+    | Block { $1 }
     | "(" Expr ")" { $2 }
     ;
 KeywordMsg -> Result<Expr, ()>:
@@ -146,11 +150,11 @@ Literal -> Result<Expr, ()>:
     | StringConst { unimplemented!() }
     | ArrayConst { unimplemented!() }
     ;
-Block -> Result<(), ()>:
-      "[" BlockParamsOpt NameDefs BlockExprs "]" { unimplemented!() };
-BlockParamsOpt -> Result<(), ()>:
+Block -> Result<Expr, ()>:
+      "[" BlockParamsOpt NameDefs BlockExprs "]" { Ok(Expr::Block{ params: $2?, vars: $3?, exprs: $4? }) };
+BlockParamsOpt -> Result<Vec<Lexeme<StorageT>>, ()>:
       BlockParams "|" { unimplemented!() }
-    | { unimplemented!() }
+    | { Ok(vec![]) }
     ;
 BlockParams -> Result<(), ()>:
       "PARAM" Argument { unimplemented!() }

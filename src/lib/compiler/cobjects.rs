@@ -22,6 +22,7 @@ pub struct Class {
     pub supercls: Option<String>,
     pub num_inst_vars: usize,
     pub methods: Vec<Method>,
+    pub blocks: Vec<Block>,
     pub instrs: Vec<Instr>,
     pub consts: Vec<Const>,
     pub sends: Vec<(String, usize)>,
@@ -42,4 +43,10 @@ pub enum MethodBody {
         /// The offset of this method's bytecode in its parent class.
         bytecode_off: usize,
     },
+}
+
+pub struct Block {
+    pub bytecode_off: usize,
+    pub bytecode_end: usize,
+    pub num_vars: usize,
 }
