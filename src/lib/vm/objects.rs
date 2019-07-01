@@ -87,7 +87,7 @@ impl Val {
     ///
     /// [In an ideal world, this would be a function on `Obj` itself, but that would mean that
     /// `Obj` couldn't be a trait object. Oh well.]
-    pub fn from_obj<T: Obj>(_: &VM, obj: T) -> Self {
+    pub fn from_obj<T: Obj + 'static>(_: &VM, obj: T) -> Self {
         debug_assert_eq!(ValKind::GCBOX as usize, 0);
         debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
@@ -267,18 +267,8 @@ macro_rules! gclayout {
     };
 }
 
-macro_rules! gclayout_lifetime {
-    ($(#[$attr:meta])* $n: ident) => {
-        impl<'a> GcLayout for $n<'a> {
-            fn layout(&self) -> std::alloc::Layout {
-                std::alloc::Layout::new::<$n>()
-            }
-        }
-    };
-}
-
 gclayout!(Block);
-gclayout_lifetime!(Class);
+gclayout!(Class);
 gclayout!(Method);
 gclayout!(Inst);
 gclayout!(Int);
@@ -433,10 +423,10 @@ impl Block {
 }
 
 #[derive(Debug)]
-pub struct Class<'a> {
+pub struct Class {
     pub name: Val,
     pub path: PathBuf,
-    pub supercls: Option<&'a Class<'a>>,
+    pub supercls: Option<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Method>,
     pub blockinfos: Vec<BlockInfo>,
@@ -453,7 +443,7 @@ pub struct BlockInfo {
     pub num_vars: usize,
 }
 
-impl<'a> Obj for Class<'a> {
+impl Obj for Class {
     fn dyn_objtype(&self) -> ObjType {
         ObjType::Class
     }
@@ -471,21 +461,21 @@ impl<'a> Obj for Class<'a> {
     }
 }
 
-impl<'a> StaticObjType for Class<'a> {
+impl StaticObjType for Class {
     fn static_objtype() -> ObjType {
         ObjType::Class
     }
 }
 
-impl<'a> Class<'a> {
+impl Class {
     pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, VMError> {
         let supercls = match ccls.supercls {
             Some(ref x) => match x.as_str() {
-                "Boolean" => Some(vm.bool_cls.gcbox_cast(vm)?),
+                "Boolean" => Some(vm.bool_cls.clone()),
                 "nil" => None,
                 _ => unimplemented!(),
             },
-            None => (Some(vm.obj_cls.gcbox_cast(vm)?)),
+            None => Some(vm.obj_cls.clone()),
         };
 
         let mut inst_vars = Vec::with_capacity(ccls.num_inst_vars);
@@ -551,8 +541,8 @@ impl<'a> Class<'a> {
         self.methods
             .get(msg)
             .map(|x| Ok((Val::recover(self), x)))
-            .unwrap_or_else(|| match self.supercls {
-                Some(scls) => scls.get_method(vm, msg),
+            .unwrap_or_else(|| match &self.supercls {
+                Some(scls) => scls.gcbox_cast::<Class>(vm)?.get_method(vm, msg),
                 None => Err(VMError::UnknownMethod(msg.to_owned())),
             })
     }
