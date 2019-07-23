@@ -13,10 +13,9 @@ use std::{
     process, ptr,
 };
 
-use super::{
-    gc::{Gc, GcLayout},
-    objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val},
-};
+use abgc::{Gc, GcLayout};
+
+use super::objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
     compile,
     instrs::{Builtin, Instr, Primitive},
@@ -427,23 +426,26 @@ impl Frame {
 #[derive(Debug)]
 pub struct Closure {
     parent: Option<Gc<Closure>>,
-    vars: Gc<UnsafeCell<Vec<Val>>>,
+    vars: Gc<Vars>,
 }
+
+#[derive(Debug)]
+struct Vars(UnsafeCell<Vec<Val>>);
 
 impl Closure {
     fn new(parent: Option<Gc<Closure>>, vars: Vec<Val>) -> Closure {
         Closure {
             parent,
-            vars: Gc::new(UnsafeCell::new(vars)),
+            vars: Gc::new(Vars(UnsafeCell::new(vars))),
         }
     }
 
     fn get_var(&self, var: usize) -> Val {
-        unsafe { (&*self.vars.get()).get_unchecked(var) }.clone()
+        unsafe { (&*self.vars.0.get()).get_unchecked(var) }.clone()
     }
 
     fn set_var(&self, var: usize, val: Val) {
-        unsafe { *(&mut *self.vars.get()).get_unchecked_mut(var) = val };
+        unsafe { *(&mut *self.vars.0.get()).get_unchecked_mut(var) = val };
     }
 }
 
@@ -453,7 +455,7 @@ impl GcLayout for Closure {
     }
 }
 
-impl GcLayout for UnsafeCell<Vec<Val>> {
+impl GcLayout for Vars {
     fn layout(&self) -> std::alloc::Layout {
         std::alloc::Layout::new::<Self>()
     }

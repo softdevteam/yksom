@@ -42,12 +42,10 @@ use std::{
     ptr,
 };
 
+use abgc::{Gc, GcBox, GcLayout};
 use enum_primitive_derive::Primitive;
 
-use super::{
-    gc::{Gc, GcBox, GcLayout},
-    vm::{Closure, VMError, VM},
-};
+use super::vm::{Closure, VMError, VM};
 use crate::compiler::{
     cobjects,
     instrs::{Instr, Primitive},
