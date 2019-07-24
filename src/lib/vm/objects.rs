@@ -42,12 +42,11 @@ use std::{
     ptr,
 };
 
+use abgc::{self, Gc, GcBox};
+use abgc_derive::GcLayout;
 use enum_primitive_derive::Primitive;
 
-use super::{
-    gc::{Gc, GcBox, GcLayout},
-    vm::{Closure, VMError, VM},
-};
+use super::vm::{Closure, VMError, VM};
 use crate::compiler::{
     cobjects,
     instrs::{Instr, Primitive},
@@ -241,7 +240,7 @@ pub enum ObjType {
 }
 
 /// The main SOM Object trait.
-pub trait Obj: Debug + GcLayout {
+pub trait Obj: Debug + abgc::GcLayout {
     /// Return the `ObjType` of this object.
     fn dyn_objtype(&self) -> ObjType;
     /// If possible, return this `Obj` as an `isize`.
@@ -256,23 +255,6 @@ pub trait StaticObjType {
     /// Return this trait type's static `ObjType`
     fn static_objtype() -> ObjType;
 }
-
-macro_rules! gclayout {
-    ($(#[$attr:meta])* $n: ident) => {
-        impl GcLayout for $n {
-            fn layout(&self) -> std::alloc::Layout {
-                std::alloc::Layout::new::<$n>()
-            }
-        }
-    };
-}
-
-gclayout!(Block);
-gclayout!(Class);
-gclayout!(Method);
-gclayout!(Inst);
-gclayout!(Int);
-gclayout!(String_);
 
 /// A GCable object that stores the vtable pointer alongside the object, meaning that a thin
 /// pointer can be used to store to the ThinCell itself.
@@ -340,7 +322,7 @@ impl ThinObj {
     }
 }
 
-impl GcLayout for ThinObj {
+impl abgc::GcLayout for ThinObj {
     fn layout(&self) -> Layout {
         Layout::new::<ThinObj>()
             .extend(self.deref().layout())
@@ -373,7 +355,7 @@ impl Drop for ThinObj {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, GcLayout)]
 pub struct Block {
     pub blockinfo_cls: Val,
     pub blockinfo_off: usize,
@@ -422,7 +404,7 @@ impl Block {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, GcLayout)]
 pub struct Class {
     pub name: Val,
     pub path: PathBuf,
@@ -552,7 +534,7 @@ impl Class {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, GcLayout)]
 pub struct Method {
     pub name: String,
     pub body: MethodBody,
@@ -596,7 +578,7 @@ impl StaticObjType for Method {
 }
 
 /// An instance of a user class.
-#[derive(Debug)]
+#[derive(Debug, GcLayout)]
 pub struct Inst {
     class: Val,
     inst_vars: UnsafeCell<Vec<Val>>,
@@ -649,7 +631,7 @@ impl Inst {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, GcLayout)]
 pub struct Int {
     val: isize,
 }
@@ -722,7 +704,7 @@ impl Int {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, GcLayout)]
 pub struct String_ {
     s: String,
 }
