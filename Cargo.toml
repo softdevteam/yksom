@@ -32,10 +32,10 @@ regex = "1.1"
 abgc = { git = "https://github.com/softdevteam/abgc" }
 abgc_derive = { git = "https://github.com/softdevteam/abgc" }
 cfgrammar = "0.4"
-enum-primitive-derive = "0.1"
 getopts = "0.2"
 indexmap = "1.0"
 itertools = "0.8"
 lrlex = "0.4"
 lrpar = "0.4"
+num_enum = "0.3"
 num-traits = "0.2"
