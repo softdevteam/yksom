@@ -44,7 +44,7 @@ use std::{
 
 use abgc::{self, Gc, GcBox};
 use abgc_derive::GcLayout;
-use enum_primitive_derive::Primitive;
+use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 
 use super::vm::{Closure, VMError, VM};
 use crate::compiler::{
@@ -64,7 +64,8 @@ const TAG_BITSIZE: usize = 3; // Number of bits
 const TAG_BITMASK: usize = (1 << 3) - 1;
 
 #[cfg(target_pointer_width = "64")]
-#[derive(Debug, PartialEq, Primitive)]
+#[derive(Debug, PartialEq, IntoPrimitive, UnsafeFromPrimitive)]
+#[repr(usize)]
 enum ValKind {
     // All of the values here must fit inside TAG_BITSIZE bits and be safely convert to usize
     // using "as".
@@ -119,11 +120,19 @@ impl Val {
     }
 
     fn valkind(&self) -> ValKind {
+        // Since it should be impossible to create incorrect tags, in release mode, we want to make
+        // this a zero-cost function (i.e. we get guarantees from the static type system but
+        // without any run-time overhead). However, just in case someone does something silly, in
+        // debug mode we explicitly check the tags.
+
+        #[cfg(debug_assertions)]
         match self.val & TAG_BITMASK {
-            x if x == ValKind::GCBOX as usize => ValKind::GCBOX,
-            x if x == ValKind::INT as usize => ValKind::INT,
-            _ => unreachable!(),
+            x if x == ValKind::GCBOX as usize => (),
+            x if x == ValKind::INT as usize => (),
+            _ => panic!("Invalid tag {}", self.val & TAG_BITMASK),
         }
+
+        unsafe { ValKind::from_unchecked(self.val & TAG_BITMASK) }
     }
 
     /// If this `Val` is a `GCBOX`, and that `GCBOX` is of type `T`, cast the `Val` to `&T`. If
