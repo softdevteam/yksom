@@ -15,7 +15,7 @@ use std::{
 
 use abgc::{Gc, GcLayout};
 
-use super::objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val};
+use super::objects::{downcast, Block, Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
     compile,
     instrs::{Builtin, Instr, Primitive},
@@ -31,7 +31,7 @@ pub enum VMError {
     CantRepresentAsUsize,
     /// The VM is trying to exit.
     Exit,
-    /// Tried to perform a `Val::gcbox_cast` operation on a non-boxed `Val`. Note that `expected`
+    /// Tried to perform a `Val::gcbox_downcast` operation on a non-boxed `Val`. Note that `expected`
     /// and `got` can reference the same `ObjType`.
     GcBoxTypeError { expected: ObjType, got: ObjType },
     /// Percolate a non-local return up the call stack.
@@ -153,7 +153,7 @@ impl VM {
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> Result<Val, VMError> {
         let cls_tobj = rcv.tobj(self)?.get_class(self).tobj(self)?;
-        let cls: &Class = cls_tobj.cast()?;
+        let cls: &Class = downcast(&cls_tobj)?;
         let (meth_cls_val, meth) = cls.get_method(self, msg)?;
 
         match meth.body {
@@ -163,7 +163,7 @@ impl VM {
                 bytecode_off,
             } => {
                 let meth_cls_tobj = meth_cls_val.tobj(self)?;
-                let meth_cls: &Class = meth_cls_tobj.cast()?;
+                let meth_cls: &Class = downcast(&meth_cls_tobj)?;
                 self.exec_user(meth_cls, bytecode_off, rcv, None, num_vars, args)
             }
         }
@@ -177,10 +177,13 @@ impl VM {
             }
             Primitive::Concatenate => {
                 let rcv_tobj = rcv.tobj(self)?;
-                let rcv_str: &String_ = rcv_tobj.cast()?;
+                let rcv_str: &String_ = downcast(&rcv_tobj)?;
                 rcv_str.concatenate(self, args[0].clone())
             }
-            Primitive::Name => rcv.tobj(self)?.cast::<Class>()?.name(self),
+            Primitive::Name => {
+                let tobj = rcv.tobj(self)?;
+                downcast::<Class>(&tobj)?.name(self)
+            }
             Primitive::New => {
                 assert_eq!(args.len(), 0);
                 Ok(Inst::new(self, rcv))
@@ -188,15 +191,15 @@ impl VM {
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string
                 let str_tobj = rcv.tobj(self)?;
-                let str_: &String_ = str_tobj.cast()?;
+                let str_: &String_ = downcast(&str_tobj)?;
                 println!("{}", str_.as_str());
                 Ok(rcv)
             }
             Primitive::Value => {
                 let rcv_tobj = rcv.tobj(self)?;
-                let rcv_blk: &Block = rcv_tobj.cast()?;
+                let rcv_blk: &Block = downcast(&rcv_tobj)?;
                 let blk_cls_tobj = rcv_blk.blockinfo_cls.tobj(self)?;
-                let blk_cls: &Class = blk_cls_tobj.cast()?;
+                let blk_cls: &Class = downcast(&blk_cls_tobj)?;
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
                 self.exec_user(
                     blk_cls,
@@ -251,12 +254,12 @@ impl VM {
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
-                    let inst: &Inst = rcv.gcbox_cast(self).unwrap();
+                    let inst: &Inst = rcv.gcbox_downcast(self).unwrap();
                     frame.stack_push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
-                    let inst: &Inst = rcv.gcbox_cast(self).unwrap();
+                    let inst: &Inst = rcv.gcbox_downcast(self).unwrap();
                     inst.inst_var_set(n, frame.stack_peek());
                     pc += 1;
                 }

@@ -32,18 +32,17 @@
 //! soon as you create an `Obj` instance, pass it to `Val::from_obj`.
 
 use std::{
-    alloc::Layout,
     cell::UnsafeCell,
     collections::HashMap,
     fmt::Debug,
-    mem::{forget, size_of, transmute},
-    ops::{CoerceUnsized, Deref},
+    mem::{size_of, transmute},
+    ops::Deref,
     path::PathBuf,
-    ptr,
 };
 
-use abgc::{self, Gc, GcBox};
+use abgc::{self, Gc};
 use abgc_derive::GcLayout;
+use natrob::narrowable_abgc;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 
 use super::vm::{Closure, VMError, VM};
@@ -89,10 +88,10 @@ impl Val {
     /// `Obj` couldn't be a trait object. Oh well.]
     pub fn from_obj<T: Obj + 'static>(_: &VM, obj: T) -> Self {
         debug_assert_eq!(ValKind::GCBOX as usize, 0);
-        debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
+        debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
         Val {
-            val: unsafe { transmute::<*const GcBox<ThinObj>, usize>(ptr) },
+            val: unsafe { transmute::<*const ThinObj, usize>(ptr) },
         }
     }
 
@@ -103,7 +102,7 @@ impl Val {
         unsafe {
             let ptr = ThinObj::recover(obj).into_raw();
             Val {
-                val: transmute::<*const GcBox<ThinObj>, usize>(ptr),
+                val: transmute::<*const ThinObj, usize>(ptr),
             }
         }
     }
@@ -138,15 +137,15 @@ impl Val {
     /// If this `Val` is a `GCBOX`, and that `GCBOX` is of type `T`, cast the `Val` to `&T`. If
     /// this `Val` is not a `GCBOX` or the `GCBOX` is not of type `T`, `VMError` will be returned.
     /// Note that, in general, you should use `Val::tobj()` as that can box values as needed
-    /// whereas `gcbox_cast` cannot.
-    pub fn gcbox_cast<T: Obj + StaticObjType>(&self, _: &VM) -> Result<&T, VMError> {
+    /// whereas `gcbox_downcast` cannot.
+    pub fn gcbox_downcast<T: Obj + StaticObjType>(&self, _: &VM) -> Result<&T, VMError> {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(ValKind::GCBOX as usize, 0);
-                debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
+                debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
                 debug_assert_ne!(self.val, 0);
-                let tobj = unsafe { &*transmute::<usize, *const GcBox<ThinObj>>(self.val) };
-                tobj.deref().cast()
+                let tobj = unsafe { &*transmute::<usize, *const ThinObj>(self.val) };
+                downcast(tobj)
             }
             ValKind::INT => Err(VMError::GcBoxTypeError {
                 expected: T::static_objtype(),
@@ -160,7 +159,7 @@ impl Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(ValKind::GCBOX as usize, 0);
-                debug_assert_eq!(size_of::<*const GcBox<ThinObj>>(), size_of::<usize>());
+                debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
                 debug_assert_ne!(self.val, 0);
                 Ok(unsafe { Gc::clone_from_raw(self.val as *const _) })
             }
@@ -207,7 +206,7 @@ impl Clone for Val {
             ValKind::GCBOX => {
                 if self.val != 0 {
                     unsafe {
-                        transmute::<*const GcBox<ThinObj>, usize>(
+                        transmute::<*const ThinObj, usize>(
                             Gc::<ThinObj>::clone_from_raw(self.val as *const _).into_raw(),
                         )
                     }
@@ -249,6 +248,7 @@ pub enum ObjType {
 }
 
 /// The main SOM Object trait.
+#[narrowable_abgc(ThinObj)]
 pub trait Obj: Debug + abgc::GcLayout {
     /// Return the `ObjType` of this object.
     fn dyn_objtype(&self) -> ObjType;
@@ -265,102 +265,14 @@ pub trait StaticObjType {
     fn static_objtype() -> ObjType;
 }
 
-/// A GCable object that stores the vtable pointer alongside the object, meaning that a thin
-/// pointer can be used to store to the ThinCell itself.
-#[repr(C)]
-pub struct ThinObj {
-    vtable: usize,
-    // The ThinObj `vtable` is followed by the actual contents of the object itself. In other
-    // words, on a 64 bit machine the layout is:
-    //   0..7: vtable
-    //   8..: object
-}
-
-impl ThinObj {
-    pub fn new<'a, U>(v: U) -> Gc<ThinObj>
-    where
-        *const U: CoerceUnsized<*const (dyn Obj + 'a)>,
-        U: Obj + 'a,
-    {
-        let (layout, uoff) = Layout::new::<ThinObj>().extend(Layout::new::<U>()).unwrap();
-        debug_assert_eq!(uoff, size_of::<ThinObj>());
-        let (gcbptr, objptr) = GcBox::<ThinObj>::alloc_blank(layout);
-        let t: &dyn Obj = &v;
-        unsafe {
-            (*objptr).vtable = transmute::<*const dyn Obj, (usize, usize)>(t).1;
-            let buf_v = (objptr as *mut u8).add(uoff);
-            if size_of::<U>() != 0 {
-                buf_v.copy_from_nonoverlapping(&v as *const U as *const u8, size_of::<U>());
-            }
-        }
-        forget(v);
-        unsafe { Gc::from_raw(gcbptr) }
-    }
-
-    /// Turn an `Obj` pointer into a `Gc<ThinObj>`.
-    pub unsafe fn recover(o: &dyn Obj) -> Gc<ThinObj> {
-        let thinptr = (o as *const _ as *const u8).sub(size_of::<ThinObj>()) as *const ThinObj;
-        Gc::recover(thinptr)
-    }
-
-    /// Cast this `ThinObj` to a concrete `Obj` instance.
-    pub fn cast<T: Obj + StaticObjType>(&self) -> Result<&T, VMError> {
-        // This is a cunning hack based on the fact that vtable pointers are a proxy for a type
-        // identifier. In other words, if two distinct objects have the same vtable pointer, they
-        // are instances of the same type; if their vtable pointers are different, they are
-        // instances of different types. We can thus use vtable pointers as a proxy for type
-        // equality.
-
-        // We need to get `T`'s vtable. We cheat, creating a dummy pointer that forces the compiler
-        // to create a trait object, from which we can then fish out the vtable pointer.
-        let t_vtable = {
-            let t: &dyn Obj = unsafe { &*(0 as *const T) };
-            unsafe { transmute::<&dyn Obj, (usize, usize)>(t) }.1
-        };
-
-        if t_vtable == self.vtable {
-            let self_ptr = self as *const Self as *const u8;
-            let obj_ptr = unsafe { self_ptr.add(size_of::<ThinObj>()) };
-            Ok(unsafe { &*(obj_ptr as *const T) })
-        } else {
-            Err(VMError::TypeError {
-                expected: T::static_objtype(),
-                got: self.deref().dyn_objtype(),
-            })
-        }
-    }
-}
-
-impl abgc::GcLayout for ThinObj {
-    fn layout(&self) -> Layout {
-        Layout::new::<ThinObj>()
-            .extend(self.deref().layout())
-            .unwrap()
-            .0
-    }
-}
-
-impl Deref for ThinObj {
-    type Target = dyn Obj;
-
-    fn deref(&self) -> &(dyn Obj + 'static) {
-        unsafe {
-            let self_ptr = self as *const Self as *const u8;
-            let obj_ptr = self_ptr.add(size_of::<ThinObj>());
-            transmute::<(*const u8, usize), &dyn Obj>((obj_ptr, self.vtable))
-        }
-    }
-}
-
-impl Drop for ThinObj {
-    fn drop(&mut self) {
-        let self_ptr = self as *const Self as *const u8;
-        unsafe {
-            let obj_ptr = self_ptr.add(size_of::<ThinObj>());
-            let fat_ptr =
-                transmute::<(*mut u8, usize), *mut dyn Obj>((obj_ptr as *mut u8, self.vtable));
-            ptr::drop_in_place(fat_ptr);
-        }
+pub fn downcast<T: Obj + StaticObjType>(tobj: &ThinObj) -> Result<&T, VMError> {
+    if let Some(t) = tobj.downcast() {
+        Ok(t)
+    } else {
+        Err(VMError::TypeError {
+            expected: T::static_objtype(),
+            got: tobj.deref().dyn_objtype(),
+        })
     }
 }
 
@@ -533,7 +445,7 @@ impl Class {
             .get(msg)
             .map(|x| Ok((Val::recover(self), x)))
             .unwrap_or_else(|| match &self.supercls {
-                Some(scls) => scls.gcbox_cast::<Class>(vm)?.get_method(vm, msg),
+                Some(scls) => scls.gcbox_downcast::<Class>(vm)?.get_method(vm, msg),
                 None => Err(VMError::UnknownMethod(msg.to_owned())),
             })
     }
@@ -619,7 +531,7 @@ impl StaticObjType for Inst {
 
 impl Inst {
     pub fn new(vm: &VM, class: Val) -> Val {
-        let cls: &Class = class.gcbox_cast(vm).unwrap();
+        let cls: &Class = class.gcbox_downcast(vm).unwrap();
         let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
         inst_vars.resize(cls.num_inst_vars, Val::illegal());
         let inst = Inst {
@@ -754,7 +666,7 @@ impl String_ {
     /// Concatenate this string with another string and return the result.
     pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, VMError> {
         let other_tobj = other.tobj(vm)?;
-        let other_str: &String_ = other_tobj.cast()?;
+        let other_str: &String_ = downcast(&other_tobj)?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.
@@ -872,16 +784,16 @@ mod tests {
         };
         // At this point, we will have dropped one of the references to the String above so the
         // assertion below is really checking that we're not doing a read after free.
-        assert_eq!(v.tobj(&vm).unwrap().cast::<String_>().unwrap().s, "s");
+        assert_eq!(downcast::<String_>(&v.tobj(&vm).unwrap()).unwrap().s, "s");
     }
 
     #[test]
     fn test_cast() {
         let vm = VM::new_no_bootstrap();
         let v = String_::new(&vm, "s".to_owned());
-        assert!(v.tobj(&vm).unwrap().cast::<String_>().is_ok());
+        assert!(downcast::<String_>(&v.tobj(&vm).unwrap()).is_ok());
         assert_eq!(
-            v.tobj(&vm).unwrap().cast::<Class>().unwrap_err(),
+            downcast::<Class>(&v.tobj(&vm).unwrap()).unwrap_err(),
             VMError::TypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_
@@ -890,13 +802,13 @@ mod tests {
     }
 
     #[test]
-    fn test_gcbox_cast() {
+    fn test_gcbox_downcast() {
         let vm = VM::new_no_bootstrap();
         let v = String_::new(&vm, "s".to_owned());
-        assert!(v.gcbox_cast::<String_>(&vm).is_ok());
+        assert!(v.gcbox_downcast::<String_>(&vm).is_ok());
         let v = Int::from_usize(&vm, 0).unwrap();
         assert_eq!(
-            v.gcbox_cast::<Int>(&vm).unwrap_err(),
+            v.gcbox_downcast::<Int>(&vm).unwrap_err(),
             VMError::GcBoxTypeError {
                 expected: ObjType::Int,
                 got: ObjType::Int
