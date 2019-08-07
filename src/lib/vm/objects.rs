@@ -69,6 +69,9 @@ enum ValKind {
     // All of the values here must fit inside TAG_BITSIZE bits and be safely convert to usize
     // using "as".
     GCBOX = 0b000,
+    // Anything which can be stored unboxed *must* not have the `NotUnboxable` trait implemented
+    // for them. In other words, if an existing type is added to the list of unboxable things, you
+    // need to check whether it implemented `NotUnboxable` and, if so, remove that implementation.
     INT = 0b001,
 }
 
@@ -138,20 +141,16 @@ impl Val {
     /// this `Val` is not a `GCBOX` or the `GCBOX` is not of type `T`, `VMError` will be returned.
     /// Note that, in general, you should use `Val::tobj()` as that can box values as needed
     /// whereas `gcbox_downcast` cannot.
-    pub fn gcbox_downcast<T: Obj + StaticObjType>(&self, _: &VM) -> Result<&T, VMError> {
-        match self.valkind() {
-            ValKind::GCBOX => {
-                debug_assert_eq!(ValKind::GCBOX as usize, 0);
-                debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                debug_assert_ne!(self.val, 0);
-                let tobj = unsafe { &*transmute::<usize, *const ThinObj>(self.val) };
-                downcast(tobj)
-            }
-            ValKind::INT => Err(VMError::GcBoxTypeError {
-                expected: T::static_objtype(),
-                got: Int::static_objtype(),
-            }),
-        }
+    pub fn gcbox_downcast<T: Obj + StaticObjType + NotUnboxable>(
+        &self,
+        _: &VM,
+    ) -> Result<&T, VMError> {
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        debug_assert_eq!(ValKind::GCBOX as usize, 0);
+        debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
+        debug_assert_ne!(self.val, 0);
+        let tobj = unsafe { &*transmute::<usize, *const ThinObj>(self.val) };
+        downcast(tobj)
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
@@ -260,6 +259,11 @@ pub trait Obj: Debug + abgc::GcLayout {
     fn get_class(&self, vm: &VM) -> Val;
 }
 
+/// SOM objects which `impl` this trait guarantee that they can only ever be stored boxed.
+/// Implementing this trait on SOM objects which can be stored unboxed leads to undefined
+/// behaviour.
+pub trait NotUnboxable: Obj {}
+
 pub trait StaticObjType {
     /// Return this trait type's static `ObjType`
     fn static_objtype() -> ObjType;
@@ -300,6 +304,8 @@ impl Obj for Block {
         vm.block_cls.clone()
     }
 }
+
+impl NotUnboxable for Block {}
 
 impl StaticObjType for Block {
     fn static_objtype() -> ObjType {
@@ -363,6 +369,8 @@ impl Obj for Class {
         vm.cls_cls.clone()
     }
 }
+
+impl NotUnboxable for Class {}
 
 impl StaticObjType for Class {
     fn static_objtype() -> ObjType {
@@ -492,6 +500,8 @@ impl Obj for Method {
     }
 }
 
+impl NotUnboxable for Method {}
+
 impl StaticObjType for Method {
     fn static_objtype() -> ObjType {
         ObjType::Method
@@ -522,6 +532,8 @@ impl Obj for Inst {
         self.class.clone()
     }
 }
+
+impl NotUnboxable for Inst {}
 
 impl StaticObjType for Inst {
     fn static_objtype() -> ObjType {
@@ -648,6 +660,8 @@ impl Obj for String_ {
     }
 }
 
+impl NotUnboxable for String_ {}
+
 impl StaticObjType for String_ {
     fn static_objtype() -> ObjType {
         ObjType::String_
@@ -665,8 +679,7 @@ impl String_ {
 
     /// Concatenate this string with another string and return the result.
     pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, VMError> {
-        let other_tobj = other.tobj(vm)?;
-        let other_str: &String_ = downcast(&other_tobj)?;
+        let other_str: &String_ = other.gcbox_downcast(vm)?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.
@@ -784,16 +797,16 @@ mod tests {
         };
         // At this point, we will have dropped one of the references to the String above so the
         // assertion below is really checking that we're not doing a read after free.
-        assert_eq!(downcast::<String_>(&v.tobj(&vm).unwrap()).unwrap().s, "s");
+        assert_eq!(v.gcbox_downcast::<String_>(&vm).unwrap().s, "s");
     }
 
     #[test]
     fn test_cast() {
         let vm = VM::new_no_bootstrap();
         let v = String_::new(&vm, "s".to_owned());
-        assert!(downcast::<String_>(&v.tobj(&vm).unwrap()).is_ok());
+        assert!(v.gcbox_downcast::<String_>(&vm).is_ok());
         assert_eq!(
-            downcast::<Class>(&v.tobj(&vm).unwrap()).unwrap_err(),
+            v.gcbox_downcast::<Class>(&vm).unwrap_err(),
             VMError::TypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_
@@ -806,13 +819,6 @@ mod tests {
         let vm = VM::new_no_bootstrap();
         let v = String_::new(&vm, "s".to_owned());
         assert!(v.gcbox_downcast::<String_>(&vm).is_ok());
-        let v = Int::from_usize(&vm, 0).unwrap();
-        assert_eq!(
-            v.gcbox_downcast::<Int>(&vm).unwrap_err(),
-            VMError::GcBoxTypeError {
-                expected: ObjType::Int,
-                got: ObjType::Int
-            }
-        );
+        assert!(v.gcbox_downcast::<Class>(&vm).is_err());
     }
 }
