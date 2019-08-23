@@ -137,10 +137,11 @@ impl Val {
         unsafe { ValKind::from_unchecked(self.val & TAG_BITMASK) }
     }
 
-    /// If this `Val` is a `GCBOX`, and that `GCBOX` is of type `T`, cast the `Val` to `&T`. If
-    /// this `Val` is not a `GCBOX` or the `GCBOX` is not of type `T`, `VMError` will be returned.
-    /// Note that, in general, you should use `Val::tobj()` as that can box values as needed
-    /// whereas `gcbox_downcast` cannot.
+    /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
+    /// be boxed) or `None` otherwise.
+    ///
+    /// If you need to downcast a type `T` which can be boxed, you will need to call `tobj` and
+    /// `downcast` that.
     pub fn gcbox_downcast<T: Obj + StaticObjType + NotUnboxable>(
         &self,
         _: &VM,
@@ -150,7 +151,11 @@ impl Val {
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         debug_assert_ne!(self.val, 0);
         let tobj = unsafe { &*transmute::<usize, *const ThinObj>(self.val) };
-        downcast(tobj)
+
+        tobj.downcast().ok_or_else(|| VMError::TypeError {
+            expected: T::static_objtype(),
+            got: tobj.deref().dyn_objtype(),
+        })
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
@@ -267,17 +272,6 @@ pub trait NotUnboxable: Obj {}
 pub trait StaticObjType {
     /// Return this trait type's static `ObjType`
     fn static_objtype() -> ObjType;
-}
-
-pub fn downcast<T: Obj + StaticObjType>(tobj: &ThinObj) -> Result<&T, VMError> {
-    if let Some(t) = tobj.downcast() {
-        Ok(t)
-    } else {
-        Err(VMError::TypeError {
-            expected: T::static_objtype(),
-            got: tobj.deref().dyn_objtype(),
-        })
-    }
 }
 
 #[derive(Debug, GcLayout)]

@@ -15,7 +15,7 @@ use std::{
 
 use abgc::{Gc, GcLayout};
 
-use super::objects::{downcast, Block, Class, Inst, MethodBody, ObjType, String_, Val};
+use super::objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val};
 use crate::compiler::{
     compile,
     instrs::{Builtin, Instr, Primitive},
@@ -189,14 +189,13 @@ impl VM {
                 Ok(rcv)
             }
             Primitive::Value => {
-                let rcv_tobj = rcv.tobj(self)?;
-                let rcv_blk: &Block = downcast(&rcv_tobj)?;
+                let rcv_blk: &Block = rcv.gcbox_downcast(self)?;
                 let blk_cls: &Class = rcv_blk.blockinfo_cls.gcbox_downcast(self)?;
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
                 self.exec_user(
                     blk_cls,
                     blkinfo.bytecode_off,
-                    rcv,
+                    rcv.clone(),
                     Some(Gc::clone(&rcv_blk.parent_closure)),
                     blkinfo.num_vars,
                     &[],
