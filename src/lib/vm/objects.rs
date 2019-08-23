@@ -137,20 +137,22 @@ impl Val {
         unsafe { ValKind::from_unchecked(self.val & TAG_BITMASK) }
     }
 
-    /// If this `Val` is a `GCBOX`, and that `GCBOX` is of type `T`, cast the `Val` to `&T`. If
-    /// this `Val` is not a `GCBOX` or the `GCBOX` is not of type `T`, `VMError` will be returned.
-    /// Note that, in general, you should use `Val::tobj()` as that can box values as needed
-    /// whereas `gcbox_downcast` cannot.
-    pub fn gcbox_downcast<T: Obj + StaticObjType + NotUnboxable>(
-        &self,
-        _: &VM,
-    ) -> Result<&T, VMError> {
+    /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
+    /// be boxed) or `None` otherwise.
+    ///
+    /// If you need to downcast a type `T` which can be boxed, you will need to call `tobj` and
+    /// `downcast` that.
+    pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Result<&T, VMError> {
         debug_assert_eq!(self.valkind(), ValKind::GCBOX);
         debug_assert_eq!(ValKind::GCBOX as usize, 0);
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         debug_assert_ne!(self.val, 0);
         let tobj = unsafe { &*transmute::<usize, *const ThinObj>(self.val) };
-        downcast(tobj)
+
+        tobj.downcast().ok_or_else(|| VMError::TypeError {
+            expected: T::static_objtype(),
+            got: tobj.deref().dyn_objtype(),
+        })
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
@@ -267,17 +269,6 @@ pub trait NotUnboxable: Obj {}
 pub trait StaticObjType {
     /// Return this trait type's static `ObjType`
     fn static_objtype() -> ObjType;
-}
-
-pub fn downcast<T: Obj + StaticObjType>(tobj: &ThinObj) -> Result<&T, VMError> {
-    if let Some(t) = tobj.downcast() {
-        Ok(t)
-    } else {
-        Err(VMError::TypeError {
-            expected: T::static_objtype(),
-            got: tobj.deref().dyn_objtype(),
-        })
-    }
 }
 
 #[derive(Debug, GcLayout)]
@@ -453,7 +444,7 @@ impl Class {
             .get(msg)
             .map(|x| Ok((Val::recover(self), x)))
             .unwrap_or_else(|| match &self.supercls {
-                Some(scls) => scls.gcbox_downcast::<Class>(vm)?.get_method(vm, msg),
+                Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
                 None => Err(VMError::UnknownMethod(msg.to_owned())),
             })
     }
@@ -543,7 +534,7 @@ impl StaticObjType for Inst {
 
 impl Inst {
     pub fn new(vm: &VM, class: Val) -> Val {
-        let cls: &Class = class.gcbox_downcast(vm).unwrap();
+        let cls: &Class = class.downcast(vm).unwrap();
         let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
         inst_vars.resize(cls.num_inst_vars, Val::illegal());
         let inst = Inst {
@@ -679,7 +670,7 @@ impl String_ {
 
     /// Concatenate this string with another string and return the result.
     pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, VMError> {
-        let other_str: &String_ = other.gcbox_downcast(vm)?;
+        let other_str: &String_ = other.downcast(vm)?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.
@@ -797,16 +788,16 @@ mod tests {
         };
         // At this point, we will have dropped one of the references to the String above so the
         // assertion below is really checking that we're not doing a read after free.
-        assert_eq!(v.gcbox_downcast::<String_>(&vm).unwrap().s, "s");
+        assert_eq!(v.downcast::<String_>(&vm).unwrap().s, "s");
     }
 
     #[test]
     fn test_cast() {
         let vm = VM::new_no_bootstrap();
         let v = String_::new(&vm, "s".to_owned());
-        assert!(v.gcbox_downcast::<String_>(&vm).is_ok());
+        assert!(v.downcast::<String_>(&vm).is_ok());
         assert_eq!(
-            v.gcbox_downcast::<Class>(&vm).unwrap_err(),
+            v.downcast::<Class>(&vm).unwrap_err(),
             VMError::TypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_
@@ -815,10 +806,10 @@ mod tests {
     }
 
     #[test]
-    fn test_gcbox_downcast() {
+    fn test_downcast() {
         let vm = VM::new_no_bootstrap();
         let v = String_::new(&vm, "s".to_owned());
-        assert!(v.gcbox_downcast::<String_>(&vm).is_ok());
-        assert!(v.gcbox_downcast::<Class>(&vm).is_err());
+        assert!(v.downcast::<String_>(&vm).is_ok());
+        assert!(v.downcast::<Class>(&vm).is_err());
     }
 }
