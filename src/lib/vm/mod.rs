@@ -8,6 +8,7 @@
 // terms.
 
 pub mod objects;
+pub mod val;
 pub mod vm;
 
 pub use crate::vm::vm::VM;
