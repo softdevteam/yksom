@@ -588,43 +588,4 @@ mod tests {
             v.as_usize(&vm).unwrap()
         );
     }
-
-    #[test]
-    fn test_recovery() {
-        let vm = VM::new_no_bootstrap();
-
-        let v = {
-            let v = String_::new(&vm, "s".to_owned());
-            let v_tobj = v.tobj(&vm).unwrap();
-            let v_int: &dyn Obj = v_tobj.deref().deref();
-            let v_recovered = Val::recover(v_int);
-            assert_eq!(v_recovered.val, v.val);
-            v_recovered
-        };
-        // At this point, we will have dropped one of the references to the String above so the
-        // assertion below is really checking that we're not doing a read after free.
-        assert_eq!(v.downcast::<String_>(&vm).unwrap().s, "s");
-    }
-
-    #[test]
-    fn test_cast() {
-        let vm = VM::new_no_bootstrap();
-        let v = String_::new(&vm, "s".to_owned());
-        assert!(v.downcast::<String_>(&vm).is_ok());
-        assert_eq!(
-            v.downcast::<Class>(&vm).unwrap_err(),
-            VMError::TypeError {
-                expected: ObjType::Class,
-                got: ObjType::String_
-            }
-        );
-    }
-
-    #[test]
-    fn test_downcast() {
-        let vm = VM::new_no_bootstrap();
-        let v = String_::new(&vm, "s".to_owned());
-        assert!(v.downcast::<String_>(&vm).is_ok());
-        assert!(v.downcast::<Class>(&vm).is_err());
-    }
 }
