@@ -43,7 +43,7 @@ use crate::{
         instrs::{Instr, Primitive},
     },
     vm::{
-        val::{Val, ValKind, BITSIZE, TAG_BITMASK, TAG_BITSIZE},
+        val::Val,
         vm::{Closure, VMError, VM},
     },
 };
@@ -403,42 +403,10 @@ impl StaticObjType for Int {
 }
 
 impl Int {
-    /// Create a `Val` representing the `isize` integer `i`.
-    pub fn from_isize(vm: &VM, i: isize) -> Result<Val, VMError> {
-        let top_bits = i as usize & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE));
-        if top_bits == 0 || top_bits == TAG_BITMASK << (BITSIZE - TAG_BITSIZE) {
-            // top_bits == 0: A positive integer that fits in our tagging scheme
-            // top_bits all set to 1: A negative integer that fits in our tagging scheme
-            Ok(Val {
-                val: ((i as usize) << TAG_BITSIZE) | (ValKind::INT as usize),
-            })
-        } else {
-            Ok(Val::from_obj(vm, Int { val: i }))
-        }
-    }
-
     /// Create a `Val` representing the `usize` integer `i`. The `Val` is guaranteed to be boxed
     /// internally.
     pub fn boxed_isize(vm: &VM, i: isize) -> Result<Val, VMError> {
         Ok(Val::from_obj(vm, Int { val: i }))
-    }
-
-    /// Create a `Val` representing the `usize` integer `i`. Notice that this can fail if `i` is
-    /// too big (since we don't have BigNum support and ints are internally represented as
-    /// `isize`).
-    pub fn from_usize(vm: &VM, i: usize) -> Result<Val, VMError> {
-        if i & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE)) == 0 {
-            // The top TAG_BITSIZE bits aren't set, so this fits within our pointer tagging scheme.
-            Ok(Val {
-                val: (i << TAG_BITSIZE) | (ValKind::INT as usize),
-            })
-        } else if i & (1 << (BITSIZE - 1)) == 0 {
-            // One of the top TAG_BITSIZE bits is set, but not the topmost bit itself, so we can
-            // box this as an isize.
-            Ok(Int::from_isize(vm, i as isize)?)
-        } else {
-            Err(VMError::CantRepresentAsIsize)
-        }
     }
 }
 
@@ -504,85 +472,19 @@ impl String_ {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ops::Deref;
-
-    #[test]
-    fn test_isize() {
-        let vm = VM::new_no_bootstrap();
-
-        let v = Int::from_isize(&vm, 0).unwrap();
-        assert_eq!(v.valkind(), ValKind::INT);
-        assert_eq!(v.as_usize(&vm).unwrap(), 0);
-        assert_eq!(v.as_isize(&vm).unwrap(), 0);
-
-        let v = Int::from_isize(&vm, -1).unwrap();
-        assert_eq!(v.valkind(), ValKind::INT);
-        assert!(v.as_usize(&vm).is_err());
-        assert_eq!(v.as_isize(&vm).unwrap(), -1);
-
-        let v = Int::from_isize(&vm, isize::min_value()).unwrap();
-        assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_isize(&vm).unwrap(), isize::min_value());
-        let v = Int::from_isize(&vm, isize::max_value()).unwrap();
-        assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_isize(&vm).unwrap(), isize::max_value());
-
-        let v = Int::from_isize(&vm, 1 << (BITSIZE - 1 - TAG_BITSIZE) - 1).unwrap();
-        assert_eq!(v.valkind(), ValKind::INT);
-        assert_eq!(
-            v.as_usize(&vm).unwrap(),
-            1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
-        );
-        assert_eq!(
-            v.as_isize(&vm).unwrap(),
-            1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
-        );
-
-        let v = Int::from_isize(&vm, 1 << (BITSIZE - 2)).unwrap();
-        assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_usize(&vm).unwrap(), 1 << (BITSIZE - 2));
-        assert_eq!(v.as_isize(&vm).unwrap(), 1 << (BITSIZE - 2));
-    }
-
-    #[test]
-    fn test_usize() {
-        let vm = VM::new_no_bootstrap();
-
-        let v = Int::from_usize(&vm, 0).unwrap();
-        assert_eq!(v.valkind(), ValKind::INT);
-        assert_eq!(v.as_usize(&vm).unwrap(), 0);
-        assert_eq!(v.as_isize(&vm).unwrap(), 0);
-
-        let v = Int::from_usize(&vm, 1 << (BITSIZE - 1 - TAG_BITSIZE) - 1).unwrap();
-        assert_eq!(v.valkind(), ValKind::INT);
-        assert_eq!(
-            v.as_usize(&vm).unwrap(),
-            1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
-        );
-        assert_eq!(
-            v.as_isize(&vm).unwrap(),
-            1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
-        );
-
-        assert!(Int::from_usize(&vm, 1 << (BITSIZE - 1)).is_err());
-
-        let v = Int::from_usize(&vm, 1 << (BITSIZE - 2)).unwrap();
-        assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_usize(&vm).unwrap(), 1 << (BITSIZE - 2));
-        assert_eq!(v.as_isize(&vm).unwrap(), 1 << (BITSIZE - 2));
-    }
+    use crate::vm::val::ValKind;
 
     #[test]
     fn test_boxed_int() {
         let vm = VM::new_no_bootstrap();
 
-        assert_eq!(Int::from_isize(&vm, 12345).unwrap().valkind(), ValKind::INT);
+        assert_eq!(Val::from_isize(&vm, 12345).unwrap().valkind(), ValKind::INT);
         assert_eq!(
             Int::boxed_isize(&vm, 12345).unwrap().valkind(),
             ValKind::GCBOX
         );
 
-        let v = Int::from_isize(&vm, 12345).unwrap();
+        let v = Val::from_isize(&vm, 12345).unwrap();
         assert_eq!(
             v.tobj(&vm).unwrap().as_usize().unwrap(),
             v.as_usize(&vm).unwrap()

@@ -481,14 +481,14 @@ impl VM {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::objects::Int, *};
+    use super::*;
 
     #[test]
     fn test_frame() {
         let vm = VM::new_no_bootstrap();
-        let selfv = Int::from_isize(&vm, 42).unwrap();
-        let v1 = Int::from_isize(&vm, 43).unwrap();
-        let v2 = Int::from_isize(&vm, 44).unwrap();
+        let selfv = Val::from_isize(&vm, 42).unwrap();
+        let v1 = Val::from_isize(&vm, 43).unwrap();
+        let v2 = Val::from_isize(&vm, 44).unwrap();
         let f = Frame::new(&vm, None, 4, selfv, &[v1, v2]);
         assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
