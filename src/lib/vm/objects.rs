@@ -43,7 +43,7 @@ use crate::{
         instrs::{Instr, Primitive},
     },
     vm::{
-        val::Val,
+        val::{NotUnboxable, Val},
         vm::{Closure, VMError, VM},
     },
 };
@@ -74,11 +74,6 @@ pub trait Obj: Debug + abgc::GcLayout {
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
 }
-
-/// SOM objects which `impl` this trait guarantee that they can only ever be stored boxed.
-/// Implementing this trait on SOM objects which can be stored unboxed leads to undefined
-/// behaviour.
-pub trait NotUnboxable: Obj {}
 
 pub trait StaticObjType {
     /// Return this trait type's static `ObjType`

@@ -40,7 +40,7 @@ use abgc::{self, Gc};
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 
 use super::{
-    objects::{Int, NotUnboxable, Obj, StaticObjType, ThinObj},
+    objects::{Int, Obj, StaticObjType, ThinObj},
     vm::{VMError, VM},
 };
 
@@ -67,6 +67,10 @@ pub enum ValKind {
     // need to check whether it implemented `NotUnboxable` and, if so, remove that implementation.
     INT = 0b001,
 }
+
+/// Objects which `impl` this trait guarantee that they can only ever be stored boxed.
+/// Implementing this trait on objects which can be stored unboxed leads to undefined behaviour.
+pub trait NotUnboxable {}
 
 /// The core struct representing values in the language runtime: boxed and unboxed values are
 /// hidden behind this, such that they can be treated in exactly the same way.
