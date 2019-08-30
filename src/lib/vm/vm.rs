@@ -15,7 +15,10 @@ use std::{
 
 use abgc::{Gc, GcLayout};
 
-use super::objects::{Block, Class, Inst, MethodBody, ObjType, String_, Val};
+use super::{
+    objects::{Block, Class, Inst, MethodBody, ObjType, String_},
+    val::Val,
+};
 use crate::compiler::{
     compile,
     instrs::{Builtin, Instr, Primitive},
