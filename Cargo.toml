@@ -40,3 +40,37 @@ lrpar = "0.4"
 num_enum = "0.3"
 num-traits = "0.2"
 natrob = { git="https://github.com/softdevteam/natrob", features=["abgc"] }
+
+# The main reason for customising the profile.* sections is to force unwind=abort.
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'unwind'
+incremental = false
+overflow-checks = false
+
+[profile.dev]
+opt-level = 0
+debug = true
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 16
+panic = 'abort'
+incremental = true
+overflow-checks = true
+
+[profile.test]
+opt-level = 0
+debug = 2
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 16
+# Currently, the panic setting is ignored for the 'test' profile.
+incremental = true
+overflow-checks = true
