@@ -7,6 +7,32 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+/// If a `ValResult` represents an error, percolate it up the call stack.
+#[macro_export]
+macro_rules! vtry {
+    ($elem:expr) => {{
+        let o = $elem;
+        if o.is_val() {
+            unsafe { o.unwrap_unsafe() }
+        } else {
+            return o;
+        }
+    }};
+}
+
+/// If a `Result<T, Box<VMError>>` represents an error, then convert the `Box<VMError>` into a
+/// `ValResult` and percolate that up the call stack.
+#[macro_export]
+macro_rules! rtry {
+    ($elem:expr) => {{
+        let e = $elem;
+        match e {
+            Ok(o) => o,
+            Err(e) => return ValResult::from_boxvmerror(e),
+        }
+    }};
+}
+
 pub mod objects;
 pub mod val;
 pub mod vm;

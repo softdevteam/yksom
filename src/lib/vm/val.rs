@@ -10,7 +10,7 @@
 #![allow(clippy::new_ret_no_self)]
 
 use std::{
-    mem::{size_of, transmute},
+    mem::{forget, size_of, transmute},
     ops::Deref,
 };
 
@@ -34,11 +34,17 @@ pub const TAG_BITSIZE: usize = 3; // Number of bits
 pub const TAG_BITMASK: usize = (1 << 3) - 1;
 
 #[cfg(target_pointer_width = "64")]
+/// If a member of ValResult has this bit set, it is a `Box<VMError>`.
+const VALRESULT_ERR_BIT: usize = 0b010;
+
+#[cfg(target_pointer_width = "64")]
 #[derive(Debug, PartialEq, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(usize)]
+// All of the values here must:
+//   1) Fit inside TAG_BITSIZE bits
+//   2) Safely convert to usize using `as`
+//   3) Not have the VALRESULT_ERR_BIT bit set or else `ValResult` will do weird things.
 pub enum ValKind {
-    // All of the values here must fit inside TAG_BITSIZE bits and be safely convert to usize
-    // using "as".
     GCBOX = 0b000,
     // Anything which can be stored unboxed *must* not have the `NotUnboxable` trait implemented
     // for them. In other words, if an existing type is added to the list of unboxable things, you
@@ -117,21 +123,26 @@ impl Val {
     ///
     /// If you need to downcast a type `T` which can be boxed, you will need to call `tobj` and
     /// `downcast` that.
-    pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Result<&T, VMError> {
+    pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(
+        &self,
+        _: &VM,
+    ) -> Result<&T, Box<VMError>> {
         debug_assert_eq!(self.valkind(), ValKind::GCBOX);
         debug_assert_eq!(ValKind::GCBOX as usize, 0);
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         debug_assert_ne!(self.val, 0);
         let tobj = unsafe { &*transmute::<usize, *const ThinObj>(self.val) };
 
-        tobj.downcast().ok_or_else(|| VMError::TypeError {
-            expected: T::static_objtype(),
-            got: tobj.deref().dyn_objtype(),
+        tobj.downcast().ok_or_else(|| {
+            Box::new(VMError::TypeError {
+                expected: T::static_objtype(),
+                got: tobj.deref().dyn_objtype(),
+            })
         })
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
-    pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, VMError> {
+    pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, Box<VMError>> {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(ValKind::GCBOX as usize, 0);
@@ -139,17 +150,24 @@ impl Val {
                 debug_assert_ne!(self.val, 0);
                 Ok(unsafe { Gc::clone_from_raw(self.val as *const _) })
             }
-            ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap())?.tobj(vm),
+            ValKind::INT => {
+                let vr = Int::boxed_isize(vm, self.as_isize(vm).unwrap());
+                if vr.is_val() {
+                    vr.unwrap().tobj(vm)
+                } else {
+                    Err(vr.unwrap_err())
+                }
+            }
         }
     }
 
     /// Create a (possibly boxed) `Val` representing the `isize` integer `i`.
-    pub fn from_isize(vm: &VM, i: isize) -> Result<Val, VMError> {
+    pub fn from_isize(vm: &VM, i: isize) -> ValResult {
         let top_bits = i as usize & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE));
         if top_bits == 0 || top_bits == TAG_BITMASK << (BITSIZE - TAG_BITSIZE) {
             // top_bits == 0: A positive integer that fits in our tagging scheme
             // top_bits all set to 1: A negative integer that fits in our tagging scheme
-            Ok(Val {
+            ValResult::from_val(Val {
                 val: ((i as usize) << TAG_BITSIZE) | (ValKind::INT as usize),
             })
         } else {
@@ -160,10 +178,10 @@ impl Val {
     /// Create a (possibly boxed) `Val` representing the `usize` integer `i`. Notice that this can
     /// fail if `i` is too big (since we don't have BigNum support and ints are internally
     /// represented as `isize`).
-    pub fn from_usize(vm: &VM, i: usize) -> Result<Val, VMError> {
+    pub fn from_usize(vm: &VM, i: usize) -> ValResult {
         if i & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE)) == 0 {
             // The top TAG_BITSIZE bits aren't set, so this fits within our pointer tagging scheme.
-            Ok(Val {
+            ValResult::from_val(Val {
                 val: (i << TAG_BITSIZE) | (ValKind::INT as usize),
             })
         } else if i & (1 << (BITSIZE - 1)) == 0 {
@@ -171,14 +189,14 @@ impl Val {
             // box this as an isize.
             Int::boxed_isize(vm, i as isize)
         } else {
-            Err(VMError::CantRepresentAsIsize)
+            ValResult::from_vmerror(VMError::CantRepresentAsIsize)
         }
     }
 
     /// If possible, return this `Val` as an `isize`.
-    pub fn as_isize(&self, vm: &VM) -> Result<isize, VMError> {
+    pub fn as_isize(&self, vm: &VM) -> Result<isize, Box<VMError>> {
         match self.valkind() {
-            ValKind::GCBOX => Ok(self.tobj(vm)?.as_isize()?),
+            ValKind::GCBOX => self.tobj(vm)?.as_isize(),
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
                     Ok((self.val >> TAG_BITSIZE) as isize)
@@ -194,14 +212,14 @@ impl Val {
     }
 
     /// If possible, return this `Val` as an `usize`.
-    pub fn as_usize(&self, vm: &VM) -> Result<usize, VMError> {
+    pub fn as_usize(&self, vm: &VM) -> Result<usize, Box<VMError>> {
         match self.valkind() {
-            ValKind::GCBOX => Ok(self.tobj(vm)?.as_usize()?),
+            ValKind::GCBOX => self.tobj(vm)?.as_usize(),
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
                     Ok(self.val >> TAG_BITSIZE)
                 } else {
-                    Err(VMError::CantRepresentAsUsize)
+                    Err(Box::new(VMError::CantRepresentAsUsize))
                 }
             }
         }
@@ -237,6 +255,106 @@ impl Drop for Val {
                 }
             }
             ValKind::INT => (),
+        }
+    }
+}
+
+/// A compact representation of a `Val` or a `Box<VMError>`.
+#[derive(Debug, PartialEq)]
+pub struct ValResult {
+    // If VALRESULT_ERR_BIT is set, this is a `Box<VMError>`, otherwise it is a `Val`.
+    val: usize,
+}
+
+impl ValResult {
+    /// Construct a `ValResult` from a `Val`.
+    pub fn from_val(val: Val) -> ValResult {
+        let vr = ValResult { val: val.val };
+        std::mem::forget(val);
+        vr
+    }
+
+    /// Construct a `ValResult` from a `VMError`.
+    pub fn from_vmerror(err: VMError) -> ValResult {
+        let b = Box::new(err);
+        let ptr = Box::into_raw(b) as *const usize as usize;
+        ValResult {
+            val: ptr | VALRESULT_ERR_BIT,
+        }
+    }
+
+    /// Construct a `ValResult` from a `Box<VMError>`.
+    pub fn from_boxvmerror(err: Box<VMError>) -> ValResult {
+        let ptr = Box::into_raw(err) as *const usize as usize;
+        ValResult {
+            val: ptr | VALRESULT_ERR_BIT,
+        }
+    }
+
+    /// Is this `ValResult` a `Val`? If not, it is one of the extra kinds defined in
+    /// `ValResultKind`.
+    pub fn is_val(&self) -> bool {
+        (self.val & VALRESULT_ERR_BIT) == 0
+    }
+
+    /// Is this `ValResult` a `Box<VMError>`? If not, it is a `Val`.
+    pub fn is_err(&self) -> bool {
+        (self.val & VALRESULT_ERR_BIT) != 0
+    }
+
+    /// Unwraps a `ValResult`, yielding a `Val`.
+    ///
+    /// # Panics
+    ///
+    /// If the `ValResult` represents a `Box<VMError>`.
+    pub fn unwrap(self) -> Val {
+        if !self.is_val() {
+            panic!("Trying to unwrap non-Val.");
+        }
+        unsafe { self.unwrap_unsafe() }
+    }
+
+    /// Unwraps a `ValResult`, yielding a `Val` without checking whether this `ValResult` actually
+    /// represents a `Val` or not.
+    #[doc(hidden)]
+    pub unsafe fn unwrap_unsafe(self) -> Val {
+        let v = Val { val: self.val };
+        forget(self);
+        v
+    }
+
+    /// Unwraps a `ValResult`, yielding a `Val`. If the value is a `Box<VMError>` then it calls
+    /// `op` with its value.
+    pub fn unwrap_or_else<F: FnOnce(Box<VMError>) -> Val>(self, op: F) -> Val {
+        if self.is_val() {
+            unsafe { self.unwrap_unsafe() }
+        } else {
+            op(self.unwrap_err())
+        }
+    }
+
+    /// Unwraps a `ValResult`, yielding a `Box<VMError>`.
+    ///
+    /// # Panics
+    ///
+    /// If the `ValResult` represents a `Val`.
+    pub fn unwrap_err(self) -> Box<VMError> {
+        if !self.is_err() {
+            panic!("Trying to unwrap non-VMError.");
+        }
+        let ptr = (self.val & !VALRESULT_ERR_BIT) as *mut VMError;
+        forget(self);
+        unsafe { Box::from_raw(ptr) }
+    }
+}
+
+impl Drop for ValResult {
+    fn drop(&mut self) {
+        if self.is_val() {
+            drop(Val { val: self.val });
+        } else {
+            let ptr = (self.val & !TAG_BITMASK) as *mut VMError;
+            drop(*unsafe { Box::from_raw(ptr) });
         }
     }
 }
@@ -340,7 +458,7 @@ mod tests {
         let v = String_::new(&vm, "s".to_owned());
         assert!(v.downcast::<String_>(&vm).is_ok());
         assert_eq!(
-            v.downcast::<Class>(&vm).unwrap_err(),
+            *v.downcast::<Class>(&vm).unwrap_err(),
             VMError::TypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_

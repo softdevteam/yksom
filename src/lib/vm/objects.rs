@@ -43,7 +43,7 @@ use crate::{
         instrs::{Instr, Primitive},
     },
     vm::{
-        val::{NotUnboxable, Val},
+        val::{NotUnboxable, Val, ValResult},
         vm::{Closure, VMError, VM},
     },
 };
@@ -68,9 +68,9 @@ pub trait Obj: Debug + abgc::GcLayout {
     /// Return the `ObjType` of this object.
     fn dyn_objtype(&self) -> ObjType;
     /// If possible, return this `Obj` as an `isize`.
-    fn as_isize(&self) -> Result<isize, VMError>;
+    fn as_isize(&self) -> Result<isize, Box<VMError>>;
     /// If possible, return this `Obj` as an `usize`.
-    fn as_usize(&self) -> Result<usize, VMError>;
+    fn as_usize(&self) -> Result<usize, Box<VMError>>;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
 }
@@ -92,12 +92,12 @@ impl Obj for Block {
         ObjType::Block
     }
 
-    fn as_isize(&self) -> Result<isize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_isize(&self) -> Result<isize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
-    fn as_usize(&self) -> Result<usize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_usize(&self) -> Result<usize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
     fn get_class(&self, vm: &VM) -> Val {
@@ -157,12 +157,12 @@ impl Obj for Class {
         ObjType::Class
     }
 
-    fn as_isize(&self) -> Result<isize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_isize(&self) -> Result<isize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
-    fn as_usize(&self) -> Result<usize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_usize(&self) -> Result<usize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
     fn get_class(&self, vm: &VM) -> Val {
@@ -179,7 +179,7 @@ impl StaticObjType for Class {
 }
 
 impl Class {
-    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, VMError> {
+    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> ValResult {
         let supercls = match ccls.supercls {
             Some(ref x) => match x.as_str() {
                 "Boolean" => Some(vm.bool_cls.clone()),
@@ -228,7 +228,7 @@ impl Class {
                 cobjects::Const::String(s) => String_::new(vm, s),
             })
             .collect();
-        Ok(Val::from_obj(
+        ValResult::from_val(Val::from_obj(
             vm,
             Class {
                 name: String_::new(vm, ccls.name),
@@ -244,17 +244,17 @@ impl Class {
         ))
     }
 
-    pub fn name(&self, _: &VM) -> Result<Val, VMError> {
-        Ok(self.name.clone())
+    pub fn name(&self, _: &VM) -> ValResult {
+        ValResult::from_val(self.name.clone())
     }
 
-    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, &Method), VMError> {
+    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, &Method), Box<VMError>> {
         self.methods
             .get(msg)
             .map(|x| Ok((Val::recover(self), x)))
             .unwrap_or_else(|| match &self.supercls {
                 Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
-                None => Err(VMError::UnknownMethod(msg.to_owned())),
+                None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),
             })
     }
 
@@ -287,12 +287,12 @@ impl Obj for Method {
         ObjType::Method
     }
 
-    fn as_isize(&self) -> Result<isize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_isize(&self) -> Result<isize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
-    fn as_usize(&self) -> Result<usize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_usize(&self) -> Result<usize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
     fn get_class(&self, _: &VM) -> Val {
@@ -320,11 +320,11 @@ impl Obj for Inst {
         ObjType::Inst
     }
 
-    fn as_isize(&self) -> Result<isize, VMError> {
+    fn as_isize(&self) -> Result<isize, Box<VMError>> {
         unimplemented!()
     }
 
-    fn as_usize(&self) -> Result<usize, VMError> {
+    fn as_usize(&self) -> Result<usize, Box<VMError>> {
         unimplemented!()
     }
 
@@ -374,15 +374,15 @@ impl Obj for Int {
         ObjType::Int
     }
 
-    fn as_isize(&self) -> Result<isize, VMError> {
+    fn as_isize(&self) -> Result<isize, Box<VMError>> {
         Ok(self.val)
     }
 
-    fn as_usize(&self) -> Result<usize, VMError> {
+    fn as_usize(&self) -> Result<usize, Box<VMError>> {
         if self.val > 0 {
             Ok(self.val as usize)
         } else {
-            Err(VMError::CantRepresentAsUsize)
+            Err(Box::new(VMError::CantRepresentAsUsize))
         }
     }
 
@@ -400,8 +400,8 @@ impl StaticObjType for Int {
 impl Int {
     /// Create a `Val` representing the `usize` integer `i`. The `Val` is guaranteed to be boxed
     /// internally.
-    pub fn boxed_isize(vm: &VM, i: isize) -> Result<Val, VMError> {
-        Ok(Val::from_obj(vm, Int { val: i }))
+    pub fn boxed_isize(vm: &VM, i: isize) -> ValResult {
+        ValResult::from_val(Val::from_obj(vm, Int { val: i }))
     }
 }
 
@@ -415,12 +415,12 @@ impl Obj for String_ {
         ObjType::String_
     }
 
-    fn as_isize(&self) -> Result<isize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_isize(&self) -> Result<isize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
-    fn as_usize(&self) -> Result<usize, VMError> {
-        Err(VMError::CantRepresentAsUsize)
+    fn as_usize(&self) -> Result<usize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
     fn get_class(&self, vm: &VM) -> Val {
@@ -446,21 +446,21 @@ impl String_ {
     }
 
     /// Concatenate this string with another string and return the result.
-    pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, VMError> {
-        let other_str: &String_ = other.downcast(vm)?;
+    pub fn concatenate(&self, vm: &VM, other: Val) -> ValResult {
+        let other_str: &String_ = rtry!(other.downcast(vm));
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.
         if self.s.is_empty() {
-            return Ok(other);
+            return ValResult::from_val(other);
         } else if other_str.s.is_empty() {
-            return Ok(Val::recover(self));
+            return ValResult::from_val(Val::recover(self));
         }
 
         let mut new = String::with_capacity(self.s.len() + other_str.s.len());
         new.push_str(&self.s);
         new.push_str(&other_str.s);
-        Ok(String_::new(vm, new))
+        ValResult::from_val(String_::new(vm, new))
     }
 }
 
