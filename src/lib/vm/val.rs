@@ -9,28 +9,6 @@
 
 #![allow(clippy::new_ret_no_self)]
 
-//! This file contains the core SOM objects. Note that there is a fundamental constraint that
-//! *must* be obeyed by the programmer at all times: upon their creation, instances of the `Obj`
-//! trait must immediately be passed to `Val::from_obj`. In other words this is safe:
-//!
-//! ```rust,ignore
-//! let x = Val::from_obj(vm, String_{ s: "a".to_owned() });
-//! dbg!(x.tobj().as_str());
-//! ```
-//!
-//! but this leads to undefined behaviour:
-//!
-//! ```rust,ignore
-//! let x = String_{ s: "a".to_owned() };
-//! dbg!(x.tobj().as_str());
-//! ```
-//!
-//! The reason for this is that methods on `Obj`s can call `Val::restore` which converts an `Obj`
-//! reference back into a `Val`.
-//!
-//! Although this constraint is not enforced through the type system, it is not hard to obey: as
-//! soon as you create an `Obj` instance, pass it to `Val::from_obj`.
-
 use std::{
     mem::{size_of, transmute},
     ops::Deref,
