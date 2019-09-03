@@ -15,13 +15,15 @@ use std::{
 
 use abgc::{Gc, GcLayout};
 
-use super::{
-    objects::{Block, Class, Inst, MethodBody, ObjType, String_},
-    val::Val,
-};
-use crate::compiler::{
-    compile,
-    instrs::{Builtin, Instr, Primitive},
+use crate::{
+    compiler::{
+        compile,
+        instrs::{Builtin, Instr, Primitive},
+    },
+    vm::{
+        objects::{Block, Class, Inst, MethodBody, ObjType, String_},
+        val::{Val, ValResult},
+    },
 };
 
 pub const SOM_EXTENSION: &str = "som";
@@ -154,9 +156,9 @@ impl VM {
     }
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
-    pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> Result<Val, VMError> {
-        let cls = rcv.tobj(self)?.get_class(self);
-        let (meth_cls_val, meth) = cls.downcast::<Class>(self)?.get_method(self, msg)?;
+    pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> ValResult {
+        let cls = rtry!(rcv.tobj(self)).get_class(self);
+        let (meth_cls_val, meth) = rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, msg));
 
         match meth.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
@@ -164,36 +166,36 @@ impl VM {
                 num_vars,
                 bytecode_off,
             } => {
-                let meth_cls = meth_cls_val.downcast::<Class>(self)?;
+                let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
                 self.exec_user(meth_cls, bytecode_off, rcv, None, num_vars, args)
             }
         }
     }
 
-    fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> Result<Val, VMError> {
+    fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> ValResult {
         match prim {
             Primitive::Class => {
-                let rcv_tobj = rcv.tobj(self)?;
-                Ok(rcv_tobj.get_class(self))
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                ValResult::from_val(rcv_tobj.get_class(self))
             }
             Primitive::Concatenate => {
-                let rcv_str: &String_ = rcv.downcast(self)?;
+                let rcv_str: &String_ = rtry!(rcv.downcast(self));
                 rcv_str.concatenate(self, args[0].clone())
             }
-            Primitive::Name => rcv.downcast::<Class>(self)?.name(self),
+            Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
             Primitive::New => {
                 assert_eq!(args.len(), 0);
-                Ok(Inst::new(self, rcv))
+                ValResult::from_val(Inst::new(self, rcv))
             }
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string
-                let str_: &String_ = rcv.downcast(self)?;
+                let str_: &String_ = rtry!(rcv.downcast(self));
                 println!("{}", str_.as_str());
-                Ok(rcv)
+                ValResult::from_val(rcv)
             }
             Primitive::Value => {
-                let rcv_blk: &Block = rcv.downcast(self)?;
-                let blk_cls: &Class = rcv_blk.blockinfo_cls.downcast(self)?;
+                let rcv_blk: &Block = rtry!(rcv.downcast(self));
+                let blk_cls: &Class = rtry!(rcv_blk.blockinfo_cls.downcast(self));
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
                 self.exec_user(
                     blk_cls,
@@ -215,7 +217,7 @@ impl VM {
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
         args: &[Val],
-    ) -> Result<Val, VMError> {
+    ) -> ValResult {
         let frame = Gc::new(Frame::new(
             self,
             parent_closure,
@@ -265,19 +267,26 @@ impl VM {
                     let (ref name, nargs) = &cls.sends[moff];
                     let args = frame.stack_drain_rev(frame.stack_len() - nargs);
                     let rcv = frame.stack_pop();
-                    let r = match self.send(rcv, &name, &args) {
-                        Ok(r) => r,
-                        Err(VMError::Return(depth, val)) => {
-                            if depth == 0 {
-                                val
-                            } else {
-                                unsafe { &mut *self.frames.get() }.pop();
-                                return Err(VMError::Return(depth - 1, val));
+                    let vr = self.send(rcv, &name, &args);
+                    let r = if vr.is_val() {
+                        vr.unwrap()
+                    } else {
+                        match *vr.unwrap_err() {
+                            VMError::Return(depth, val) => {
+                                if depth == 0 {
+                                    val
+                                } else {
+                                    unsafe { &mut *self.frames.get() }.pop();
+                                    return ValResult::from_vmerror(VMError::Return(
+                                        depth - 1,
+                                        val,
+                                    ));
+                                }
                             }
-                        }
-                        Err(e) => {
-                            unsafe { &mut *self.frames.get() }.pop();
-                            return Err(e);
+                            e => {
+                                unsafe { &mut *self.frames.get() }.pop();
+                                return ValResult::from_vmerror(e);
+                            }
                         }
                     };
                     frame.stack_push(r);
@@ -287,7 +296,7 @@ impl VM {
                     let v = frame.stack_pop();
                     if closure_depth == 0 {
                         unsafe { &mut *self.frames.get() }.pop();
-                        return Ok(v);
+                        return ValResult::from_val(v);
                     } else {
                         // We want to do a non-local return. Before we attempt that, we need to
                         // check that the block hasn't escaped its function (and we know we're in a
@@ -300,14 +309,14 @@ impl VM {
                             unsafe { &*self.frames.get() }.iter().rev().enumerate()
                         {
                             if Gc::ptr_eq(&parent_closure, &pframe.closure) {
-                                return Err(VMError::Return(frame_depth, v));
+                                return ValResult::from_vmerror(VMError::Return(frame_depth, v));
                             }
                         }
                         panic!("Return from escaped block");
                     }
                 }
                 Instr::VarLookup(d, n) => {
-                    let val = frame.var_lookup(d, n)?;
+                    let val = vtry!(frame.var_lookup(d, n));
                     frame.stack_push(val);
                     pc += 1;
                 }
@@ -318,7 +327,7 @@ impl VM {
                 }
             }
         }
-        Err(VMError::Exit)
+        ValResult::from_vmerror(VMError::Exit)
     }
 }
 
@@ -394,13 +403,13 @@ impl Frame {
             .collect()
     }
 
-    fn var_lookup(&self, depth: usize, var: usize) -> Result<Val, VMError> {
+    fn var_lookup(&self, depth: usize, var: usize) -> ValResult {
         let cl = self.closure(depth);
         let v = cl.get_var(var);
         if v.is_illegal() {
-            Err(VMError::UnassignedVar(var))
+            ValResult::from_vmerror(VMError::UnassignedVar(var))
         } else {
-            Ok(v.clone())
+            ValResult::from_val(v.clone())
         }
     }
 
