@@ -140,6 +140,13 @@ impl<'a> Compiler<'a> {
         astmeth: &ast::Method,
     ) -> Result<cobjects::Method, Vec<(Lexeme<StorageT>, String)>> {
         let (name, args) = match astmeth.name {
+            ast::MethodName::BinaryOp(op, arg) => {
+                let arg_v = match arg {
+                    Some(l) => vec![l],
+                    None => vec![],
+                };
+                ((op, self.lexer.lexeme_str(&op).to_string()), arg_v)
+            }
             ast::MethodName::Id(lexeme) => {
                 ((lexeme, self.lexer.lexeme_str(&lexeme).to_string()), vec![])
             }
@@ -164,6 +171,11 @@ impl<'a> Compiler<'a> {
     ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
         match body {
             ast::MethodBody::Primitive => match name.1 {
+                "+" => Ok(cobjects::MethodBody::Primitive(Primitive::Add)),
+                "-" => Ok(cobjects::MethodBody::Primitive(Primitive::Sub)),
+                "*" => Ok(cobjects::MethodBody::Primitive(Primitive::Mul)),
+                "/" => Ok(cobjects::MethodBody::Primitive(Primitive::Div)),
+                "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
                 "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
@@ -198,6 +210,13 @@ impl<'a> Compiler<'a> {
                 }
                 Ok(())
             }
+            ast::Expr::BinaryMsg { lhs, op, rhs } => {
+                self.c_expr(lhs)?;
+                self.c_expr(rhs)?;
+                let send_off = self.send_off((self.lexer.lexeme_str(&op).to_string(), 1));
+                self.instrs.push(Instr::Send(send_off));
+                Ok(())
+            }
             ast::Expr::Block {
                 params,
                 vars,
@@ -217,6 +236,14 @@ impl<'a> Compiler<'a> {
                 self.blocks[block_off].num_vars = num_vars;
                 Ok(())
             }
+            ast::Expr::Int(lexeme) => match self.lexer.lexeme_str(&lexeme).parse::<isize>() {
+                Ok(i) => {
+                    let const_off = self.const_off(cobjects::Const::Int(i));
+                    self.instrs.push(Instr::Const(const_off));
+                    Ok(())
+                }
+                Err(e) => Err(vec![(*lexeme, format!("{}", e))]),
+            },
             ast::Expr::KeywordMsg { receiver, msglist } => {
                 self.c_expr(receiver)?;
                 let mut mn = String::new();

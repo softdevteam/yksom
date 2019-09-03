@@ -34,17 +34,28 @@ pub enum VMError {
     CantRepresentAsIsize,
     /// A number which can't be represented in an `usize`.
     CantRepresentAsUsize,
+    DivisionByZero,
     /// The VM is trying to exit.
     Exit,
     /// Tried to perform a `Val::downcast` operation on a non-boxed `Val`. Note that `expected`
     /// and `got` can reference the same `ObjType`.
-    GcBoxTypeError { expected: ObjType, got: ObjType },
+    GcBoxTypeError {
+        expected: ObjType,
+        got: ObjType,
+    },
+    /// Integer overflow.
+    Overflow,
     /// Percolate a non-local return up the call stack.
     Return(usize, Val),
     /// A dynamic type error.
-    TypeError { expected: ObjType, got: ObjType },
+    TypeError {
+        expected: ObjType,
+        got: ObjType,
+    },
     /// Tried to read from a local variable that hasn't had a value assigned to it yet.
     UnassignedVar(usize),
+    /// Integer underflow.
+    Underflow,
     /// An unknown method.
     UnknownMethod(String),
 }
@@ -55,6 +66,7 @@ pub struct VM {
     pub bool_cls: Val,
     pub cls_cls: Val,
     pub false_cls: Val,
+    pub int_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
@@ -79,6 +91,7 @@ impl VM {
             bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
             false_cls: Val::illegal(),
+            int_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
@@ -104,6 +117,7 @@ impl VM {
         vm.block_cls = vm.init_builtin_class("Block", false);
         vm.bool_cls = vm.init_builtin_class("Boolean", false);
         vm.false_cls = vm.init_builtin_class("False", false);
+        vm.int_cls = vm.init_builtin_class("Integer", false);
         vm.str_cls = vm.init_builtin_class("String", false);
         vm.true_cls = vm.init_builtin_class("True", false);
         vm.false_ = Inst::new(&vm, vm.false_cls.clone());
@@ -174,13 +188,30 @@ impl VM {
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> ValResult {
         match prim {
+            Primitive::Add => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.add(self, args[0].clone())
+            }
+            Primitive::AsString => rtry!(rcv.tobj(self)).to_strval(self),
             Primitive::Class => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
                 ValResult::from_val(rcv_tobj.get_class(self))
             }
             Primitive::Concatenate => {
                 let rcv_str: &String_ = rtry!(rcv.downcast(self));
+                assert_eq!(args.len(), 1);
                 rcv_str.concatenate(self, args[0].clone())
+            }
+            Primitive::Div => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.div(self, args[0].clone())
+            }
+            Primitive::Mul => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.mul(self, args[0].clone())
             }
             Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
             Primitive::New => {
@@ -192,6 +223,11 @@ impl VM {
                 let str_: &String_ = rtry!(rcv.downcast(self));
                 println!("{}", str_.as_str());
                 ValResult::from_val(rcv)
+            }
+            Primitive::Sub => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.sub(self, args[0].clone())
             }
             Primitive::Value => {
                 let rcv_blk: &Block = rtry!(rcv.downcast(self));
@@ -476,6 +512,7 @@ impl VM {
             bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
             false_cls: Val::illegal(),
+            int_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),

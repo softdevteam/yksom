@@ -30,10 +30,15 @@ pub enum Builtin {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Primitive {
+    Add,
+    AsString,
     Class,
     Concatenate,
+    Div,
+    Mul,
     Name,
     New,
     PrintLn,
+    Sub,
     Value,
 }

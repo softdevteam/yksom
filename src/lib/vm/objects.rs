@@ -73,6 +73,16 @@ pub trait Obj: Debug + abgc::GcLayout {
     fn as_usize(&self) -> Result<usize, Box<VMError>>;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
+    /// Produce a new `Val` which adds `other` to this.
+    fn add(&self, vm: &VM, other: Val) -> ValResult;
+    /// Produce a new `Val` which subtracts `other` from this.
+    fn sub(&self, vm: &VM, other: Val) -> ValResult;
+    /// Produce a new `Val` which multiplies `other` to this.
+    fn mul(&self, vm: &VM, other: Val) -> ValResult;
+    /// Produce a new `Val` which divides `other` from this.
+    fn div(&self, vm: &VM, other: Val) -> ValResult;
+    /// Convert this object to a `Val` that represents a SOM string.
+    fn to_strval(&self, vm: &VM) -> ValResult;
 }
 
 pub trait StaticObjType {
@@ -102,6 +112,26 @@ impl Obj for Block {
 
     fn get_class(&self, vm: &VM) -> Val {
         vm.block_cls.clone()
+    }
+
+    fn add(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn sub(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn mul(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn to_strval(&self, _: &VM) -> ValResult {
+        unimplemented!();
     }
 }
 
@@ -168,6 +198,26 @@ impl Obj for Class {
     fn get_class(&self, vm: &VM) -> Val {
         vm.cls_cls.clone()
     }
+
+    fn add(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn sub(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn mul(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn to_strval(&self, _: &VM) -> ValResult {
+        unimplemented!();
+    }
 }
 
 impl NotUnboxable for Class {}
@@ -221,13 +271,13 @@ impl Class {
             })
             .collect();
 
-        let consts = ccls
-            .consts
-            .into_iter()
-            .map(|c| match c {
+        let mut consts = Vec::with_capacity(ccls.consts.len());
+        for c in ccls.consts {
+            consts.push(match c {
                 cobjects::Const::String(s) => String_::new(vm, s),
-            })
-            .collect();
+                cobjects::Const::Int(i) => vtry!(Val::from_isize(vm, i)),
+            });
+        }
         ValResult::from_val(Val::from_obj(
             vm,
             Class {
@@ -298,6 +348,26 @@ impl Obj for Method {
     fn get_class(&self, _: &VM) -> Val {
         unimplemented!();
     }
+
+    fn add(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn sub(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn mul(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn to_strval(&self, _: &VM) -> ValResult {
+        unimplemented!();
+    }
 }
 
 impl NotUnboxable for Method {}
@@ -330,6 +400,26 @@ impl Obj for Inst {
 
     fn get_class(&self, _: &VM) -> Val {
         self.class.clone()
+    }
+
+    fn add(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn sub(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn mul(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn to_strval(&self, _: &VM) -> ValResult {
+        unimplemented!();
     }
 }
 
@@ -386,8 +476,45 @@ impl Obj for Int {
         }
     }
 
-    fn get_class(&self, _: &VM) -> Val {
-        unimplemented!();
+    fn get_class(&self, vm: &VM) -> Val {
+        vm.int_cls.clone()
+    }
+
+    fn add(&self, vm: &VM, other: Val) -> ValResult {
+        match self.val.checked_add(rtry!(other.as_isize(vm))) {
+            Some(i) => ValResult::from_val(Val::from_obj(vm, Int { val: i })),
+            None => ValResult::from_vmerror(VMError::Overflow),
+        }
+    }
+
+    fn sub(&self, vm: &VM, other: Val) -> ValResult {
+        match self.val.checked_sub(rtry!(other.as_isize(vm))) {
+            Some(i) => ValResult::from_val(Val::from_obj(vm, Int { val: i })),
+            None => ValResult::from_vmerror(VMError::Underflow),
+        }
+    }
+
+    fn mul(&self, vm: &VM, other: Val) -> ValResult {
+        match self.val.checked_mul(rtry!(other.as_isize(vm))) {
+            Some(i) => ValResult::from_val(Val::from_obj(vm, Int { val: i })),
+            None => ValResult::from_vmerror(VMError::Overflow),
+        }
+    }
+
+    fn div(&self, vm: &VM, other: Val) -> ValResult {
+        let other_int = rtry!(other.as_isize(vm));
+        if other_int != 0 {
+            match self.val.checked_div(other_int) {
+                Some(i) => ValResult::from_val(Val::from_obj(vm, Int { val: i })),
+                None => ValResult::from_vmerror(VMError::Overflow),
+            }
+        } else {
+            ValResult::from_vmerror(VMError::DivisionByZero)
+        }
+    }
+
+    fn to_strval(&self, vm: &VM) -> ValResult {
+        ValResult::from_val(String_::new(vm, self.val.to_string()))
     }
 }
 
@@ -425,6 +552,26 @@ impl Obj for String_ {
 
     fn get_class(&self, vm: &VM) -> Val {
         vm.str_cls.clone()
+    }
+
+    fn add(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn sub(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn mul(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn to_strval(&self, _: &VM) -> ValResult {
+        unimplemented!();
     }
 }
 

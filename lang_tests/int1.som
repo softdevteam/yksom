@@ -1,0 +1,9 @@
+"
+VM:
+  status: success
+  stdout: 1
+"
+
+int1 = (
+    run = ( 1 asString println )
+)
