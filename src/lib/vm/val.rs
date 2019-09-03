@@ -311,6 +311,13 @@ impl ValResult {
         if !self.is_val() {
             panic!("Trying to unwrap non-Val.");
         }
+        unsafe { self.unwrap_unsafe() }
+    }
+
+    /// Unwraps a `ValResult`, yielding a `Val` without checking whether this `ValResult` actually
+    /// represents a `Val` or not.
+    #[doc(hidden)]
+    pub unsafe fn unwrap_unsafe(self) -> Val {
         let v = Val { val: self.val };
         forget(self);
         v
@@ -320,7 +327,7 @@ impl ValResult {
     /// `op` with its value.
     pub fn unwrap_or_else<F: FnOnce(Box<VMError>) -> Val>(self, op: F) -> Val {
         if self.is_val() {
-            self.unwrap()
+            unsafe { self.unwrap_unsafe() }
         } else {
             op(self.unwrap_err())
         }

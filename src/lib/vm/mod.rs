@@ -13,7 +13,7 @@ macro_rules! vtry {
     ($elem:expr) => {{
         let o = $elem;
         if o.is_val() {
-            o.unwrap()
+            unsafe { o.unwrap_unsafe() }
         } else {
             return o;
         }
