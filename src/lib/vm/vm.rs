@@ -208,6 +208,11 @@ impl VM {
                 assert_eq!(args.len(), 1);
                 rcv_tobj.div(self, args[0].clone())
             }
+            Primitive::Equals => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.equals(self, args[0].clone())
+            }
             Primitive::Mul => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
                 assert_eq!(args.len(), 1);
@@ -217,6 +222,11 @@ impl VM {
             Primitive::New => {
                 assert_eq!(args.len(), 0);
                 ValResult::from_val(Inst::new(self, rcv))
+            }
+            Primitive::NotEquals => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.not_equals(self, args[0].clone())
             }
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string

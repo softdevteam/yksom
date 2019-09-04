@@ -175,6 +175,8 @@ impl<'a> Compiler<'a> {
                 "-" => Ok(cobjects::MethodBody::Primitive(Primitive::Sub)),
                 "*" => Ok(cobjects::MethodBody::Primitive(Primitive::Mul)),
                 "/" => Ok(cobjects::MethodBody::Primitive(Primitive::Div)),
+                "=" => Ok(cobjects::MethodBody::Primitive(Primitive::Equals)),
+                "~=" => Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals)),
                 "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
