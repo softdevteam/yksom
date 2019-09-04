@@ -21,7 +21,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, Class, Inst, MethodBody, ObjType, String_},
+        objects::{Block, Class, Inst, Method, MethodBody, ObjType, String_},
         val::{Val, ValResult},
     },
 };
@@ -45,6 +45,8 @@ pub enum VMError {
     },
     /// Integer overflow.
     Overflow,
+    /// Something went wrong when trying to execute a primitive.
+    PrimitiveError,
     /// Percolate a non-local return up the call stack.
     Return(usize, Val),
     /// A dynamic type error.
@@ -173,7 +175,10 @@ impl VM {
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> ValResult {
         let cls = rtry!(rcv.tobj(self)).get_class(self);
         let (meth_cls_val, meth) = rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, msg));
+        self.send_internal(rcv, args, meth_cls_val, meth)
+    }
 
+    fn send_internal(&self, rcv: Val, args: &[Val], meth_cls_val: Val, meth: &Method) -> ValResult {
         match meth.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
             MethodBody::User {
@@ -228,6 +233,10 @@ impl VM {
                 assert_eq!(args.len(), 1);
                 rcv_tobj.not_equals(self, args[0].clone())
             }
+            Primitive::Restart => {
+                // This is handled directly by exec_user.
+                ValResult::from_vmerror(VMError::PrimitiveError)
+            }
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string
                 let str_: &String_ = rtry!(rcv.downcast(self));
@@ -258,7 +267,7 @@ impl VM {
     fn exec_user(
         &self,
         cls: &Class,
-        mut pc: usize,
+        meth_pc: usize,
         rcv: Val,
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
@@ -272,6 +281,7 @@ impl VM {
             args,
         ));
         unsafe { &mut *self.frames.get() }.push(Gc::clone(&frame));
+        let mut pc = meth_pc;
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Block(blkinfo_off) => {
@@ -313,30 +323,42 @@ impl VM {
                     let (ref name, nargs) = &cls.sends[moff];
                     let args = frame.stack_drain_rev(frame.stack_len() - nargs);
                     let rcv = frame.stack_pop();
-                    let vr = self.send(rcv, &name, &args);
-                    let r = if vr.is_val() {
-                        vr.unwrap()
-                    } else {
-                        match *vr.unwrap_err() {
-                            VMError::Return(depth, val) => {
-                                if depth == 0 {
-                                    val
-                                } else {
-                                    unsafe { &mut *self.frames.get() }.pop();
-                                    return ValResult::from_vmerror(VMError::Return(
-                                        depth - 1,
-                                        val,
-                                    ));
-                                }
-                            }
-                            e => {
-                                unsafe { &mut *self.frames.get() }.pop();
-                                return ValResult::from_vmerror(e);
-                            }
+
+                    let cls = rtry!(rcv.tobj(self)).get_class(self);
+                    let (meth_cls_val, meth) =
+                        rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
+                    match meth.body {
+                        MethodBody::Primitive(Primitive::Restart) => {
+                            pc = meth_pc;
+                            frame.stack_clear();
                         }
-                    };
-                    frame.stack_push(r);
-                    pc += 1;
+                        _ => {
+                            let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
+                            let r = if vr.is_val() {
+                                vr.unwrap()
+                            } else {
+                                match *vr.unwrap_err() {
+                                    VMError::Return(depth, val) => {
+                                        if depth == 0 {
+                                            val
+                                        } else {
+                                            unsafe { &mut *self.frames.get() }.pop();
+                                            return ValResult::from_vmerror(VMError::Return(
+                                                depth - 1,
+                                                val,
+                                            ));
+                                        }
+                                    }
+                                    e => {
+                                        unsafe { &mut *self.frames.get() }.pop();
+                                        return ValResult::from_vmerror(e);
+                                    }
+                                }
+                            };
+                            frame.stack_push(r);
+                            pc += 1;
+                        }
+                    }
                 }
                 Instr::Return(closure_depth) => {
                     let v = frame.stack_pop();
@@ -440,6 +462,10 @@ impl Frame {
             stack.set_len(i);
             v
         }
+    }
+
+    fn stack_clear(&self) {
+        unsafe { &mut *self.stack.get() }.clear();
     }
 
     fn stack_drain_rev(&self, start: usize) -> Vec<Val> {

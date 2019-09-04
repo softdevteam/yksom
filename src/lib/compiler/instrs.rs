@@ -41,6 +41,7 @@ pub enum Primitive {
     NotEquals,
     New,
     PrintLn,
+    Restart,
     Sub,
     Value,
 }

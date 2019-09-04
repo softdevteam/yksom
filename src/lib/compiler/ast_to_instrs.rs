@@ -183,6 +183,7 @@ impl<'a> Compiler<'a> {
                 "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
+                "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
                 "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
