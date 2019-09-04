@@ -186,7 +186,7 @@ impl VM {
                 bytecode_off,
             } => {
                 let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
-                self.exec_user(meth_cls, bytecode_off, rcv, None, num_vars, args)
+                self.exec_user(meth_cls, true, bytecode_off, rcv, None, num_vars, args)
             }
         }
     }
@@ -254,6 +254,7 @@ impl VM {
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
                 self.exec_user(
                     blk_cls,
+                    false,
                     blkinfo.bytecode_off,
                     rcv.clone(),
                     Some(Gc::clone(&rcv_blk.parent_closure)),
@@ -267,6 +268,7 @@ impl VM {
     fn exec_user(
         &self,
         cls: &Class,
+        is_method: bool,
         meth_pc: usize,
         rcv: Val,
         parent_closure: Option<Gc<Closure>>,
@@ -275,6 +277,7 @@ impl VM {
     ) -> ValResult {
         let frame = Gc::new(Frame::new(
             self,
+            is_method,
             parent_closure,
             num_vars,
             rcv.clone(),
@@ -414,6 +417,7 @@ impl GcLayout for Frame {
 impl Frame {
     fn new(
         _: &VM,
+        is_method: bool,
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
         self_val: Val,
@@ -421,12 +425,16 @@ impl Frame {
     ) -> Self {
         let mut vars = Vec::new();
         vars.resize(num_vars, Val::illegal());
-        // The VM makes some strong assumptions about variables: that the first variable is
-        // "self" and that arguments 1..n+1 are the first n arguments to the method in
-        // reverse order.
-        vars[0] = self_val;
-        for (i, arg) in args.iter().enumerate() {
-            vars[i + 1] = arg.clone();
+
+        if is_method {
+            vars[0] = self_val;
+            for (i, arg) in args.iter().enumerate() {
+                vars[i + 1] = arg.clone();
+            }
+        } else {
+            for (i, arg) in args.iter().enumerate() {
+                vars[i] = arg.clone();
+            }
         }
 
         Frame {
@@ -571,7 +579,7 @@ mod tests {
         let selfv = Val::from_isize(&vm, 42).unwrap();
         let v1 = Val::from_isize(&vm, 43).unwrap();
         let v2 = Val::from_isize(&vm, 44).unwrap();
-        let f = Frame::new(&vm, None, 4, selfv, &[v1, v2]);
+        let f = Frame::new(&vm, true, None, 4, selfv, &[v1, v2]);
         assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
         assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);
