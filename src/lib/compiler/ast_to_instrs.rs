@@ -177,6 +177,12 @@ impl<'a> Compiler<'a> {
                 "/" => Ok(cobjects::MethodBody::Primitive(Primitive::Div)),
                 "=" => Ok(cobjects::MethodBody::Primitive(Primitive::Equals)),
                 "~=" => Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals)),
+                "<" => Ok(cobjects::MethodBody::Primitive(Primitive::LessThan)),
+                "<=" => Ok(cobjects::MethodBody::Primitive(Primitive::LessThanEquals)),
+                ">" => Ok(cobjects::MethodBody::Primitive(Primitive::GreaterThan)),
+                ">=" => Ok(cobjects::MethodBody::Primitive(
+                    Primitive::GreaterThanEquals,
+                )),
                 "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),

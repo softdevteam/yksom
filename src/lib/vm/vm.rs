@@ -218,6 +218,26 @@ impl VM {
                 assert_eq!(args.len(), 1);
                 rcv_tobj.equals(self, args[0].clone())
             }
+            Primitive::GreaterThan => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.greater_than(self, args[0].clone())
+            }
+            Primitive::GreaterThanEquals => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.greater_than_equals(self, args[0].clone())
+            }
+            Primitive::LessThan => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.less_than(self, args[0].clone())
+            }
+            Primitive::LessThanEquals => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.less_than_equals(self, args[0].clone())
+            }
             Primitive::Mul => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
                 assert_eq!(args.len(), 1);
