@@ -200,9 +200,8 @@ impl VM {
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> ValResult {
         match prim {
             Primitive::Add => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.add(self, args[0].clone())
+                rtry!(rcv.tobj(self)).add(self, args[0].clone())
             }
             Primitive::AsString => rtry!(rcv.tobj(self)).to_strval(self),
             Primitive::Class => {
@@ -210,24 +209,20 @@ impl VM {
                 ValResult::from_val(rcv_tobj.get_class(self))
             }
             Primitive::Concatenate => {
-                let rcv_str: &String_ = rtry!(rcv.downcast(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_str.concatenate(self, args[0].clone())
+                rtry!(rcv.downcast::<String_>(self)).concatenate(self, args[0].clone())
             }
             Primitive::Div => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.div(self, args[0].clone())
+                rtry!(rcv.tobj(self)).div(self, args[0].clone())
             }
             Primitive::Equals => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.equals(self, args[0].clone())
+                rtry!(rcv.tobj(self)).equals(self, args[0].clone())
             }
             Primitive::GreaterThan => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.greater_than(self, args[0].clone())
+                rtry!(rcv.tobj(self)).greater_than(self, args[0].clone())
             }
             Primitive::GreaterThanEquals => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
@@ -235,9 +230,8 @@ impl VM {
                 rcv_tobj.greater_than_equals(self, args[0].clone())
             }
             Primitive::LessThan => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.less_than(self, args[0].clone())
+                rtry!(rcv.tobj(self)).less_than(self, args[0].clone())
             }
             Primitive::LessThanEquals => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
@@ -245,9 +239,8 @@ impl VM {
                 rcv_tobj.less_than_equals(self, args[0].clone())
             }
             Primitive::Mul => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.mul(self, args[0].clone())
+                rtry!(rcv.tobj(self)).mul(self, args[0].clone())
             }
             Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
             Primitive::New => {
@@ -255,9 +248,8 @@ impl VM {
                 ValResult::from_val(Inst::new(self, rcv))
             }
             Primitive::NotEquals => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.not_equals(self, args[0].clone())
+                rtry!(rcv.tobj(self)).not_equals(self, args[0].clone())
             }
             Primitive::Restart => {
                 // This is handled directly by exec_user.
@@ -270,9 +262,8 @@ impl VM {
                 ValResult::from_val(rcv)
             }
             Primitive::Sub => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.sub(self, args[0].clone())
+                rtry!(rcv.tobj(self)).sub(self, args[0].clone())
             }
             Primitive::Value => {
                 let rcv_blk: &Block = rtry!(rcv.downcast(self));
