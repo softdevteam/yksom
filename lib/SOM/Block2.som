@@ -1,0 +1,3 @@
+Block2 = Block (
+    value: argument = primitive
+)

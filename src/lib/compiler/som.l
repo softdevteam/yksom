@@ -26,9 +26,9 @@
 \^ "^"
 \. "."
 - "-"
+: ":"
 primitive "PRIMITIVE"
 [a-zA-Z_][a-zA-Z_0-9]*:([a-zA-Z_][a-zA-Z0-9]*:)* "KEYWORD"
-: *[a-zA-Z_][a-zA-Z_0-9]* "PARAM"
 [a-zA-Z_][a-zA-Z_0-9]* "ID"
 [ \t\n\r]+ ;
 ".*?" ;

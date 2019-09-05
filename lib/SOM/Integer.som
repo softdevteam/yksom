@@ -11,4 +11,14 @@ Integer = (
     >= argument = primitive
 
     asString    = primitive
+
+    to: limit do: block = (
+        self to: limit by: 1 do: block
+    )
+
+    to: limit by: step do: block = (
+        | i |
+        i := self.
+        [ i <= limit ] whileTrue: [ block value: i. i := i + step ]
+    )
 )

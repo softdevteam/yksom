@@ -8,7 +8,7 @@
 // terms.
 
 %start ClassDef
-%avoid_insert "DOUBLE" "INT" "STRING" "KEYWORD" "PARAM" "ID"
+%avoid_insert "DOUBLE" "INT" "STRING" "KEYWORD" "ID"
 %%
 ClassDef -> Result<Class, ()>:
       "ID" "=" SuperClass "(" NameDefs MethodsOpt ClassMethods ")"
@@ -153,12 +153,12 @@ Literal -> Result<Expr, ()>:
 Block -> Result<Expr, ()>:
       "[" BlockParamsOpt NameDefs BlockExprs "]" { Ok(Expr::Block{ params: $2?, vars: $3?, exprs: $4? }) };
 BlockParamsOpt -> Result<Vec<Lexeme<StorageT>>, ()>:
-      BlockParams "|" { unimplemented!() }
+      BlockParams "|" { $1 }
     | { Ok(vec![]) }
     ;
-BlockParams -> Result<(), ()>:
-      "PARAM" Argument { unimplemented!() }
-    | BlockParams "PARAM" Argument { unimplemented!() }
+BlockParams -> Result<Vec<Lexeme<StorageT>>, ()>:
+      ":" "ID" { Ok(vec![map_err($2)?]) }
+    | BlockParams ":" "ID" { flattenr($1, map_err($3)) }
     ;
 Argument -> Result<Option<Lexeme<StorageT>>, ()>:
       "ID" { Ok(Some(map_err($1)?)) }

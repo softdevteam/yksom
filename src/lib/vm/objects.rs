@@ -104,6 +104,8 @@ pub trait StaticObjType {
 
 #[derive(Debug, GcLayout)]
 pub struct Block {
+    // Does this Block represent Block, Block2, or Block3?
+    pub blockn_cls: Val,
     pub blockinfo_cls: Val,
     pub blockinfo_off: usize,
     pub parent_closure: Gc<Closure>,
@@ -122,8 +124,8 @@ impl Obj for Block {
         Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
-    fn get_class(&self, vm: &VM) -> Val {
-        vm.block_cls.clone()
+    fn get_class(&self, _: &VM) -> Val {
+        self.blockn_cls.clone()
     }
 
     fn add(&self, _: &VM, _: Val) -> ValResult {
@@ -185,10 +187,18 @@ impl Block {
         blockinfo_cls: Val,
         blockinfo_off: usize,
         parent_closure: Gc<Closure>,
+        num_params: usize,
     ) -> Val {
+        let blockn_cls = match num_params {
+            0 => vm.block_cls.clone(),
+            1 => vm.block2_cls.clone(),
+            2 => vm.block3_cls.clone(),
+            _ => unimplemented!(),
+        };
         Val::from_obj(
             vm,
             Block {
+                blockn_cls,
                 blockinfo_cls,
                 blockinfo_off,
                 parent_closure,
@@ -215,6 +225,7 @@ pub struct Class {
 pub struct BlockInfo {
     pub bytecode_off: usize,
     pub bytecode_end: usize,
+    pub num_params: usize,
     pub num_vars: usize,
 }
 
@@ -292,6 +303,7 @@ impl Class {
     pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> ValResult {
         let supercls = match ccls.supercls {
             Some(ref x) => match x.as_str() {
+                "Block" => Some(vm.block_cls.clone()),
                 "Boolean" => Some(vm.bool_cls.clone()),
                 "nil" => None,
                 _ => unimplemented!(),
@@ -327,6 +339,7 @@ impl Class {
             .map(|b| BlockInfo {
                 bytecode_off: b.bytecode_off,
                 bytecode_end: b.bytecode_end,
+                num_params: b.num_params,
                 num_vars: b.num_vars,
             })
             .collect();

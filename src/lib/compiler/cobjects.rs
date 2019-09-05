@@ -49,5 +49,6 @@ pub enum MethodBody {
 pub struct Block {
     pub bytecode_off: usize,
     pub bytecode_end: usize,
+    pub num_params: usize,
     pub num_vars: usize,
 }

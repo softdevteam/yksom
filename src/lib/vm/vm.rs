@@ -65,6 +65,8 @@ pub enum VMError {
 pub struct VM {
     classpath: Vec<String>,
     pub block_cls: Val,
+    pub block2_cls: Val,
+    pub block3_cls: Val,
     pub bool_cls: Val,
     pub cls_cls: Val,
     pub false_cls: Val,
@@ -91,6 +93,8 @@ impl VM {
             classpath,
             block_cls: Val::illegal(),
             bool_cls: Val::illegal(),
+            block2_cls: Val::illegal(),
+            block3_cls: Val::illegal(),
             cls_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
@@ -117,6 +121,8 @@ impl VM {
         //
         // Nothing in this phase must store references to any classes earlier than it in the phase.
         vm.block_cls = vm.init_builtin_class("Block", false);
+        vm.block2_cls = vm.init_builtin_class("Block2", false);
+        vm.block3_cls = vm.init_builtin_class("Block3", false);
         vm.bool_cls = vm.init_builtin_class("Boolean", false);
         vm.false_cls = vm.init_builtin_class("False", false);
         vm.int_cls = vm.init_builtin_class("Integer", false);
@@ -279,7 +285,7 @@ impl VM {
                     rcv.clone(),
                     Some(Gc::clone(&rcv_blk.parent_closure)),
                     blkinfo.num_vars,
-                    &[],
+                    args,
                 )
             }
         }
@@ -308,13 +314,15 @@ impl VM {
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Block(blkinfo_off) => {
+                    let blkinfo = cls.blockinfo(blkinfo_off);
                     frame.stack_push(Block::new(
                         self,
                         Val::recover(cls),
                         blkinfo_off,
                         Gc::clone(&frame.closure),
+                        blkinfo.num_params,
                     ));
-                    pc = cls.blockinfo(blkinfo_off).bytecode_end;
+                    pc = blkinfo.bytecode_end;
                 }
                 Instr::Builtin(b) => {
                     frame.stack_push(match b {
@@ -573,6 +581,8 @@ impl VM {
         VM {
             classpath: vec![],
             block_cls: Val::illegal(),
+            block2_cls: Val::illegal(),
+            block3_cls: Val::illegal(),
             bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
             false_cls: Val::illegal(),
