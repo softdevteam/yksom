@@ -469,7 +469,7 @@ impl Frame {
 
     fn stack_peek(&self) -> Val {
         let stack = unsafe { &*self.stack.get() };
-        debug_assert!(stack.len() > 0);
+        debug_assert!(!stack.is_empty());
         let i = stack.len() - 1;
         unsafe { stack.get_unchecked(i) }.clone()
     }
@@ -480,7 +480,7 @@ impl Frame {
         // Option.
         unsafe {
             let stack = &mut *self.stack.get();
-            debug_assert!(stack.len() > 0);
+            debug_assert!(!stack.is_empty());
             let i = stack.len() - 1;
             let v = ptr::read(stack.get_unchecked(i));
             stack.set_len(i);
