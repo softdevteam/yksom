@@ -349,37 +349,34 @@ impl VM {
                     let cls = rtry!(rcv.tobj(self)).get_class(self);
                     let (meth_cls_val, meth) =
                         rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
-                    match meth.body {
-                        MethodBody::Primitive(Primitive::Restart) => {
-                            pc = meth_pc;
-                            frame.stack_clear();
-                        }
-                        _ => {
-                            let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
-                            let r = if vr.is_val() {
-                                vr.unwrap()
-                            } else {
-                                match *vr.unwrap_err() {
-                                    VMError::Return(depth, val) => {
-                                        if depth == 0 {
-                                            val
-                                        } else {
-                                            unsafe { &mut *self.frames.get() }.pop();
-                                            return ValResult::from_vmerror(VMError::Return(
-                                                depth - 1,
-                                                val,
-                                            ));
-                                        }
-                                    }
-                                    e => {
+                    if let MethodBody::Primitive(Primitive::Restart) = meth.body {
+                        pc = meth_pc;
+                        frame.stack_clear();
+                    } else {
+                        let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
+                        let r = if vr.is_val() {
+                            vr.unwrap()
+                        } else {
+                            match *vr.unwrap_err() {
+                                VMError::Return(depth, val) => {
+                                    if depth == 0 {
+                                        val
+                                    } else {
                                         unsafe { &mut *self.frames.get() }.pop();
-                                        return ValResult::from_vmerror(e);
+                                        return ValResult::from_vmerror(VMError::Return(
+                                            depth - 1,
+                                            val,
+                                        ));
                                     }
                                 }
-                            };
-                            frame.stack_push(r);
-                            pc += 1;
-                        }
+                                e => {
+                                    unsafe { &mut *self.frames.get() }.pop();
+                                    return ValResult::from_vmerror(e);
+                                }
+                            }
+                        };
+                        frame.stack_push(r);
+                        pc += 1;
                     }
                 }
                 Instr::Return(closure_depth) => {
