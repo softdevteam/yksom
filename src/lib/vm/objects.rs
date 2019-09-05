@@ -67,34 +67,73 @@ pub enum ObjType {
 pub trait Obj: Debug + abgc::GcLayout {
     /// Return the `ObjType` of this object.
     fn dyn_objtype(&self) -> ObjType;
-    /// If possible, return this `Obj` as an `isize`.
-    fn as_isize(&self) -> Result<isize, Box<VMError>>;
-    /// If possible, return this `Obj` as an `usize`.
-    fn as_usize(&self) -> Result<usize, Box<VMError>>;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
+
+    /// If possible, return this `Obj` as an `isize`.
+    fn as_isize(&self) -> Result<isize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsIsize))
+    }
+
+    /// If possible, return this `Obj` as an `usize`.
+    fn as_usize(&self) -> Result<usize, Box<VMError>> {
+        Err(Box::new(VMError::CantRepresentAsUsize))
+    }
+
     /// Produce a new `Val` which adds `other` to this.
-    fn add(&self, vm: &VM, other: Val) -> ValResult;
+    fn add(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Produce a new `Val` which subtracts `other` from this.
-    fn sub(&self, vm: &VM, other: Val) -> ValResult;
+    fn sub(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Produce a new `Val` which multiplies `other` to this.
-    fn mul(&self, vm: &VM, other: Val) -> ValResult;
+    fn mul(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Produce a new `Val` which divides `other` from this.
-    fn div(&self, vm: &VM, other: Val) -> ValResult;
+    fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Does this `Val` equal `other`?
-    fn equals(&self, vm: &VM, other: Val) -> ValResult;
+    fn equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Does this `Val` not equal `other`?
-    fn not_equals(&self, vm: &VM, other: Val) -> ValResult;
+    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Is this `Val` greater than `other`?
-    fn greater_than(&self, vm: &VM, other: Val) -> ValResult;
+    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Is this `Val` greater than or equal to `other`?
-    fn greater_than_equals(&self, vm: &VM, other: Val) -> ValResult;
+    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Is this `Val` less than `other`?
-    fn less_than(&self, vm: &VM, other: Val) -> ValResult;
+    fn less_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Is this `Val` less than or equal to `other`?
-    fn less_than_equals(&self, vm: &VM, other: Val) -> ValResult;
+    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     /// Convert this object to a `Val` that represents a SOM string.
-    fn to_strval(&self, vm: &VM) -> ValResult;
+    fn to_strval(&self, _: &VM) -> ValResult {
+        unimplemented!();
+    }
 }
 
 pub trait StaticObjType {
@@ -116,60 +155,8 @@ impl Obj for Block {
         ObjType::Block
     }
 
-    fn as_isize(&self) -> Result<isize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
-    fn as_usize(&self) -> Result<usize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
     fn get_class(&self, _: &VM) -> Val {
         self.blockn_cls.clone()
-    }
-
-    fn add(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn sub(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn mul(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn div(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn to_strval(&self, _: &VM) -> ValResult {
-        unimplemented!();
     }
 }
 
@@ -234,60 +221,8 @@ impl Obj for Class {
         ObjType::Class
     }
 
-    fn as_isize(&self) -> Result<isize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
-    fn as_usize(&self) -> Result<usize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
     fn get_class(&self, vm: &VM) -> Val {
         vm.cls_cls.clone()
-    }
-
-    fn add(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn sub(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn mul(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn div(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn to_strval(&self, _: &VM) -> ValResult {
-        unimplemented!();
     }
 }
 
@@ -410,59 +345,7 @@ impl Obj for Method {
         ObjType::Method
     }
 
-    fn as_isize(&self) -> Result<isize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
-    fn as_usize(&self) -> Result<usize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
     fn get_class(&self, _: &VM) -> Val {
-        unimplemented!();
-    }
-
-    fn add(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn sub(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn mul(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn div(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn to_strval(&self, _: &VM) -> ValResult {
         unimplemented!();
     }
 }
@@ -487,60 +370,8 @@ impl Obj for Inst {
         ObjType::Inst
     }
 
-    fn as_isize(&self) -> Result<isize, Box<VMError>> {
-        unimplemented!()
-    }
-
-    fn as_usize(&self) -> Result<usize, Box<VMError>> {
-        unimplemented!()
-    }
-
     fn get_class(&self, _: &VM) -> Val {
         self.class.clone()
-    }
-
-    fn add(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn sub(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn mul(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn div(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn to_strval(&self, _: &VM) -> ValResult {
-        unimplemented!();
     }
 }
 
@@ -585,6 +416,10 @@ impl Obj for Int {
         ObjType::Int
     }
 
+    fn get_class(&self, vm: &VM) -> Val {
+        vm.int_cls.clone()
+    }
+
     fn as_isize(&self) -> Result<isize, Box<VMError>> {
         Ok(self.val)
     }
@@ -595,10 +430,6 @@ impl Obj for Int {
         } else {
             Err(Box::new(VMError::CantRepresentAsUsize))
         }
-    }
-
-    fn get_class(&self, vm: &VM) -> Val {
-        vm.int_cls.clone()
     }
 
     fn add(&self, vm: &VM, other: Val) -> ValResult {
@@ -711,60 +542,8 @@ impl Obj for String_ {
         ObjType::String_
     }
 
-    fn as_isize(&self) -> Result<isize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
-    fn as_usize(&self) -> Result<usize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
     fn get_class(&self, vm: &VM) -> Val {
         vm.str_cls.clone()
-    }
-
-    fn add(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn sub(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn mul(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn div(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    fn to_strval(&self, _: &VM) -> ValResult {
-        unimplemented!();
     }
 }
 
