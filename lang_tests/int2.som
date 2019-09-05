@@ -1,0 +1,22 @@
+"
+VM:
+  status: success
+  stdout:
+    2
+    0
+    -1
+    1
+    20
+    4
+"
+
+int2 = (
+    run = (
+        (1 + 1) asString println.
+        (1 - 1) asString println.
+        ((1 - 1) - 1) asString println.
+        (1 - (1 - 1)) asString println.
+        (2 + 3 * 4) asString println.
+        (20 / 5) asString println.
+    )
+)

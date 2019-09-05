@@ -1,0 +1,9 @@
+"
+VM:
+  status: error
+  stderr: DivisionByZero
+"
+
+int5 = (
+    run = ( 10 / 0 )
+)

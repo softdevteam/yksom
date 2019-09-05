@@ -41,32 +41,32 @@ NameDefs -> Result<Vec<Lexeme<StorageT>>, ()>:
 MethodName -> Result<MethodName, ()>:
       "ID" { Ok(MethodName::Id(map_err($1)?)) }
     | MethodNameKeywords { Ok(MethodName::Keywords($1?)) }
-    | MethodNameBin { unimplemented!() }
+    | MethodNameBin { $1 }
     ;
 MethodNameKeywords -> Result<Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>, ()>:
       "KEYWORD" "ID" { Ok(vec![(map_err($1)?, map_err($2)?)]) }
     | MethodNameKeywords "KEYWORD" "ID" { flattenr($1, Ok((map_err($2)?, map_err($3)?))) }
     ;
-MethodNameBin -> Result<(), ()>:
-      MethodNameBinOp Argument { unimplemented!() };
+MethodNameBin -> Result<MethodName, ()>:
+      MethodNameBinOp Argument { Ok(MethodName::BinaryOp($1?, $2?)) };
 // We'd like to just use BinOp here, rather than introducing MethodNameBinOp,
 // but then the "|" symbol conflicts with NameDefs. In other words, you can't
 // have "|" as a method name in SOM.
-MethodNameBinOp -> Result<(), ()>:
+MethodNameBinOp -> Result<Lexeme<StorageT>, ()>:
       "BINOPSEQ" { unimplemented!() }
-    | "~" { unimplemented!() }
-    | "&" { unimplemented!() }
-    | "*" { unimplemented!() }
-    | "/" { unimplemented!() }
-    | "\\" { unimplemented!() }
-    | "+" { unimplemented!() }
-    | "-" { unimplemented!() }
-    | "=" { unimplemented!() }
-    | ">" { unimplemented!() }
-    | "<" { unimplemented!() }
-    | "," { unimplemented!() }
-    | "@" { unimplemented!() }
-    | "%" { unimplemented!() }
+    | "~" { Ok(map_err($1)?) }
+    | "&" { Ok(map_err($1)?) }
+    | "*" { Ok(map_err($1)?) }
+    | "/" { Ok(map_err($1)?) }
+    | "\\" { Ok(map_err($1)?) }
+    | "+" { Ok(map_err($1)?) }
+    | "-" { Ok(map_err($1)?) }
+    | "=" { Ok(map_err($1)?) }
+    | ">" { Ok(map_err($1)?) }
+    | "<" { Ok(map_err($1)?) }
+    | "," { Ok(map_err($1)?) }
+    | "@" { Ok(map_err($1)?) }
+    | "%" { Ok(map_err($1)?) }
     ;
 MethodBody -> Result<MethodBody, ()>:
       "PRIMITIVE" { Ok(MethodBody::Primitive) }
@@ -111,7 +111,7 @@ KeywordMsgList -> Result<Vec<(Lexeme<StorageT>, Expr)>, ()>:
     | "KEYWORD" BinaryMsg { Ok(vec![(map_err($1)?, $2?)]) }
     ;
 BinaryMsg -> Result<Expr, ()>:
-      UnaryMsg BinOp BinaryMsg { unimplemented!() }
+      BinaryMsg BinOp UnaryMsg { Ok(Expr::BinaryMsg{ lhs: Box::new($1?), op: $2?, rhs: Box::new($3?) }) }
     | UnaryMsg { $1 }
     ;
 UnaryMsg -> Result<Expr, ()>:
@@ -124,26 +124,26 @@ IdList -> Result<Vec<Lexeme<StorageT>>, ()>:
       "ID" { Ok(vec![map_err($1)?]) }
     | IdList "ID" { flattenr($1, map_err($2)) }
     ;
-BinOp -> Result<(), ()>:
+BinOp -> Result<Lexeme<StorageT>, ()>:
       "BINOPSEQ" { unimplemented!() }
-    | "~" { unimplemented!() }
-    | "&" { unimplemented!() }
-    | "|" { unimplemented!() }
-    | "*" { unimplemented!() }
-    | "/" { unimplemented!() }
-    | "\\" { unimplemented!() }
-    | "+" { unimplemented!() }
-    | "-" { unimplemented!() }
-    | "=" { unimplemented!() }
-    | ">" { unimplemented!() }
-    | "<" { unimplemented!() }
-    | "," { unimplemented!() }
-    | "@" { unimplemented!() }
-    | "%" { unimplemented!() }
+    | "~" { Ok(map_err($1)?) }
+    | "&" { Ok(map_err($1)?) }
+    | "|" { Ok(map_err($1)?) }
+    | "*" { Ok(map_err($1)?) }
+    | "/" { Ok(map_err($1)?) }
+    | "\\" { Ok(map_err($1)?) }
+    | "+" { Ok(map_err($1)?) }
+    | "-" { Ok(map_err($1)?) }
+    | "=" { Ok(map_err($1)?) }
+    | ">" { Ok(map_err($1)?) }
+    | "<" { Ok(map_err($1)?) }
+    | "," { Ok(map_err($1)?) }
+    | "@" { Ok(map_err($1)?) }
+    | "%" { Ok(map_err($1)?) }
     ;
 Literal -> Result<Expr, ()>:
       "STRING" { Ok(Expr::String(map_err($1)?)) }
-    | "INT" { unimplemented!() }
+    | "INT" { Ok(Expr::Int(map_err($1)?)) }
     | "-" "INT" { unimplemented!() }
     | "DOUBLE" { unimplemented!() }
     | "-" "DOUBLE" { unimplemented!() }
@@ -160,8 +160,8 @@ BlockParams -> Result<(), ()>:
       "PARAM" Argument { unimplemented!() }
     | BlockParams "PARAM" Argument { unimplemented!() }
     ;
-Argument -> Result<(), ()>:
-      "ID" { unimplemented!() }
+Argument -> Result<Option<Lexeme<StorageT>>, ()>:
+      "ID" { Ok(Some(map_err($1)?)) }
     | { unimplemented!() }
     ;
 StringConst -> Result<(), ()>:

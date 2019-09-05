@@ -27,6 +27,7 @@ pub struct Method {
 
 #[derive(Debug)]
 pub enum MethodName {
+    BinaryOp(Lexeme<StorageT>, Option<Lexeme<StorageT>>),
     Id(Lexeme<StorageT>),
     Keywords(Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>),
 }
@@ -46,11 +47,17 @@ pub enum Expr {
         id: Lexeme<StorageT>,
         expr: Box<Expr>,
     },
+    BinaryMsg {
+        lhs: Box<Expr>,
+        op: Lexeme<StorageT>,
+        rhs: Box<Expr>,
+    },
     Block {
         params: Vec<Lexeme<StorageT>>,
         vars: Vec<Lexeme<StorageT>>,
         exprs: Vec<Expr>,
     },
+    Int(Lexeme<StorageT>),
     KeywordMsg {
         receiver: Box<Expr>,
         msglist: Vec<(Lexeme<StorageT>, Expr)>,
