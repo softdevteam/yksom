@@ -169,20 +169,63 @@ impl<'a> Compiler<'a> {
         params: Vec<Lexeme<StorageT>>,
         body: &ast::MethodBody,
     ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
+        // We check the number of arguments at compile-time so that we don't have to check them
+        // continuously at run-time.
+        let requires_args = |n: usize| -> Result<(), Vec<(Lexeme<StorageT>, String)>> {
+            if params.len() != n {
+                Err(vec![(
+                    name.0,
+                    format!("Expected {} parameters, got {}", n, params.len()),
+                )])
+            } else {
+                Ok(())
+            }
+        };
+
         match body {
             ast::MethodBody::Primitive => match name.1 {
-                "+" => Ok(cobjects::MethodBody::Primitive(Primitive::Add)),
-                "-" => Ok(cobjects::MethodBody::Primitive(Primitive::Sub)),
-                "*" => Ok(cobjects::MethodBody::Primitive(Primitive::Mul)),
-                "/" => Ok(cobjects::MethodBody::Primitive(Primitive::Div)),
-                "=" => Ok(cobjects::MethodBody::Primitive(Primitive::Equals)),
-                "~=" => Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals)),
-                "<" => Ok(cobjects::MethodBody::Primitive(Primitive::LessThan)),
-                "<=" => Ok(cobjects::MethodBody::Primitive(Primitive::LessThanEquals)),
-                ">" => Ok(cobjects::MethodBody::Primitive(Primitive::GreaterThan)),
-                ">=" => Ok(cobjects::MethodBody::Primitive(
-                    Primitive::GreaterThanEquals,
-                )),
+                "+" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::Add))
+                }
+                "-" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::Sub))
+                }
+                "*" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::Mul))
+                }
+                "/" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::Div))
+                }
+                "=" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::Equals))
+                }
+                "~=" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals))
+                }
+                "<" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::LessThan))
+                }
+                "<=" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::LessThanEquals))
+                }
+                ">" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::GreaterThan))
+                }
+                ">=" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(
+                        Primitive::GreaterThanEquals,
+                    ))
+                }
                 "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
