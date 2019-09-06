@@ -1,3 +1,14 @@
 Block = (
+    whileFalse: block = (
+        [ self value not ] whileTrue: block
+    )
+
+    whileTrue: block = (
+        self value ifFalse: [ ^nil ].
+        block value.
+        self restart
+    )
+
+    restart = primitive
     value = primitive
 )

@@ -21,7 +21,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, Class, Inst, MethodBody, ObjType, String_},
+        objects::{Block, Class, Inst, Method, MethodBody, ObjType, String_},
         val::{Val, ValResult},
     },
 };
@@ -45,6 +45,8 @@ pub enum VMError {
     },
     /// Integer overflow.
     Overflow,
+    /// Something went wrong when trying to execute a primitive.
+    PrimitiveError,
     /// Percolate a non-local return up the call stack.
     Return(usize, Val),
     /// A dynamic type error.
@@ -173,7 +175,10 @@ impl VM {
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> ValResult {
         let cls = rtry!(rcv.tobj(self)).get_class(self);
         let (meth_cls_val, meth) = rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, msg));
+        self.send_internal(rcv, args, meth_cls_val, meth)
+    }
 
+    fn send_internal(&self, rcv: Val, args: &[Val], meth_cls_val: Val, meth: &Method) -> ValResult {
         match meth.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
             MethodBody::User {
@@ -181,7 +186,7 @@ impl VM {
                 bytecode_off,
             } => {
                 let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
-                self.exec_user(meth_cls, bytecode_off, rcv, None, num_vars, args)
+                self.exec_user(meth_cls, true, bytecode_off, rcv, None, num_vars, args)
             }
         }
     }
@@ -208,6 +213,11 @@ impl VM {
                 assert_eq!(args.len(), 1);
                 rcv_tobj.div(self, args[0].clone())
             }
+            Primitive::Equals => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.equals(self, args[0].clone())
+            }
             Primitive::Mul => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
                 assert_eq!(args.len(), 1);
@@ -217,6 +227,15 @@ impl VM {
             Primitive::New => {
                 assert_eq!(args.len(), 0);
                 ValResult::from_val(Inst::new(self, rcv))
+            }
+            Primitive::NotEquals => {
+                let rcv_tobj = rtry!(rcv.tobj(self));
+                assert_eq!(args.len(), 1);
+                rcv_tobj.not_equals(self, args[0].clone())
+            }
+            Primitive::Restart => {
+                // This is handled directly by exec_user.
+                ValResult::from_vmerror(VMError::PrimitiveError)
             }
             Primitive::PrintLn => {
                 // XXX println should be on System, not on string
@@ -235,6 +254,7 @@ impl VM {
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
                 self.exec_user(
                     blk_cls,
+                    false,
                     blkinfo.bytecode_off,
                     rcv.clone(),
                     Some(Gc::clone(&rcv_blk.parent_closure)),
@@ -248,7 +268,8 @@ impl VM {
     fn exec_user(
         &self,
         cls: &Class,
-        mut pc: usize,
+        is_method: bool,
+        meth_pc: usize,
         rcv: Val,
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
@@ -256,12 +277,14 @@ impl VM {
     ) -> ValResult {
         let frame = Gc::new(Frame::new(
             self,
+            is_method,
             parent_closure,
             num_vars,
             rcv.clone(),
             args,
         ));
         unsafe { &mut *self.frames.get() }.push(Gc::clone(&frame));
+        let mut pc = meth_pc;
         while pc < cls.instrs.len() {
             match cls.instrs[pc] {
                 Instr::Block(blkinfo_off) => {
@@ -303,30 +326,42 @@ impl VM {
                     let (ref name, nargs) = &cls.sends[moff];
                     let args = frame.stack_drain_rev(frame.stack_len() - nargs);
                     let rcv = frame.stack_pop();
-                    let vr = self.send(rcv, &name, &args);
-                    let r = if vr.is_val() {
-                        vr.unwrap()
-                    } else {
-                        match *vr.unwrap_err() {
-                            VMError::Return(depth, val) => {
-                                if depth == 0 {
-                                    val
-                                } else {
-                                    unsafe { &mut *self.frames.get() }.pop();
-                                    return ValResult::from_vmerror(VMError::Return(
-                                        depth - 1,
-                                        val,
-                                    ));
-                                }
-                            }
-                            e => {
-                                unsafe { &mut *self.frames.get() }.pop();
-                                return ValResult::from_vmerror(e);
-                            }
+
+                    let cls = rtry!(rcv.tobj(self)).get_class(self);
+                    let (meth_cls_val, meth) =
+                        rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
+                    match meth.body {
+                        MethodBody::Primitive(Primitive::Restart) => {
+                            pc = meth_pc;
+                            frame.stack_clear();
                         }
-                    };
-                    frame.stack_push(r);
-                    pc += 1;
+                        _ => {
+                            let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
+                            let r = if vr.is_val() {
+                                vr.unwrap()
+                            } else {
+                                match *vr.unwrap_err() {
+                                    VMError::Return(depth, val) => {
+                                        if depth == 0 {
+                                            val
+                                        } else {
+                                            unsafe { &mut *self.frames.get() }.pop();
+                                            return ValResult::from_vmerror(VMError::Return(
+                                                depth - 1,
+                                                val,
+                                            ));
+                                        }
+                                    }
+                                    e => {
+                                        unsafe { &mut *self.frames.get() }.pop();
+                                        return ValResult::from_vmerror(e);
+                                    }
+                                }
+                            };
+                            frame.stack_push(r);
+                            pc += 1;
+                        }
+                    }
                 }
                 Instr::Return(closure_depth) => {
                     let v = frame.stack_pop();
@@ -382,6 +417,7 @@ impl GcLayout for Frame {
 impl Frame {
     fn new(
         _: &VM,
+        is_method: bool,
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
         self_val: Val,
@@ -389,12 +425,16 @@ impl Frame {
     ) -> Self {
         let mut vars = Vec::new();
         vars.resize(num_vars, Val::illegal());
-        // The VM makes some strong assumptions about variables: that the first variable is
-        // "self" and that arguments 1..n+1 are the first n arguments to the method in
-        // reverse order.
-        vars[0] = self_val;
-        for (i, arg) in args.iter().enumerate() {
-            vars[i + 1] = arg.clone();
+
+        if is_method {
+            vars[0] = self_val;
+            for (i, arg) in args.iter().enumerate() {
+                vars[i + 1] = arg.clone();
+            }
+        } else {
+            for (i, arg) in args.iter().enumerate() {
+                vars[i] = arg.clone();
+            }
         }
 
         Frame {
@@ -430,6 +470,10 @@ impl Frame {
             stack.set_len(i);
             v
         }
+    }
+
+    fn stack_clear(&self) {
+        unsafe { &mut *self.stack.get() }.clear();
     }
 
     fn stack_drain_rev(&self, start: usize) -> Vec<Val> {
@@ -535,7 +579,7 @@ mod tests {
         let selfv = Val::from_isize(&vm, 42).unwrap();
         let v1 = Val::from_isize(&vm, 43).unwrap();
         let v2 = Val::from_isize(&vm, 44).unwrap();
-        let f = Frame::new(&vm, None, 4, selfv, &[v1, v2]);
+        let f = Frame::new(&vm, true, None, 4, selfv, &[v1, v2]);
         assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
         assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);

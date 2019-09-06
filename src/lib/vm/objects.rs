@@ -81,6 +81,10 @@ pub trait Obj: Debug + abgc::GcLayout {
     fn mul(&self, vm: &VM, other: Val) -> ValResult;
     /// Produce a new `Val` which divides `other` from this.
     fn div(&self, vm: &VM, other: Val) -> ValResult;
+    /// Does this `Val` equal `other`?
+    fn equals(&self, vm: &VM, other: Val) -> ValResult;
+    /// Does this `Val` not equal `other`?
+    fn not_equals(&self, vm: &VM, other: Val) -> ValResult;
     /// Convert this object to a `Val` that represents a SOM string.
     fn to_strval(&self, vm: &VM) -> ValResult;
 }
@@ -127,6 +131,14 @@ impl Obj for Block {
     }
 
     fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
     }
 
@@ -212,6 +224,14 @@ impl Obj for Class {
     }
 
     fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
     }
 
@@ -365,6 +385,14 @@ impl Obj for Method {
         unimplemented!();
     }
 
+    fn equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     fn to_strval(&self, _: &VM) -> ValResult {
         unimplemented!();
     }
@@ -415,6 +443,14 @@ impl Obj for Inst {
     }
 
     fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
     }
 
@@ -513,6 +549,22 @@ impl Obj for Int {
         }
     }
 
+    fn equals(&self, vm: &VM, other: Val) -> ValResult {
+        if self.val == rtry!(other.as_isize(vm)) {
+            ValResult::from_val(vm.true_.clone())
+        } else {
+            ValResult::from_val(vm.false_.clone())
+        }
+    }
+
+    fn not_equals(&self, vm: &VM, other: Val) -> ValResult {
+        if self.val != rtry!(other.as_isize(vm)) {
+            ValResult::from_val(vm.true_.clone())
+        } else {
+            ValResult::from_val(vm.false_.clone())
+        }
+    }
+
     fn to_strval(&self, vm: &VM) -> ValResult {
         ValResult::from_val(String_::new(vm, self.val.to_string()))
     }
@@ -567,6 +619,14 @@ impl Obj for String_ {
     }
 
     fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
     }
 

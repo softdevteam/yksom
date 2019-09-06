@@ -53,7 +53,7 @@ MethodNameBin -> Result<MethodName, ()>:
 // but then the "|" symbol conflicts with NameDefs. In other words, you can't
 // have "|" as a method name in SOM.
 MethodNameBinOp -> Result<Lexeme<StorageT>, ()>:
-      "BINOPSEQ" { unimplemented!() }
+      "BINOPSEQ" { Ok(map_err($1)?) }
     | "~" { Ok(map_err($1)?) }
     | "&" { Ok(map_err($1)?) }
     | "*" { Ok(map_err($1)?) }
@@ -125,7 +125,7 @@ IdList -> Result<Vec<Lexeme<StorageT>>, ()>:
     | IdList "ID" { flattenr($1, map_err($2)) }
     ;
 BinOp -> Result<Lexeme<StorageT>, ()>:
-      "BINOPSEQ" { unimplemented!() }
+      "BINOPSEQ" { Ok(map_err($1)?) }
     | "~" { Ok(map_err($1)?) }
     | "&" { Ok(map_err($1)?) }
     | "|" { Ok(map_err($1)?) }

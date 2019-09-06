@@ -35,10 +35,13 @@ pub enum Primitive {
     Class,
     Concatenate,
     Div,
+    Equals,
     Mul,
     Name,
+    NotEquals,
     New,
     PrintLn,
+    Restart,
     Sub,
     Value,
 }

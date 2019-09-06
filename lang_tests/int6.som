@@ -1,0 +1,18 @@
+"
+VM:
+  status: success
+  stdout:
+    false
+    true
+    true
+    false
+"
+
+int6 = (
+    run = (
+        (1 = 0) asString println.
+        (1 = 1) asString println.
+        (1 ~= 0) asString println.
+        (1 ~= 1) asString println.
+    )
+)

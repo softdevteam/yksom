@@ -175,12 +175,15 @@ impl<'a> Compiler<'a> {
                 "-" => Ok(cobjects::MethodBody::Primitive(Primitive::Sub)),
                 "*" => Ok(cobjects::MethodBody::Primitive(Primitive::Mul)),
                 "/" => Ok(cobjects::MethodBody::Primitive(Primitive::Div)),
+                "=" => Ok(cobjects::MethodBody::Primitive(Primitive::Equals)),
+                "~=" => Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals)),
                 "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
                 "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
+                "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
                 "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value)),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
@@ -306,10 +309,10 @@ impl<'a> Compiler<'a> {
         exprs: &[ast::Expr],
     ) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
         let mut vars = HashMap::new();
-        // The VM makes some strong assumptions about variables: that the first variable is
-        // "self" and that arguments 1..n+1 are the first n arguments to the method in
-        // reverse order.
-        vars.insert("self", 0);
+        if is_method {
+            // The VM assumes that the first variable of a method is "self".
+            vars.insert("self", 0);
+        }
 
         let mut process_var = |lexeme| {
             let vars_len = vars.len();
@@ -326,17 +329,18 @@ impl<'a> Compiler<'a> {
             }
         };
 
+        // The VM assumes that a blocks's arguments are stored in variables
+        // 0..n and a method's arguments in 1..n+1 (in both cases in reverse order).
         for lexeme in params.iter().rev() {
             process_var(*lexeme)?;
         }
+
         for lexeme in vars_lexemes {
             process_var(*lexeme)?;
         }
 
         let num_vars = vars.len();
         self.vars_stack.push(vars);
-        // We implicitly assume that the VM sets the 0th var to self and the next n args to
-        // the function parameters (in reverse order).
         for (i, e) in exprs.iter().enumerate() {
             // We deliberately bomb out at the first error in a method on the basis that
             // it's likely to lead to many repetitive errors.
