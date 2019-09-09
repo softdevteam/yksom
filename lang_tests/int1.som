@@ -1,9 +1,14 @@
 "
 VM:
   status: success
-  stdout: 1
+  stdout:
+    1
+    -1
 "
 
 int1 = (
-    run = ( 1 asString println )
+    run = (
+        1 asString println.
+        -1 asString println.
+    )
 )

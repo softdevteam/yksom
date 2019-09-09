@@ -291,14 +291,20 @@ impl<'a> Compiler<'a> {
                 self.blocks[block_off].num_vars = num_vars;
                 Ok(())
             }
-            ast::Expr::Int(lexeme) => match self.lexer.lexeme_str(&lexeme).parse::<isize>() {
-                Ok(i) => {
-                    let const_off = self.const_off(cobjects::Const::Int(i));
-                    self.instrs.push(Instr::Const(const_off));
-                    Ok(())
+            ast::Expr::Int { is_negative, val } => {
+                match self.lexer.lexeme_str(&val).parse::<isize>() {
+                    Ok(mut i) => {
+                        if *is_negative {
+                            // With twos complement, `0-i` will always succeed, but just in case...
+                            i = 0isize.checked_sub(i).unwrap();
+                        }
+                        let const_off = self.const_off(cobjects::Const::Int(i));
+                        self.instrs.push(Instr::Const(const_off));
+                        Ok(())
+                    }
+                    Err(e) => Err(vec![(*val, format!("{}", e))]),
                 }
-                Err(e) => Err(vec![(*lexeme, format!("{}", e))]),
-            },
+            }
             ast::Expr::KeywordMsg { receiver, msglist } => {
                 self.c_expr(receiver)?;
                 let mut mn = String::new();
