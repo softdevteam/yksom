@@ -6,6 +6,18 @@ VM:
     true
     true
     false
+    false
+    true
+    false
+    false
+    false
+    true
+    true
+    false
+    true
+    true
+    true
+    false
 "
 
 int6 = (
@@ -14,5 +26,21 @@ int6 = (
         (1 = 1) asString println.
         (1 ~= 0) asString println.
         (1 ~= 1) asString println.
+
+        (1 < 1) asString println.
+        (1 < 2) asString println.
+        (2 < 0) asString println.
+
+        (1 > 1) asString println.
+        (1 > 2) asString println.
+        (2 > 0) asString println.
+
+        (1 >= 1) asString println.
+        (1 >= 2) asString println.
+        (2 >= 0) asString println.
+
+        (1 <= 1) asString println.
+        (1 <= 2) asString println.
+        (2 <= 0) asString println.
     )
 )

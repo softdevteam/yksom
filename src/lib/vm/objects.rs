@@ -85,6 +85,14 @@ pub trait Obj: Debug + abgc::GcLayout {
     fn equals(&self, vm: &VM, other: Val) -> ValResult;
     /// Does this `Val` not equal `other`?
     fn not_equals(&self, vm: &VM, other: Val) -> ValResult;
+    /// Is this `Val` greater than `other`?
+    fn greater_than(&self, vm: &VM, other: Val) -> ValResult;
+    /// Is this `Val` greater than or equal to `other`?
+    fn greater_than_equals(&self, vm: &VM, other: Val) -> ValResult;
+    /// Is this `Val` less than `other`?
+    fn less_than(&self, vm: &VM, other: Val) -> ValResult;
+    /// Is this `Val` less than or equal to `other`?
+    fn less_than_equals(&self, vm: &VM, other: Val) -> ValResult;
     /// Convert this object to a `Val` that represents a SOM string.
     fn to_strval(&self, vm: &VM) -> ValResult;
 }
@@ -96,6 +104,8 @@ pub trait StaticObjType {
 
 #[derive(Debug, GcLayout)]
 pub struct Block {
+    // Does this Block represent Block, Block2, or Block3?
+    pub blockn_cls: Val,
     pub blockinfo_cls: Val,
     pub blockinfo_off: usize,
     pub parent_closure: Gc<Closure>,
@@ -114,8 +124,8 @@ impl Obj for Block {
         Err(Box::new(VMError::CantRepresentAsUsize))
     }
 
-    fn get_class(&self, vm: &VM) -> Val {
-        vm.block_cls.clone()
+    fn get_class(&self, _: &VM) -> Val {
+        self.blockn_cls.clone()
     }
 
     fn add(&self, _: &VM, _: Val) -> ValResult {
@@ -142,6 +152,22 @@ impl Obj for Block {
         unimplemented!();
     }
 
+    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     fn to_strval(&self, _: &VM) -> ValResult {
         unimplemented!();
     }
@@ -161,10 +187,18 @@ impl Block {
         blockinfo_cls: Val,
         blockinfo_off: usize,
         parent_closure: Gc<Closure>,
+        num_params: usize,
     ) -> Val {
+        let blockn_cls = match num_params {
+            0 => vm.block_cls.clone(),
+            1 => vm.block2_cls.clone(),
+            2 => vm.block3_cls.clone(),
+            _ => unimplemented!(),
+        };
         Val::from_obj(
             vm,
             Block {
+                blockn_cls,
                 blockinfo_cls,
                 blockinfo_off,
                 parent_closure,
@@ -191,6 +225,7 @@ pub struct Class {
 pub struct BlockInfo {
     pub bytecode_off: usize,
     pub bytecode_end: usize,
+    pub num_params: usize,
     pub num_vars: usize,
 }
 
@@ -235,6 +270,22 @@ impl Obj for Class {
         unimplemented!();
     }
 
+    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     fn to_strval(&self, _: &VM) -> ValResult {
         unimplemented!();
     }
@@ -252,6 +303,7 @@ impl Class {
     pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> ValResult {
         let supercls = match ccls.supercls {
             Some(ref x) => match x.as_str() {
+                "Block" => Some(vm.block_cls.clone()),
                 "Boolean" => Some(vm.bool_cls.clone()),
                 "nil" => None,
                 _ => unimplemented!(),
@@ -287,6 +339,7 @@ impl Class {
             .map(|b| BlockInfo {
                 bytecode_off: b.bytecode_off,
                 bytecode_end: b.bytecode_end,
+                num_params: b.num_params,
                 num_vars: b.num_vars,
             })
             .collect();
@@ -393,6 +446,22 @@ impl Obj for Method {
         unimplemented!();
     }
 
+    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
     fn to_strval(&self, _: &VM) -> ValResult {
         unimplemented!();
     }
@@ -451,6 +520,22 @@ impl Obj for Inst {
     }
 
     fn not_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
     }
 
@@ -565,6 +650,38 @@ impl Obj for Int {
         }
     }
 
+    fn greater_than(&self, vm: &VM, other: Val) -> ValResult {
+        if self.val > rtry!(other.as_isize(vm)) {
+            ValResult::from_val(vm.true_.clone())
+        } else {
+            ValResult::from_val(vm.false_.clone())
+        }
+    }
+
+    fn greater_than_equals(&self, vm: &VM, other: Val) -> ValResult {
+        if self.val >= rtry!(other.as_isize(vm)) {
+            ValResult::from_val(vm.true_.clone())
+        } else {
+            ValResult::from_val(vm.false_.clone())
+        }
+    }
+
+    fn less_than(&self, vm: &VM, other: Val) -> ValResult {
+        if self.val < rtry!(other.as_isize(vm)) {
+            ValResult::from_val(vm.true_.clone())
+        } else {
+            ValResult::from_val(vm.false_.clone())
+        }
+    }
+
+    fn less_than_equals(&self, vm: &VM, other: Val) -> ValResult {
+        if self.val <= rtry!(other.as_isize(vm)) {
+            ValResult::from_val(vm.true_.clone())
+        } else {
+            ValResult::from_val(vm.false_.clone())
+        }
+    }
+
     fn to_strval(&self, vm: &VM) -> ValResult {
         ValResult::from_val(String_::new(vm, self.val.to_string()))
     }
@@ -627,6 +744,22 @@ impl Obj for String_ {
     }
 
     fn not_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
     }
 

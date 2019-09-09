@@ -177,6 +177,12 @@ impl<'a> Compiler<'a> {
                 "/" => Ok(cobjects::MethodBody::Primitive(Primitive::Div)),
                 "=" => Ok(cobjects::MethodBody::Primitive(Primitive::Equals)),
                 "~=" => Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals)),
+                "<" => Ok(cobjects::MethodBody::Primitive(Primitive::LessThan)),
+                "<=" => Ok(cobjects::MethodBody::Primitive(Primitive::LessThanEquals)),
+                ">" => Ok(cobjects::MethodBody::Primitive(Primitive::GreaterThan)),
+                ">=" => Ok(cobjects::MethodBody::Primitive(
+                    Primitive::GreaterThanEquals,
+                )),
                 "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
@@ -184,7 +190,9 @@ impl<'a> Compiler<'a> {
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
                 "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
                 "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
-                "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value)),
+                "value" | "value:" | "value:with:" => {
+                    Ok(cobjects::MethodBody::Primitive(Primitive::Value))
+                }
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
             ast::MethodBody::Body {
@@ -230,6 +238,7 @@ impl<'a> Compiler<'a> {
                 self.blocks.push(cobjects::Block {
                     bytecode_off: self.instrs.len(),
                     bytecode_end: 0,
+                    num_params: params.len(),
                     num_vars: 0,
                 });
                 self.closure_depth += 1;
