@@ -131,7 +131,7 @@ impl Val {
         debug_assert_eq!(ValKind::GCBOX as usize, 0);
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         debug_assert_ne!(self.val, 0);
-        let tobj = unsafe { &*transmute::<usize, *const ThinObj>(self.val) };
+        let tobj = unsafe { &*(self.val as *const ThinObj) };
 
         tobj.downcast().ok_or_else(|| {
             Box::new(VMError::TypeError {

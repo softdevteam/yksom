@@ -12,6 +12,9 @@
 #![feature(coerce_unsized)]
 #![feature(specialization)]
 #![feature(unsize)]
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
 
 pub mod compiler;
 pub mod vm;

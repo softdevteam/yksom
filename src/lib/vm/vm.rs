@@ -200,9 +200,8 @@ impl VM {
     fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> ValResult {
         match prim {
             Primitive::Add => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.add(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).add(self, args[0].clone())
             }
             Primitive::AsString => rtry!(rcv.tobj(self)).to_strval(self),
             Primitive::Class => {
@@ -210,54 +209,47 @@ impl VM {
                 ValResult::from_val(rcv_tobj.get_class(self))
             }
             Primitive::Concatenate => {
-                let rcv_str: &String_ = rtry!(rcv.downcast(self));
-                assert_eq!(args.len(), 1);
-                rcv_str.concatenate(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.downcast::<String_>(self)).concatenate(self, args[0].clone())
             }
             Primitive::Div => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.div(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).div(self, args[0].clone())
             }
             Primitive::Equals => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.equals(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).equals(self, args[0].clone())
             }
             Primitive::GreaterThan => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.greater_than(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).greater_than(self, args[0].clone())
             }
             Primitive::GreaterThanEquals => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
+                debug_assert_eq!(args.len(), 1);
                 rcv_tobj.greater_than_equals(self, args[0].clone())
             }
             Primitive::LessThan => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.less_than(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).less_than(self, args[0].clone())
             }
             Primitive::LessThanEquals => {
                 let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
+                debug_assert_eq!(args.len(), 1);
                 rcv_tobj.less_than_equals(self, args[0].clone())
             }
             Primitive::Mul => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.mul(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).mul(self, args[0].clone())
             }
             Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
             Primitive::New => {
-                assert_eq!(args.len(), 0);
+                debug_assert_eq!(args.len(), 0);
                 ValResult::from_val(Inst::new(self, rcv))
             }
             Primitive::NotEquals => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.not_equals(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).not_equals(self, args[0].clone())
             }
             Primitive::Restart => {
                 // This is handled directly by exec_user.
@@ -270,9 +262,8 @@ impl VM {
                 ValResult::from_val(rcv)
             }
             Primitive::Sub => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                assert_eq!(args.len(), 1);
-                rcv_tobj.sub(self, args[0].clone())
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.tobj(self)).sub(self, args[0].clone())
             }
             Primitive::Value => {
                 let rcv_blk: &Block = rtry!(rcv.downcast(self));
@@ -358,37 +349,34 @@ impl VM {
                     let cls = rtry!(rcv.tobj(self)).get_class(self);
                     let (meth_cls_val, meth) =
                         rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
-                    match meth.body {
-                        MethodBody::Primitive(Primitive::Restart) => {
-                            pc = meth_pc;
-                            frame.stack_clear();
-                        }
-                        _ => {
-                            let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
-                            let r = if vr.is_val() {
-                                vr.unwrap()
-                            } else {
-                                match *vr.unwrap_err() {
-                                    VMError::Return(depth, val) => {
-                                        if depth == 0 {
-                                            val
-                                        } else {
-                                            unsafe { &mut *self.frames.get() }.pop();
-                                            return ValResult::from_vmerror(VMError::Return(
-                                                depth - 1,
-                                                val,
-                                            ));
-                                        }
-                                    }
-                                    e => {
+                    if let MethodBody::Primitive(Primitive::Restart) = meth.body {
+                        pc = meth_pc;
+                        frame.stack_clear();
+                    } else {
+                        let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
+                        let r = if vr.is_val() {
+                            vr.unwrap()
+                        } else {
+                            match *vr.unwrap_err() {
+                                VMError::Return(depth, val) => {
+                                    if depth == 0 {
+                                        val
+                                    } else {
                                         unsafe { &mut *self.frames.get() }.pop();
-                                        return ValResult::from_vmerror(e);
+                                        return ValResult::from_vmerror(VMError::Return(
+                                            depth - 1,
+                                            val,
+                                        ));
                                     }
                                 }
-                            };
-                            frame.stack_push(r);
-                            pc += 1;
-                        }
+                                e => {
+                                    unsafe { &mut *self.frames.get() }.pop();
+                                    return ValResult::from_vmerror(e);
+                                }
+                            }
+                        };
+                        frame.stack_push(r);
+                        pc += 1;
                     }
                 }
                 Instr::Return(closure_depth) => {
@@ -481,7 +469,7 @@ impl Frame {
 
     fn stack_peek(&self) -> Val {
         let stack = unsafe { &*self.stack.get() };
-        debug_assert!(stack.len() > 0);
+        debug_assert!(!stack.is_empty());
         let i = stack.len() - 1;
         unsafe { stack.get_unchecked(i) }.clone()
     }
@@ -492,7 +480,7 @@ impl Frame {
         // Option.
         unsafe {
             let stack = &mut *self.stack.get();
-            debug_assert!(stack.len() > 0);
+            debug_assert!(!stack.is_empty());
             let i = stack.len() - 1;
             let v = ptr::read(stack.get_unchecked(i));
             stack.set_len(i);
