@@ -30,9 +30,11 @@ pub const SOM_EXTENSION: &str = "som";
 
 #[derive(Debug, PartialEq)]
 pub enum VMError {
-    /// A number which can't be represented in an `isize`.
+    /// A value which can't be represented in an `isize`.
+    CantRepresentAsBigInt,
+    /// A value which can't be represented in an `isize`.
     CantRepresentAsIsize,
-    /// A number which can't be represented in an `usize`.
+    /// A value which can't be represented in an `usize`.
     CantRepresentAsUsize,
     DivisionByZero,
     /// The VM is trying to exit.
@@ -43,8 +45,6 @@ pub enum VMError {
         expected: ObjType,
         got: ObjType,
     },
-    /// Integer overflow.
-    Overflow,
     /// Something went wrong when trying to execute a primitive.
     PrimitiveError,
     /// Percolate a non-local return up the call stack.
@@ -56,8 +56,6 @@ pub enum VMError {
     },
     /// Tried to read from a local variable that hasn't had a value assigned to it yet.
     UnassignedVar(usize),
-    /// Integer underflow.
-    Underflow,
     /// An unknown method.
     UnknownMethod(String),
 }
