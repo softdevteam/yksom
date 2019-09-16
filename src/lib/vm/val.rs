@@ -15,10 +15,12 @@ use std::{
 };
 
 use abgc::{self, Gc};
+use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
+use num_traits::ToPrimitive;
 
 use super::{
-    objects::{Int, Obj, StaticObjType, ThinObj},
+    objects::{ArbInt, Int, Obj, StaticObjType, ThinObj},
     vm::{VMError, VM},
 };
 
@@ -190,6 +192,27 @@ impl Val {
             Int::boxed_isize(vm, i as isize)
         } else {
             ValResult::from_vmerror(VMError::CantRepresentAsIsize)
+        }
+    }
+
+    /// Create a `Val` representing the `BigInt` integer `val`. Note that this will create the most
+    /// efficient integer representation that can represent `val` (i.e. this might create a tagged
+    /// `isize`, a boxed `isize`, or a boxed `BigInt`).
+    pub fn from_bigint(vm: &VM, val: BigInt) -> ValResult {
+        if let Some(i) = val.to_isize() {
+            Val::from_isize(vm, i)
+        } else {
+            ValResult::from_val(ArbInt::new(vm, val))
+        }
+    }
+
+    /// If `v == true`, return a `Val` representing `vm.true_`, otherwise return a `Val`
+    /// representing `vm.false_`.
+    pub fn from_bool(vm: &VM, v: bool) -> Val {
+        if v {
+            vm.true_.clone()
+        } else {
+            vm.false_.clone()
         }
     }
 

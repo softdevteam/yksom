@@ -57,7 +57,10 @@ pub enum Expr {
         vars: Vec<Lexeme<StorageT>>,
         exprs: Vec<Expr>,
     },
-    Int(Lexeme<StorageT>),
+    Int {
+        is_negative: bool,
+        val: Lexeme<StorageT>,
+    },
     KeywordMsg {
         receiver: Box<Expr>,
         msglist: Vec<(Lexeme<StorageT>, Expr)>,

@@ -1,9 +1,22 @@
 "
 VM:
-  status: error
-  stderr: Overflow
+  status: success
+  stdout:
+    true
+    false
+    false
+    true
+    false
+    true
 "
 
-int4 = (
-    run = ( 4611686018427387904 * 2 )
+int1 = (
+    run = (
+        ((4611686018427387904 * 2) = (4611686018427387904 * 2)) asString println.
+        ((4611686018427387904 * 2) = ((4611686018427387904 * 2) - 1)) asString println.
+        ((4611686018427387904 * 2) < (4611686018427387904 * 2)) asString println.
+        ((4611686018427387904 * 2) <= (4611686018427387904 * 2)) asString println.
+        ((4611686018427387904 * 2) > (4611686018427387904 * 2)) asString println.
+        ((4611686018427387904 * 2) >= ((4611686018427387904 * 2) - 1)) asString println.
+    )
 )
