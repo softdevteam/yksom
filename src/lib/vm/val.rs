@@ -121,10 +121,7 @@ impl Val {
     }
 
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
-    /// be boxed) or `None` otherwise.
-    ///
-    /// If you need to downcast a type `T` which can be boxed, you will need to call `tobj` and
-    /// `downcast` that.
+    /// be boxed) or return a `VMError` if the cast is invalid.
     pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(
         &self,
         _: &VM,
@@ -141,6 +138,16 @@ impl Val {
                 got: tobj.deref().dyn_objtype(),
             })
         })
+    }
+
+    /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
+    /// be boxed) or return `None` if the cast is not valid.
+    pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<&T> {
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        debug_assert_eq!(ValKind::GCBOX as usize, 0);
+        debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
+        debug_assert_ne!(self.val, 0);
+        unsafe { &*(self.val as *const ThinObj) }.downcast()
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
@@ -495,5 +502,7 @@ mod tests {
         let v = String_::new(&vm, "s".to_owned());
         assert!(v.downcast::<String_>(&vm).is_ok());
         assert!(v.downcast::<Class>(&vm).is_err());
+        assert!(v.try_downcast::<String_>(&vm).is_some());
+        assert!(v.try_downcast::<Class>(&vm).is_none());
     }
 }
