@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: DivisionByZero
+"
+
+int8 = (
+    run = (
+        1 / 0
+    )
+)

@@ -37,7 +37,7 @@ use abgc::{self, Gc};
 use abgc_derive::GcLayout;
 use natrob::narrowable_abgc;
 use num_bigint::BigInt;
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive};
 
 use crate::{
     compiler::{
@@ -56,6 +56,7 @@ use crate::{
 /// lifetime, which is an annoying restriction.
 #[derive(Debug, PartialEq)]
 pub enum ObjType {
+    ArbInt,
     Block,
     Class,
     Method,
@@ -64,31 +65,14 @@ pub enum ObjType {
     String_,
 }
 
-/// The main SOM Object trait.
+/// The main SOM Object trait. Notice that code should almost never call these functions directly:
+/// you should instead call the equivalent function in the `Val` struct.
 #[narrowable_abgc(ThinObj)]
 pub trait Obj: Debug + abgc::GcLayout {
-    /// Return the `ObjType` of this object.
+    /// What `ObjType` does this `Val` represent?
     fn dyn_objtype(&self) -> ObjType;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
-
-    /// If possible, return this `Obj` as an `isize`.
-    fn as_isize(&self) -> Result<isize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsIsize))
-    }
-
-    /// If possible, return this `Obj` as an `usize`.
-    fn as_usize(&self) -> Result<usize, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsUsize))
-    }
-
-    /// If possible, return this `Obj` as a `BigInt`.
-    ///
-    /// FIXME This API is clearly inefficient in the sense that it forces a `ArbInt` to clone an
-    /// interior `BigInt`. Can we do better?
-    fn as_bigint(&self) -> Result<BigInt, Box<VMError>> {
-        Err(Box::new(VMError::CantRepresentAsBigInt))
-    }
 
     /// Produce a new `Val` which adds `other` to this.
     fn add(&self, _: &VM, _: Val) -> ValResult {
@@ -431,99 +415,6 @@ impl Obj for Int {
         vm.int_cls.clone()
     }
 
-    fn as_isize(&self) -> Result<isize, Box<VMError>> {
-        Ok(self.val)
-    }
-
-    fn as_usize(&self) -> Result<usize, Box<VMError>> {
-        if self.val > 0 {
-            Ok(self.val as usize)
-        } else {
-            Err(Box::new(VMError::CantRepresentAsUsize))
-        }
-    }
-
-    fn as_bigint(&self) -> Result<BigInt, Box<VMError>> {
-        Ok(BigInt::from_isize(self.val).unwrap())
-    }
-
-    fn add(&self, vm: &VM, other: Val) -> ValResult {
-        if let Ok(i) = other.as_isize(vm) {
-            if let Some(j) = self.val.checked_add(i) {
-                return Val::from_isize(vm, j);
-            }
-        }
-        Val::from_bigint(
-            vm,
-            &BigInt::from_isize(self.val).unwrap() + rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        )
-    }
-
-    fn sub(&self, vm: &VM, other: Val) -> ValResult {
-        if let Ok(i) = other.as_isize(vm) {
-            if let Some(j) = self.val.checked_sub(i) {
-                return Val::from_isize(vm, j);
-            }
-        }
-        Val::from_bigint(
-            vm,
-            &BigInt::from_isize(self.val).unwrap() - rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        )
-    }
-
-    fn mul(&self, vm: &VM, other: Val) -> ValResult {
-        if let Ok(i) = other.as_isize(vm) {
-            if let Some(j) = self.val.checked_mul(i) {
-                return Val::from_isize(vm, j);
-            }
-        }
-        Val::from_bigint(
-            vm,
-            &BigInt::from_isize(self.val).unwrap() * rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        )
-    }
-
-    fn div(&self, vm: &VM, other: Val) -> ValResult {
-        if let Ok(i) = other.as_isize(vm) {
-            if let Some(j) = self.val.checked_div(i) {
-                return Val::from_isize(vm, j);
-            }
-        }
-        // BigInt::Int.checked_div catches division by zero for us.
-        if let Some(b) = BigInt::from_isize(self.val)
-            .unwrap()
-            .checked_div(&rtry!(rtry!(other.tobj(vm)).as_bigint()))
-        {
-            Val::from_bigint(vm, b)
-        } else {
-            ValResult::from_vmerror(VMError::DivisionByZero)
-        }
-    }
-
-    fn equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(vm, self.val == rtry!(other.as_isize(vm))))
-    }
-
-    fn not_equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(vm, self.val != rtry!(other.as_isize(vm))))
-    }
-
-    fn greater_than(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(vm, self.val > rtry!(other.as_isize(vm))))
-    }
-
-    fn greater_than_equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(vm, self.val >= rtry!(other.as_isize(vm))))
-    }
-
-    fn less_than(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(vm, self.val < rtry!(other.as_isize(vm))))
-    }
-
-    fn less_than_equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(vm, self.val <= rtry!(other.as_isize(vm))))
-    }
-
     fn to_strval(&self, vm: &VM) -> ValResult {
         ValResult::from_val(String_::new(vm, self.val.to_string()))
     }
@@ -541,6 +432,18 @@ impl Int {
     pub fn boxed_isize(vm: &VM, i: isize) -> ValResult {
         ValResult::from_val(Val::from_obj(vm, Int { val: i }))
     }
+
+    pub fn as_isize(&self) -> isize {
+        self.val
+    }
+
+    pub fn as_usize(&self) -> Option<usize> {
+        if self.val >= 0 {
+            Some(self.val as usize)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, GcLayout)]
@@ -553,96 +456,174 @@ impl NotUnboxable for ArbInt {}
 
 impl Obj for ArbInt {
     fn dyn_objtype(&self) -> ObjType {
-        ObjType::Int
+        ObjType::ArbInt
     }
 
     fn get_class(&self, vm: &VM) -> Val {
         vm.int_cls.clone()
     }
 
-    fn as_bigint(&self) -> Result<BigInt, Box<VMError>> {
-        Ok(self.val.clone())
+    fn to_strval(&self, vm: &VM) -> ValResult {
+        ValResult::from_val(String_::new(vm, self.val.to_string()))
     }
 
     fn add(&self, vm: &VM, other: Val) -> ValResult {
-        Val::from_bigint(vm, &self.val + rtry!(rtry!(other.tobj(vm)).as_bigint()))
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val + rhs)
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val + &rhs.val)
+        } else {
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
+        }
     }
 
     fn sub(&self, vm: &VM, other: Val) -> ValResult {
-        Val::from_bigint(vm, &self.val - rtry!(rtry!(other.tobj(vm)).as_bigint()))
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val - &rhs)
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val - &rhs.val)
+        } else {
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
+        }
     }
 
     fn mul(&self, vm: &VM, other: Val) -> ValResult {
-        Val::from_bigint(vm, &self.val * rtry!(rtry!(other.tobj(vm)).as_bigint()))
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val * rhs)
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val * &rhs.val)
+        } else {
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
+        }
     }
 
     fn div(&self, vm: &VM, other: Val) -> ValResult {
-        if let Some(b) = self
-            .val
-            .checked_div(&rtry!(rtry!(other.tobj(vm)).as_bigint()))
-        {
-            Val::from_bigint(vm, b)
+        if let Some(rhs) = other.as_isize(vm) {
+            if rhs == 0 {
+                ValResult::from_vmerror(VMError::DivisionByZero)
+            } else {
+                ArbInt::new(vm, &self.val / rhs)
+            }
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            match self.val.checked_div(&rhs.val) {
+                Some(i) => ArbInt::new(vm, i),
+                None => ValResult::from_vmerror(VMError::DivisionByZero),
+            }
         } else {
-            ValResult::from_vmerror(VMError::DivisionByZero)
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
         }
     }
 
     fn equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(
-            vm,
-            self.val == rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        ))
+        let b = if other.dyn_objtype(vm) == ObjType::Int {
+            debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            false
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            self.val == rhs.val
+        } else {
+            false
+        };
+        ValResult::from_val(Val::from_bool(vm, b))
     }
 
     fn not_equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(
-            vm,
-            self.val != rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        ))
+        let b = if other.dyn_objtype(vm) == ObjType::Int {
+            debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            true
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            self.val != rhs.val
+        } else {
+            true
+        };
+        ValResult::from_val(Val::from_bool(vm, b))
     }
 
     fn greater_than(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(
-            vm,
-            self.val > rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        ))
+        let b = if other.dyn_objtype(vm) == ObjType::Int {
+            debug_assert!(self.val > BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            true
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            self.val > rhs.val
+        } else {
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        };
+        ValResult::from_val(Val::from_bool(vm, b))
     }
 
     fn greater_than_equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(
-            vm,
-            self.val >= rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        ))
+        let b = if other.dyn_objtype(vm) == ObjType::Int {
+            debug_assert!(self.val >= BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            true
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            self.val >= rhs.val
+        } else {
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        };
+        ValResult::from_val(Val::from_bool(vm, b))
     }
 
     fn less_than(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(
-            vm,
-            self.val < rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        ))
+        let b = if other.dyn_objtype(vm) == ObjType::Int {
+            debug_assert!(self.val < BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            false
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            self.val < rhs.val
+        } else {
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        };
+        ValResult::from_val(Val::from_bool(vm, b))
     }
 
     fn less_than_equals(&self, vm: &VM, other: Val) -> ValResult {
-        ValResult::from_val(Val::from_bool(
-            vm,
-            self.val <= rtry!(rtry!(other.tobj(vm)).as_bigint()),
-        ))
-    }
-
-    fn to_strval(&self, vm: &VM) -> ValResult {
-        ValResult::from_val(String_::new(vm, self.val.to_string()))
+        let b = if other.dyn_objtype(vm) == ObjType::Int {
+            debug_assert!(self.val <= BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            false
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            self.val <= rhs.val
+        } else {
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        };
+        ValResult::from_val(Val::from_bool(vm, b))
     }
 }
 
 impl StaticObjType for ArbInt {
     fn static_objtype() -> ObjType {
-        ObjType::Int
+        ObjType::ArbInt
     }
 }
 
 impl ArbInt {
-    pub fn new(vm: &VM, val: BigInt) -> Val {
-        Val::from_obj(vm, ArbInt { val })
+    /// Create a `Val` representing the `BigInt` integer `val`. Note that this will create the most
+    /// efficient integer representation that can represent `val` (i.e. this might create a tagged
+    /// `isize`, a boxed `isize`, or a boxed `BigInt`) -- the VM relies, in various places, on this
+    /// property (e.g. an `ArbInt` with a value `1` would cause odd errors elsewhere).
+    pub fn new(vm: &VM, val: BigInt) -> ValResult {
+        if let Some(i) = val.to_isize() {
+            Val::from_isize(vm, i)
+        } else {
+            ValResult::from_val(Val::from_obj(vm, ArbInt { val }))
+        }
+    }
+
+    pub fn bigint(&self) -> &BigInt {
+        &self.val
     }
 }
 
@@ -715,7 +696,12 @@ mod tests {
 
         let v = Val::from_isize(&vm, 12345).unwrap();
         assert_eq!(
-            v.tobj(&vm).unwrap().as_usize().unwrap(),
+            v.tobj(&vm)
+                .unwrap()
+                .downcast::<Int>()
+                .unwrap()
+                .as_usize()
+                .unwrap(),
             v.as_usize(&vm).unwrap()
         );
     }
@@ -744,8 +730,6 @@ mod tests {
         assert_eq!(
             Val::from_isize(&vm, isize::min_value())
                 .unwrap()
-                .tobj(&vm)
-                .unwrap()
                 .add(&vm, Val::from_isize(&vm, isize::min_value()).unwrap())
                 .unwrap()
                 .downcast::<ArbInt>(&vm)
@@ -757,16 +741,12 @@ mod tests {
         assert_eq!(
             Val::from_isize(&vm, isize::max_value())
                 .unwrap()
-                .tobj(&vm)
-                .unwrap()
                 .sub(&vm, Val::from_isize(&vm, isize::max_value()).unwrap())
                 .unwrap()
                 .valkind(),
             ValKind::INT
         );
         let bi = Val::from_isize(&vm, isize::max_value())
-            .unwrap()
-            .tobj(&vm)
             .unwrap()
             .add(&vm, Val::from_isize(&vm, 10).unwrap())
             .unwrap();
@@ -790,15 +770,11 @@ mod tests {
         // Different LHS and RHS types
         assert!(Val::from_isize(&vm, 1)
             .unwrap()
-            .tobj(&vm)
-            .unwrap()
             .add(&vm, bi.clone())
             .unwrap()
             .downcast::<ArbInt>(&vm)
             .is_ok());
         assert!(Val::from_isize(&vm, 1)
-            .unwrap()
-            .tobj(&vm)
             .unwrap()
             .sub(&vm, bi.clone())
             .unwrap()
@@ -806,16 +782,12 @@ mod tests {
             .is_ok());
         assert!(Val::from_isize(&vm, 1)
             .unwrap()
-            .tobj(&vm)
-            .unwrap()
             .mul(&vm, bi.clone())
             .unwrap()
             .downcast::<ArbInt>(&vm)
             .is_ok());
         assert_eq!(
             Val::from_isize(&vm, 1)
-                .unwrap()
-                .tobj(&vm)
                 .unwrap()
                 .div(&vm, bi.clone())
                 .unwrap()
@@ -825,32 +797,24 @@ mod tests {
 
         assert!(bi
             .clone()
-            .tobj(&vm)
-            .unwrap()
             .add(&vm, Val::from_isize(&vm, 1).unwrap())
             .unwrap()
             .downcast::<ArbInt>(&vm)
             .is_ok());
         assert!(bi
             .clone()
-            .tobj(&vm)
-            .unwrap()
             .sub(&vm, Val::from_isize(&vm, 1).unwrap())
             .unwrap()
             .downcast::<ArbInt>(&vm)
             .is_ok());
         assert!(bi
             .clone()
-            .tobj(&vm)
-            .unwrap()
             .mul(&vm, Val::from_isize(&vm, 1).unwrap())
             .unwrap()
             .downcast::<ArbInt>(&vm)
             .is_ok());
         assert_eq!(
             bi.clone()
-                .tobj(&vm)
-                .unwrap()
                 .div(&vm, Val::from_isize(&vm, 99999999).unwrap())
                 .unwrap()
                 .valkind(),
