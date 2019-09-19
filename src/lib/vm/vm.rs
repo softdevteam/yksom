@@ -45,6 +45,11 @@ pub enum VMError {
         expected: ObjType,
         got: ObjType,
     },
+    /// A specialised version of TypeError, because SOM has more than one number type (and casts
+    /// between them as necessary) so the `expected` field of `TypeError` doesn't quite work.
+    NotANumber {
+        got: ObjType,
+    },
     /// Something went wrong when trying to execute a primitive.
     PrimitiveError,
     /// Percolate a non-local return up the call stack.
@@ -199,7 +204,7 @@ impl VM {
         match prim {
             Primitive::Add => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).add(self, args[0].clone())
+                rcv.add(self, args[0].clone())
             }
             Primitive::AsString => rtry!(rcv.tobj(self)).to_strval(self),
             Primitive::Class => {
@@ -212,33 +217,31 @@ impl VM {
             }
             Primitive::Div => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).div(self, args[0].clone())
+                rcv.div(self, args[0].clone())
             }
             Primitive::Equals => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).equals(self, args[0].clone())
+                rcv.equals(self, args[0].clone())
             }
             Primitive::GreaterThan => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).greater_than(self, args[0].clone())
+                rcv.greater_than(self, args[0].clone())
             }
             Primitive::GreaterThanEquals => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.greater_than_equals(self, args[0].clone())
+                rcv.greater_than_equals(self, args[0].clone())
             }
             Primitive::LessThan => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).less_than(self, args[0].clone())
+                rcv.less_than(self, args[0].clone())
             }
             Primitive::LessThanEquals => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
                 debug_assert_eq!(args.len(), 1);
-                rcv_tobj.less_than_equals(self, args[0].clone())
+                rcv.less_than_equals(self, args[0].clone())
             }
             Primitive::Mul => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).mul(self, args[0].clone())
+                rcv.mul(self, args[0].clone())
             }
             Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
             Primitive::New => {
@@ -247,7 +250,7 @@ impl VM {
             }
             Primitive::NotEquals => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).not_equals(self, args[0].clone())
+                rcv.not_equals(self, args[0].clone())
             }
             Primitive::Restart => {
                 // This is handled directly by exec_user.
@@ -261,7 +264,7 @@ impl VM {
             }
             Primitive::Sub => {
                 debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.tobj(self)).sub(self, args[0].clone())
+                rcv.sub(self, args[0].clone())
             }
             Primitive::Value => {
                 let rcv_blk: &Block = rtry!(rcv.downcast(self));

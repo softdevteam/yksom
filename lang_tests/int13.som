@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: NotANumber { got: String_ }
+"
+
+int13 = (
+    run = (
+        0 / 'a'
+    )
+)

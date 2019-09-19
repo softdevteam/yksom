@@ -17,10 +17,10 @@ use std::{
 use abgc::{self, Gc};
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
-use num_traits::ToPrimitive;
+use num_traits::FromPrimitive;
 
 use super::{
-    objects::{ArbInt, Int, Obj, StaticObjType, ThinObj},
+    objects::{ArbInt, Int, Obj, ObjType, StaticObjType, ThinObj},
     vm::{VMError, VM},
 };
 
@@ -120,6 +120,15 @@ impl Val {
         unsafe { ValKind::from_unchecked(self.val & TAG_BITMASK) }
     }
 
+    /// What `ObjType` does this `Val` represent?
+    pub fn dyn_objtype(&self, vm: &VM) -> ObjType {
+        debug_assert!(!self.is_illegal());
+        match self.valkind() {
+            ValKind::INT => ObjType::Int,
+            ValKind::GCBOX => self.tobj(vm).unwrap().dyn_objtype(),
+        }
+    }
+
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
     /// be boxed) or return a `VMError` if the cast is invalid.
     pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(
@@ -202,17 +211,6 @@ impl Val {
         }
     }
 
-    /// Create a `Val` representing the `BigInt` integer `val`. Note that this will create the most
-    /// efficient integer representation that can represent `val` (i.e. this might create a tagged
-    /// `isize`, a boxed `isize`, or a boxed `BigInt`).
-    pub fn from_bigint(vm: &VM, val: BigInt) -> ValResult {
-        if let Some(i) = val.to_isize() {
-            Val::from_isize(vm, i)
-        } else {
-            ValResult::from_val(ArbInt::new(vm, val))
-        }
-    }
-
     /// If `v == true`, return a `Val` representing `vm.true_`, otherwise return a `Val`
     /// representing `vm.false_`.
     pub fn from_bool(vm: &VM, v: bool) -> Val {
@@ -223,16 +221,20 @@ impl Val {
         }
     }
 
-    /// If possible, return this `Val` as an `isize`.
-    pub fn as_isize(&self, vm: &VM) -> Result<isize, Box<VMError>> {
+    /// If this `Val` represents a non-bigint integer, return its value as an `isize`.
+    pub fn as_isize(&self, vm: &VM) -> Option<isize> {
         match self.valkind() {
-            ValKind::GCBOX => self.tobj(vm)?.as_isize(),
+            ValKind::GCBOX => self
+                .tobj(vm)
+                .unwrap()
+                .downcast::<Int>()
+                .and_then(|tobj| Some(tobj.as_isize())),
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
-                    Ok((self.val >> TAG_BITSIZE) as isize)
+                    Some((self.val >> TAG_BITSIZE) as isize)
                 } else {
                     // For negative integers we need to pad the top TAG_BITSIZE bits with 1s.
-                    Ok(
+                    Some(
                         ((self.val >> TAG_BITSIZE) | (TAG_BITMASK << (BITSIZE - TAG_BITSIZE)))
                             as isize,
                     )
@@ -241,20 +243,164 @@ impl Val {
         }
     }
 
-    /// If possible, return this `Val` as an `usize`.
-    pub fn as_usize(&self, vm: &VM) -> Result<usize, Box<VMError>> {
+    /// If this `Val` represents a non-bigint integer, return its value as an `usize`.
+    pub fn as_usize(&self, vm: &VM) -> Option<usize> {
         match self.valkind() {
-            ValKind::GCBOX => self.tobj(vm)?.as_usize(),
+            ValKind::GCBOX => self
+                .tobj(vm)
+                .unwrap()
+                .downcast::<Int>()
+                .and_then(|tobj| tobj.as_usize()),
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
-                    Ok(self.val >> TAG_BITSIZE)
+                    Some(self.val >> TAG_BITSIZE)
                 } else {
-                    Err(Box::new(VMError::CantRepresentAsUsize))
+                    None
                 }
             }
         }
     }
+
+    pub fn add(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                match lhs.checked_add(rhs) {
+                    Some(i) => return Val::from_isize(vm, i),
+                    None => {
+                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs);
+                    }
+                }
+            }
+            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                // The "obvious" way of implementing this is as:
+                //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs.bigint())
+                // but because `+` is commutative, we can avoid creating a
+                // temporary BigInt.
+                return ArbInt::new(vm, rhs.bigint() + lhs);
+            }
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        }
+        self.tobj(vm).unwrap().add(vm, other)
+    }
+
+    pub fn sub(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                match lhs.checked_sub(rhs) {
+                    Some(i) => return Val::from_isize(vm, i),
+                    None => {
+                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs);
+                    }
+                }
+            }
+            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs.bigint());
+            }
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        }
+        self.tobj(vm).unwrap().sub(vm, other)
+    }
+
+    pub fn mul(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                match lhs.checked_mul(rhs) {
+                    Some(i) => return Val::from_isize(vm, i),
+                    None => {
+                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs);
+                    }
+                }
+            }
+            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                // The "obvious" way of implementing this is as:
+                //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs.bigint())
+                // but because `*` is commutative, we can avoid creating a
+                // temporary BigInt.
+                return ArbInt::new(vm, rhs.bigint() * lhs);
+            }
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        }
+        self.tobj(vm).unwrap().mul(vm, other)
+    }
+
+    pub fn div(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                match lhs.checked_div(rhs) {
+                    Some(i) => return Val::from_isize(vm, i),
+                    None => return ValResult::from_vmerror(VMError::DivisionByZero),
+                }
+            }
+            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                match BigInt::from_isize(lhs).unwrap().checked_div(rhs.bigint()) {
+                    Some(i) => return ArbInt::new(vm, i),
+                    None => return ValResult::from_vmerror(VMError::DivisionByZero),
+                }
+            }
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        }
+        self.tobj(vm).unwrap().div(vm, other)
+    }
 }
+
+macro_rules! binop_all {
+    ($name:ident, $op:tt, $tf:ident) => {
+        impl Val {
+            pub fn $name(&self, vm: &VM, other: Val) -> ValResult {
+                if let Some(lhs) = self.as_isize(vm) {
+                    if let Some(rhs) = other.as_isize(vm) {
+                        ValResult::from_val(Val::from_bool(vm, lhs $op rhs))
+                    } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                        ValResult::from_val(Val::from_bool(vm,
+                            &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
+                    } else {
+                        ValResult::from_val(vm.$tf.clone())
+                    }
+                } else {
+                    self.tobj(vm).unwrap().$name(vm, other)
+                }
+            }
+        }
+    };
+}
+
+macro_rules! binop_typeerror {
+    ($name:ident, $op:tt) => {
+        impl Val {
+            pub fn $name(&self, vm: &VM, other: Val) -> ValResult {
+                if let Some(lhs) = self.as_isize(vm) {
+                    if let Some(rhs) = other.as_isize(vm) {
+                        ValResult::from_val(Val::from_bool(vm, lhs $op rhs))
+                    } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                        ValResult::from_val(Val::from_bool(vm,
+                            &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
+                    } else {
+                        ValResult::from_vmerror(VMError::NotANumber {
+                          got: other.dyn_objtype(vm),
+                        })
+                    }
+                } else {
+                    self.tobj(vm).unwrap().$name(vm, other)
+                }
+            }
+        }
+    };
+}
+
+binop_all!(equals, ==, false_);
+binop_all!(not_equals, !=, true_);
+binop_typeerror!(greater_than, >);
+binop_typeerror!(greater_than_equals, >=);
+binop_typeerror!(less_than, <);
+binop_typeerror!(less_than_equals, <=);
 
 impl Clone for Val {
     fn clone(&self) -> Self {
@@ -410,7 +556,7 @@ mod tests {
 
         let v = Val::from_isize(&vm, -1).unwrap();
         assert_eq!(v.valkind(), ValKind::INT);
-        assert!(v.as_usize(&vm).is_err());
+        assert!(v.as_usize(&vm).is_none());
         assert_eq!(v.as_isize(&vm).unwrap(), -1);
 
         let v = Val::from_isize(&vm, isize::min_value()).unwrap();
