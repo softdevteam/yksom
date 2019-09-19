@@ -20,7 +20,7 @@ use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::FromPrimitive;
 
 use super::{
-    objects::{ArbInt, Int, Obj, ObjType, StaticObjType, ThinObj},
+    objects::{ArbInt, Int, Obj, ObjType, StaticObjType, String_, ThinObj},
     vm::{VMError, VM},
 };
 
@@ -118,15 +118,6 @@ impl Val {
         }
 
         unsafe { ValKind::from_unchecked(self.val & TAG_BITMASK) }
-    }
-
-    /// What `ObjType` does this `Val` represent?
-    pub fn dyn_objtype(&self, vm: &VM) -> ObjType {
-        debug_assert!(!self.is_illegal());
-        match self.valkind() {
-            ValKind::INT => ObjType::Int,
-            ValKind::GCBOX => self.tobj(vm).unwrap().dyn_objtype(),
-        }
     }
 
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
@@ -260,7 +251,29 @@ impl Val {
             }
         }
     }
+}
 
+// Implement each function from the `Obj` type so that we can efficiently deal with tagged values.
+impl Val {
+    /// What `ObjType` does this `Val` represent?
+    pub fn dyn_objtype(&self, vm: &VM) -> ObjType {
+        debug_assert!(!self.is_illegal());
+        match self.valkind() {
+            ValKind::INT => ObjType::Int,
+            ValKind::GCBOX => self.tobj(vm).unwrap().dyn_objtype(),
+        }
+    }
+
+    /// What class is this `Val` an instance of?
+    pub fn get_class(&self, vm: &VM) -> Val {
+        debug_assert!(!self.is_illegal());
+        match self.valkind() {
+            ValKind::INT => vm.int_cls.clone(),
+            ValKind::GCBOX => self.tobj(vm).unwrap().get_class(vm),
+        }
+    }
+
+    /// Produce a new `Val` which adds `other` to this.
     pub fn add(&self, vm: &VM, other: Val) -> ValResult {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
@@ -285,6 +298,7 @@ impl Val {
         self.tobj(vm).unwrap().add(vm, other)
     }
 
+    /// Produce a new `Val` which subtracts `other` from this.
     pub fn sub(&self, vm: &VM, other: Val) -> ValResult {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
@@ -305,6 +319,7 @@ impl Val {
         self.tobj(vm).unwrap().sub(vm, other)
     }
 
+    /// Produce a new `Val` which multiplies `other` to this.
     pub fn mul(&self, vm: &VM, other: Val) -> ValResult {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
@@ -329,6 +344,7 @@ impl Val {
         self.tobj(vm).unwrap().mul(vm, other)
     }
 
+    /// Produce a new `Val` which divides `other` from this.
     pub fn div(&self, vm: &VM, other: Val) -> ValResult {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
@@ -348,6 +364,16 @@ impl Val {
             });
         }
         self.tobj(vm).unwrap().div(vm, other)
+    }
+
+    pub fn to_strval(&self, vm: &VM) -> ValResult {
+        debug_assert!(!self.is_illegal());
+        match self.valkind() {
+            ValKind::INT => {
+                ValResult::from_val(String_::new(vm, self.as_isize(vm).unwrap().to_string()))
+            }
+            ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
+        }
     }
 }
 

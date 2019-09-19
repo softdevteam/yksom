@@ -65,10 +65,11 @@ pub enum ObjType {
     String_,
 }
 
-/// The main SOM Object trait.
+/// The main SOM Object trait. Notice that code should almost never call these functions directly:
+/// you should instead call the equivalent function in the `Val` struct.
 #[narrowable_abgc(ThinObj)]
 pub trait Obj: Debug + abgc::GcLayout {
-    /// Return the `ObjType` of this object.
+    /// What `ObjType` does this `Val` represent?
     fn dyn_objtype(&self) -> ObjType;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;

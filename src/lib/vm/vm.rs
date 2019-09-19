@@ -182,7 +182,7 @@ impl VM {
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
     pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> ValResult {
-        let cls = rtry!(rcv.tobj(self)).get_class(self);
+        let cls = rcv.get_class(self);
         let (meth_cls_val, meth) = rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, msg));
         self.send_internal(rcv, args, meth_cls_val, meth)
     }
@@ -206,11 +206,8 @@ impl VM {
                 debug_assert_eq!(args.len(), 1);
                 rcv.add(self, args[0].clone())
             }
-            Primitive::AsString => rtry!(rcv.tobj(self)).to_strval(self),
-            Primitive::Class => {
-                let rcv_tobj = rtry!(rcv.tobj(self));
-                ValResult::from_val(rcv_tobj.get_class(self))
-            }
+            Primitive::AsString => rcv.to_strval(self),
+            Primitive::Class => ValResult::from_val(rcv.get_class(self)),
             Primitive::Concatenate => {
                 debug_assert_eq!(args.len(), 1);
                 rtry!(rcv.downcast::<String_>(self)).concatenate(self, args[0].clone())
@@ -347,7 +344,7 @@ impl VM {
                     let args = frame.stack_drain_rev(frame.stack_len() - nargs);
                     let rcv = frame.stack_pop();
 
-                    let cls = rtry!(rcv.tobj(self)).get_class(self);
+                    let cls = rcv.get_class(self);
                     let (meth_cls_val, meth) =
                         rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
                     if let MethodBody::Primitive(Primitive::Restart) = meth.body {
