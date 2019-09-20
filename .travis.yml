@@ -8,11 +8,11 @@ script:
     - cargo +nightly fmt --all -- --check
     - cargo test
     - cargo doc --no-deps
-    - mv target/doc/yksom target/api
+    - mv target/doc/yksom target/doc/api
 deploy:
     provider: pages
     skip-cleanup: true
     github-token: $GITHUB_TOKEN
-    local-dir: target/api
+    local-dir: target/doc
     on:
         branch: master
