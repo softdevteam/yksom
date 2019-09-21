@@ -23,7 +23,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, Class, Inst, Method, MethodBody, ObjType, String_},
+        objects::{Block, Class, Double, Inst, Method, MethodBody, ObjType, String_},
         val::{Val, ValResult},
     },
 };
@@ -34,6 +34,8 @@ pub const SOM_EXTENSION: &str = "som";
 pub enum VMError {
     /// A value which can't be represented in an `isize`.
     CantRepresentAsBigInt,
+    /// A value which can't be represented in an `f64`.
+    CantRepresentAsDouble,
     /// A value which can't be represented in an `isize`.
     CantRepresentAsIsize,
     /// A value which can't be represented in an `usize`.
@@ -78,6 +80,7 @@ pub struct VM {
     pub block3_cls: Val,
     pub bool_cls: Val,
     pub cls_cls: Val,
+    pub double_cls: Val,
     pub false_cls: Val,
     pub int_cls: Val,
     pub nil_cls: Val,
@@ -107,6 +110,7 @@ impl VM {
             block2_cls: Val::illegal(),
             block3_cls: Val::illegal(),
             cls_cls: Val::illegal(),
+            double_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
             nil_cls: Val::illegal(),
@@ -137,6 +141,7 @@ impl VM {
         vm.block2_cls = vm.init_builtin_class("Block2", false);
         vm.block3_cls = vm.init_builtin_class("Block3", false);
         vm.bool_cls = vm.init_builtin_class("Boolean", false);
+        vm.double_cls = vm.init_builtin_class("Double", false);
         vm.false_cls = vm.init_builtin_class("False", false);
         vm.int_cls = vm.init_builtin_class("Integer", false);
         vm.str_cls = vm.init_builtin_class("String", false);
@@ -344,6 +349,10 @@ impl VM {
                 }
                 Instr::Const(coff) => {
                     frame.stack_push(cls.consts[coff].clone());
+                    pc += 1;
+                }
+                Instr::Double(i) => {
+                    frame.stack_push(Double::new(self, i));
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
@@ -592,6 +601,7 @@ impl VM {
             block3_cls: Val::illegal(),
             bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
+            double_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
             obj_cls: Val::illegal(),

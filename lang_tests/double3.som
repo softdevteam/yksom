@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: CantRepresentAsDouble
+"
+
+double3 = (
+    run = (
+        0.1 + (1 << 1024).
+    )
+)

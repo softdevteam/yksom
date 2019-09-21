@@ -31,7 +31,9 @@
 //! Although this constraint is not enforced through the type system, it is not hard to obey: as
 //! soon as you create an `Obj` instance, pass it to `Val::from_obj`.
 
-use std::{cell::UnsafeCell, collections::HashMap, convert::TryFrom, fmt::Debug, path::PathBuf};
+use std::{
+    cell::UnsafeCell, collections::HashMap, convert::TryFrom, fmt::Debug, path::PathBuf, str,
+};
 
 use abgc::{self, Gc};
 use abgc_derive::GcLayout;
@@ -59,6 +61,7 @@ pub enum ObjType {
     ArbInt,
     Block,
     Class,
+    Double,
     Method,
     Inst,
     Int,
@@ -321,6 +324,96 @@ impl Class {
 }
 
 #[derive(Debug, GcLayout)]
+/// A boxed Double (which is synonymous with a f64 in yksom).
+pub struct Double {
+    val: f64,
+}
+
+impl NotUnboxable for Double {}
+
+impl Obj for Double {
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Double
+    }
+
+    fn get_class(&self, vm: &VM) -> Val {
+        vm.double_cls.clone()
+    }
+
+    fn to_strval(&self, vm: &VM) -> ValResult {
+        let mut buf = ryu::Buffer::new();
+        ValResult::from_val(String_::new(vm, buf.format(self.val).to_owned()))
+    }
+
+    fn add(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(rhs) = other.as_isize(vm) {
+            ValResult::from_val(Double::new(vm, self.val + (rhs as f64)))
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            ValResult::from_val(Double::new(vm, self.val + rhs.val))
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            match rhs.bigint().to_f64() {
+                Some(i) => ValResult::from_val(Double::new(vm, self.val + i)),
+                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+            }
+        } else {
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
+        }
+    }
+
+    fn sub(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(rhs) = other.as_isize(vm) {
+            ValResult::from_val(Double::new(vm, self.val - (rhs as f64)))
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            ValResult::from_val(Double::new(vm, self.val - rhs.val))
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            match rhs.bigint().to_f64() {
+                Some(i) => ValResult::from_val(Double::new(vm, self.val - i)),
+                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+            }
+        } else {
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
+        }
+    }
+
+    fn mul(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(rhs) = other.as_isize(vm) {
+            ValResult::from_val(Double::new(vm, self.val * (rhs as f64)))
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            ValResult::from_val(Double::new(vm, self.val * rhs.val))
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            match rhs.bigint().to_f64() {
+                Some(i) => ValResult::from_val(Double::new(vm, self.val * i)),
+                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+            }
+        } else {
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
+        }
+    }
+}
+
+impl StaticObjType for Double {
+    fn static_objtype() -> ObjType {
+        ObjType::Double
+    }
+}
+
+impl Double {
+    pub fn new(vm: &VM, val: f64) -> Val {
+        Val::from_obj(vm, Double { val })
+    }
+
+    pub fn double(&self) -> f64 {
+        self.val
+    }
+}
+
+#[derive(Debug, GcLayout)]
 pub struct Method {
     pub name: String,
     pub body: MethodBody,
@@ -477,6 +570,11 @@ impl Obj for ArbInt {
             ArbInt::new(vm, &self.val + rhs)
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             ArbInt::new(vm, &self.val + &rhs.val)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            match self.val.to_f64() {
+                Some(i) => ValResult::from_val(Double::new(vm, i + rhs.double())),
+                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+            }
         } else {
             ValResult::from_vmerror(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
@@ -489,6 +587,11 @@ impl Obj for ArbInt {
             ArbInt::new(vm, &self.val - &rhs)
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             ArbInt::new(vm, &self.val - &rhs.val)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            match self.val.to_f64() {
+                Some(i) => ValResult::from_val(Double::new(vm, i - rhs.double())),
+                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+            }
         } else {
             ValResult::from_vmerror(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
@@ -501,6 +604,11 @@ impl Obj for ArbInt {
             ArbInt::new(vm, &self.val * rhs)
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             ArbInt::new(vm, &self.val * &rhs.val)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            match self.val.to_f64() {
+                Some(i) => ValResult::from_val(Double::new(vm, i * rhs.double())),
+                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+            }
         } else {
             ValResult::from_vmerror(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
@@ -519,6 +627,15 @@ impl Obj for ArbInt {
             match self.val.checked_div(&rhs.val) {
                 Some(i) => ArbInt::new(vm, i),
                 None => ValResult::from_vmerror(VMError::DivisionByZero),
+            }
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            if rhs.double() == 0f64 {
+                ValResult::from_vmerror(VMError::DivisionByZero)
+            } else {
+                match self.val.to_f64() {
+                    Some(i) => ValResult::from_val(Double::new(vm, i / rhs.double())),
+                    None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+                }
             }
         } else {
             ValResult::from_vmerror(VMError::NotANumber {

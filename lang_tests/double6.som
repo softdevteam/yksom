@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: CantRepresentAsDouble
+"
+
+double6 = (
+    run = (
+        (1 << 2000) - 1.1.
+    )
+)

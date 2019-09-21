@@ -23,7 +23,7 @@ use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::FromPrimitive;
 
 use super::{
-    objects::{ArbInt, Int, Obj, ObjType, StaticObjType, String_, ThinObj},
+    objects::{ArbInt, Double, Int, Obj, ObjType, StaticObjType, String_, ThinObj},
     vm::{VMError, VM},
 };
 
@@ -284,13 +284,14 @@ impl Val {
                         return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs);
                     }
                 }
-            }
-            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 // The "obvious" way of implementing this is as:
                 //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs.bigint())
                 // but because `+` is commutative, we can avoid creating a
                 // temporary BigInt.
                 return ArbInt::new(vm, rhs.bigint() + lhs);
+            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                return ValResult::from_val(Double::new(vm, (lhs as f64) + rhs.double()));
             }
             return ValResult::from_vmerror(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
@@ -309,9 +310,10 @@ impl Val {
                         return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs);
                     }
                 }
-            }
-            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs.bigint());
+            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                return ValResult::from_val(Double::new(vm, (lhs as f64) - rhs.double()));
             }
             return ValResult::from_vmerror(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
@@ -330,13 +332,14 @@ impl Val {
                         return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs);
                     }
                 }
-            }
-            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 // The "obvious" way of implementing this is as:
                 //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs.bigint())
                 // but because `*` is commutative, we can avoid creating a
                 // temporary BigInt.
                 return ArbInt::new(vm, rhs.bigint() * lhs);
+            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                return ValResult::from_val(Double::new(vm, (lhs as f64) * rhs.double()));
             }
             return ValResult::from_vmerror(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
@@ -353,11 +356,20 @@ impl Val {
                     Some(i) => return Val::from_isize(vm, i),
                     None => return ValResult::from_vmerror(VMError::DivisionByZero),
                 }
-            }
-            if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 match BigInt::from_isize(lhs).unwrap().checked_div(rhs.bigint()) {
                     Some(i) => return ArbInt::new(vm, i),
                     None => return ValResult::from_vmerror(VMError::DivisionByZero),
+                }
+            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                if rhs.double() == 0f64 {
+                    return ValResult::from_vmerror(VMError::DivisionByZero);
+                } else {
+                    // Note that converting an f64 to an isize in Rust can lead to undefined
+                    // behaviour https://github.com/rust-lang/rust/issues/10184 -- it's not obvious
+                    // that we can do anything about this other than wait for it to be fixed in
+                    // LLVM and Rust.
+                    return Val::from_isize(vm, ((lhs as f64) / rhs.double()) as isize);
                 }
             }
             return ValResult::from_vmerror(VMError::NotANumber {

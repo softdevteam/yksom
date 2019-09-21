@@ -147,8 +147,8 @@ Literal -> Result<Expr, ()>:
       "STRING" { Ok(Expr::String(map_err($1)?)) }
     | "INT" { Ok(Expr::Int{ is_negative: false, val: map_err($1)? }) }
     | "-" "INT" { Ok(Expr::Int{ is_negative: true, val: map_err($2)? }) }
-    | "DOUBLE" { unimplemented!() }
-    | "-" "DOUBLE" { unimplemented!() }
+    | "DOUBLE" { Ok(Expr::Double{ is_negative: false, val: map_err($1)? }) }
+    | "-" "DOUBLE" { Ok(Expr::Double{ is_negative: true, val: map_err($2)? }) }
     | StringConst { unimplemented!() }
     | ArrayConst { unimplemented!() }
     ;

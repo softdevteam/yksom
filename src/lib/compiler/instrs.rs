@@ -12,6 +12,7 @@ pub enum Instr {
     Block(usize),
     Builtin(Builtin),
     Const(usize),
+    Double(f64),
     InstVarLookup(usize),
     InstVarSet(usize),
     Pop,
