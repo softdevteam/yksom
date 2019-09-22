@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: ShiftTooBig
+"
+
+int20 = (
+    run = (
+        1 << (1 << 200).
+    )
+)

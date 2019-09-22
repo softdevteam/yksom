@@ -12,6 +12,7 @@
 #![allow(clippy::new_ret_no_self)]
 
 use std::{
+    convert::TryFrom,
     mem::{forget, size_of, transmute},
     ops::Deref,
 };
@@ -366,6 +367,42 @@ impl Val {
             });
         }
         self.tobj(vm).unwrap().div(vm, other)
+    }
+
+    /// Produce a new `Val` which shifts `self` `other` bits to the left.
+    pub fn shl(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                if rhs < 0 {
+                    return ValResult::from_vmerror(VMError::NegativeShift);
+                } else {
+                    let rhs_i =
+                        rtry!(u32::try_from(rhs).map_err(|_| Box::new(VMError::ShiftTooBig)));
+                    if let Some(i) = lhs.checked_shl(rhs_i) {
+                        // We have to be careful as shifting bits in an isize can lead to positive
+                        // numbers becoming negative in two's complement. For example, on a 64-bit
+                        // machine, (1isize<<63) == -9223372036854775808. To avoid this, if
+                        // shifting +ve number leads to a -ve number being produced, we know we've
+                        // exceeded an isize's ability to store the result, and need to fall back
+                        // to the ArbInt case.
+                        if lhs < 0 || (lhs > 0 && i > 0) {
+                            return Val::from_isize(vm, i as isize);
+                        }
+                    }
+                    return ArbInt::new(
+                        vm,
+                        BigInt::from_isize(lhs).unwrap() << usize::try_from(rhs_i).unwrap(),
+                    );
+                }
+            }
+            if let Some(_) = other.try_downcast::<ArbInt>(vm) {
+                return ValResult::from_vmerror(VMError::ShiftTooBig);
+            }
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        }
+        self.tobj(vm).unwrap().shl(vm, other)
     }
 
     pub fn to_strval(&self, vm: &VM) -> ValResult {

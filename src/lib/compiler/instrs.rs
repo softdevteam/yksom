@@ -46,6 +46,7 @@ pub enum Primitive {
     New,
     PrintLn,
     Restart,
+    Shl,
     Sub,
     Value,
 }

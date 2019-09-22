@@ -62,6 +62,7 @@ MethodNameBinOp -> Result<Lexeme<StorageT>, ()>:
     | "+" { Ok(map_err($1)?) }
     | "-" { Ok(map_err($1)?) }
     | "=" { Ok(map_err($1)?) }
+    | "<<" { Ok(map_err($1)?) }
     | ">" { Ok(map_err($1)?) }
     | "<" { Ok(map_err($1)?) }
     | "," { Ok(map_err($1)?) }
@@ -135,6 +136,7 @@ BinOp -> Result<Lexeme<StorageT>, ()>:
     | "+" { Ok(map_err($1)?) }
     | "-" { Ok(map_err($1)?) }
     | "=" { Ok(map_err($1)?) }
+    | "<<" { Ok(map_err($1)?) }
     | ">" { Ok(map_err($1)?) }
     | "<" { Ok(map_err($1)?) }
     | "," { Ok(map_err($1)?) }
