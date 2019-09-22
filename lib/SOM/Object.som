@@ -1,4 +1,10 @@
 Object = nil (
     class = primitive
     asString  = ( ^'instance of ' concatenate: (self class asString) )
+
+    print = ( self asString print )
+    println = (
+        self print.
+        system printNewline
+    )
 )

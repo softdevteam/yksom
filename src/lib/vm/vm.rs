@@ -265,12 +265,6 @@ impl VM {
                 // This is handled directly by exec_user.
                 ValResult::from_vmerror(VMError::PrimitiveError)
             }
-            Primitive::PrintLn => {
-                // XXX println should be on System, not on string
-                let str_: &String_ = rtry!(rcv.downcast(self));
-                println!("{}", str_.as_str());
-                ValResult::from_val(rcv)
-            }
             Primitive::PrintNewline => {
                 println!();
                 ValResult::from_val(self.system.clone())

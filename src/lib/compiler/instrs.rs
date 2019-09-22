@@ -45,7 +45,6 @@ pub enum Primitive {
     Name,
     NotEquals,
     New,
-    PrintLn,
     PrintNewline,
     PrintString,
     Restart,

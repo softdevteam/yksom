@@ -235,7 +235,6 @@ impl<'a> Compiler<'a> {
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
                 "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
-                "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
                 "printNewline" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintNewline)),
                 "printString:" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintString)),
                 "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
