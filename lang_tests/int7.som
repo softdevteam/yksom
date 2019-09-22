@@ -11,6 +11,6 @@ VM:
 
 int7 = (
     run = (
-        1 to: 5 do: [ :i | i asString println. ].
+        1 to: 5 do: [ :i | i println. ].
     )
 )

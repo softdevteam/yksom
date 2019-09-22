@@ -8,6 +8,6 @@ method2 = (
     f = ( 'irrelevant' )
 
     run = (
-       self f asString println
+       self f println
     )
 )

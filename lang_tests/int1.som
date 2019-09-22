@@ -8,7 +8,7 @@ VM:
 
 int1 = (
     run = (
-        1 asString println.
-        -1 asString println.
+        1 println.
+        -1 println.
     )
 )

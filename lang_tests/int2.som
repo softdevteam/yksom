@@ -12,11 +12,11 @@ VM:
 
 int2 = (
     run = (
-        (1 + 1) asString println.
-        (1 - 1) asString println.
-        ((1 - 1) - 1) asString println.
-        (1 - (1 - 1)) asString println.
-        (2 + 3 * 4) asString println.
-        (20 / 5) asString println.
+        (1 + 1) println.
+        (1 - 1) println.
+        ((1 - 1) - 1) println.
+        (1 - (1 - 1)) println.
+        (2 + 3 * 4) println.
+        (20 / 5) println.
     )
 )
