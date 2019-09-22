@@ -83,9 +83,11 @@ pub struct VM {
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
+    pub system_cls: Val,
     pub true_cls: Val,
     pub false_: Val,
     pub nil: Val,
+    pub system: Val,
     pub true_: Val,
     frames: UnsafeCell<Vec<Gc<Frame>>>,
 }
@@ -110,9 +112,11 @@ impl VM {
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            system_cls: Val::illegal(),
             true_cls: Val::illegal(),
             false_: Val::illegal(),
             nil: Val::illegal(),
+            system: Val::illegal(),
             true_: Val::illegal(),
             frames: UnsafeCell::new(Vec::new()),
         };
@@ -136,8 +140,10 @@ impl VM {
         vm.false_cls = vm.init_builtin_class("False", false);
         vm.int_cls = vm.init_builtin_class("Integer", false);
         vm.str_cls = vm.init_builtin_class("String", false);
+        vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
         vm.false_ = Inst::new(&vm, vm.false_cls.clone());
+        vm.system = Inst::new(&vm, vm.system_cls.clone());
         vm.true_ = Inst::new(&vm, vm.true_cls.clone());
 
         vm
@@ -265,6 +271,16 @@ impl VM {
                 println!("{}", str_.as_str());
                 ValResult::from_val(rcv)
             }
+            Primitive::PrintNewline => {
+                println!();
+                ValResult::from_val(self.system.clone())
+            }
+            Primitive::PrintString => {
+                debug_assert_eq!(args.len(), 1);
+                let str_: &String_ = rtry!(args[0].downcast(self));
+                print!("{}", str_.as_str());
+                ValResult::from_val(self.system.clone())
+            }
             Primitive::Shl => {
                 debug_assert_eq!(args.len(), 1);
                 rcv.shl(self, args[0].clone())
@@ -327,6 +343,7 @@ impl VM {
                     frame.stack_push(match b {
                         Builtin::Nil => self.nil.clone(),
                         Builtin::False => self.false_.clone(),
+                        Builtin::System => self.system.clone(),
                         Builtin::True => self.true_.clone(),
                     });
                     pc += 1;
@@ -586,9 +603,11 @@ impl VM {
             obj_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            system_cls: Val::illegal(),
             true_cls: Val::illegal(),
             false_: Val::illegal(),
             nil: Val::illegal(),
+            system: Val::illegal(),
             true_: Val::illegal(),
             frames: UnsafeCell::new(Vec::new()),
         }
