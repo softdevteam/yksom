@@ -31,7 +31,7 @@
 //! Although this constraint is not enforced through the type system, it is not hard to obey: as
 //! soon as you create an `Obj` instance, pass it to `Val::from_obj`.
 
-use std::{cell::UnsafeCell, collections::HashMap, fmt::Debug, path::PathBuf};
+use std::{cell::UnsafeCell, collections::HashMap, convert::TryFrom, fmt::Debug, path::PathBuf};
 
 use abgc::{self, Gc};
 use abgc_derive::GcLayout;
@@ -74,6 +74,11 @@ pub trait Obj: Debug + abgc::GcLayout {
     /// What class is this object an instance of?
     fn get_class(&self, vm: &VM) -> Val;
 
+    /// Convert this object to a `Val` that represents a SOM string.
+    fn to_strval(&self, _: &VM) -> ValResult {
+        unimplemented!();
+    }
+
     /// Produce a new `Val` which adds `other` to this.
     fn add(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
@@ -91,6 +96,11 @@ pub trait Obj: Debug + abgc::GcLayout {
 
     /// Produce a new `Val` which divides `other` from this.
     fn div(&self, _: &VM, _: Val) -> ValResult {
+        unimplemented!();
+    }
+
+    /// Produce a new `Val` which shifts `self` `other` bits to the left.
+    fn shl(&self, _: &VM, _: Val) -> ValResult {
         unimplemented!();
     }
 
@@ -121,11 +131,6 @@ pub trait Obj: Debug + abgc::GcLayout {
 
     /// Is this `Val` less than or equal to `other`?
     fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
-        unimplemented!();
-    }
-
-    /// Convert this object to a `Val` that represents a SOM string.
-    fn to_strval(&self, _: &VM) -> ValResult {
         unimplemented!();
     }
 }
@@ -522,6 +527,23 @@ impl Obj for ArbInt {
         }
     }
 
+    fn shl(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(rhs) = other.as_isize(vm) {
+            if rhs < 0 {
+                ValResult::from_vmerror(VMError::NegativeShift)
+            } else {
+                let rhs_i = rtry!(usize::try_from(rhs).map_err(|_| Box::new(VMError::ShiftTooBig)));
+                ArbInt::new(vm, &self.val << rhs_i)
+            }
+        } else if let Some(_) = other.try_downcast::<ArbInt>(vm) {
+            ValResult::from_vmerror(VMError::ShiftTooBig)
+        } else {
+            ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            })
+        }
+    }
+
     fn equals(&self, vm: &VM, other: Val) -> ValResult {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
@@ -715,13 +737,13 @@ mod tests {
             Val::from_isize(&vm, 1 << (BITSIZE - 1 - TAG_BITSIZE))
                 .unwrap()
                 .valkind(),
-            ValKind::INT
+            ValKind::GCBOX
         );
         assert_eq!(
             Val::from_isize(&vm, -1 - 1 << (BITSIZE - 1 - TAG_BITSIZE))
                 .unwrap()
                 .valkind(),
-            ValKind::INT
+            ValKind::GCBOX
         );
         assert_eq!(
             Val::from_isize(&vm, 1 << (BITSIZE - 1)).unwrap().valkind(),

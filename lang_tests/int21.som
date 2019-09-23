@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: NegativeShift
+"
+
+int21 = (
+    run = (
+        1 << -1.
+    )
+)

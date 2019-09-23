@@ -47,6 +47,8 @@ pub enum VMError {
         expected: ObjType,
         got: ObjType,
     },
+    /// Tried to do a shl or shr with a value below zero.
+    NegativeShift,
     /// A specialised version of TypeError, because SOM has more than one number type (and casts
     /// between them as necessary) so the `expected` field of `TypeError` doesn't quite work.
     NotANumber {
@@ -56,6 +58,8 @@ pub enum VMError {
     PrimitiveError,
     /// Percolate a non-local return up the call stack.
     Return(usize, Val),
+    /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
+    ShiftTooBig,
     /// A dynamic type error.
     TypeError {
         expected: ObjType,
@@ -260,6 +264,10 @@ impl VM {
                 let str_: &String_ = rtry!(rcv.downcast(self));
                 println!("{}", str_.as_str());
                 ValResult::from_val(rcv)
+            }
+            Primitive::Shl => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.shl(self, args[0].clone())
             }
             Primitive::Sub => {
                 debug_assert_eq!(args.len(), 1);

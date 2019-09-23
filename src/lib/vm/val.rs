@@ -12,6 +12,7 @@
 #![allow(clippy::new_ret_no_self)]
 
 use std::{
+    convert::TryFrom,
     mem::{forget, size_of, transmute},
     ops::Deref,
 };
@@ -36,6 +37,8 @@ pub const BITSIZE: usize = 64;
 pub const TAG_BITSIZE: usize = 3; // Number of bits
 #[cfg(target_pointer_width = "64")]
 pub const TAG_BITMASK: usize = (1 << 3) - 1;
+#[cfg(target_pointer_width = "64")]
+pub const INT_BITMASK: usize = (1 << 4) - 1;
 
 #[cfg(target_pointer_width = "64")]
 /// If a member of ValResult has this bit set, it is a `Box<VMError>`.
@@ -174,8 +177,8 @@ impl Val {
 
     /// Create a (possibly boxed) `Val` representing the `isize` integer `i`.
     pub fn from_isize(vm: &VM, i: isize) -> ValResult {
-        let top_bits = i as usize & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE));
-        if top_bits == 0 || top_bits == TAG_BITMASK << (BITSIZE - TAG_BITSIZE) {
+        let top_bits = i as usize & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1));
+        if top_bits == 0 || top_bits == INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1) {
             // top_bits == 0: A positive integer that fits in our tagging scheme
             // top_bits all set to 1: A negative integer that fits in our tagging scheme
             ValResult::from_val(Val {
@@ -190,17 +193,13 @@ impl Val {
     /// fail if `i` is too big (since we don't have BigNum support and ints are internally
     /// represented as `isize`).
     pub fn from_usize(vm: &VM, i: usize) -> ValResult {
-        if i & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE)) == 0 {
+        if i & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1)) == 0 {
             // The top TAG_BITSIZE bits aren't set, so this fits within our pointer tagging scheme.
             ValResult::from_val(Val {
                 val: (i << TAG_BITSIZE) | (ValKind::INT as usize),
             })
-        } else if i & (1 << (BITSIZE - 1)) == 0 {
-            // One of the top TAG_BITSIZE bits is set, but not the topmost bit itself, so we can
-            // box this as an isize.
-            Int::boxed_isize(vm, i as isize)
         } else {
-            ValResult::from_vmerror(VMError::CantRepresentAsIsize)
+            ArbInt::new(vm, BigInt::from_usize(i).unwrap())
         }
     }
 
@@ -366,6 +365,42 @@ impl Val {
             });
         }
         self.tobj(vm).unwrap().div(vm, other)
+    }
+
+    /// Produce a new `Val` which shifts `self` `other` bits to the left.
+    pub fn shl(&self, vm: &VM, other: Val) -> ValResult {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                if rhs < 0 {
+                    return ValResult::from_vmerror(VMError::NegativeShift);
+                } else {
+                    let rhs_i =
+                        rtry!(u32::try_from(rhs).map_err(|_| Box::new(VMError::ShiftTooBig)));
+                    if let Some(i) = lhs.checked_shl(rhs_i) {
+                        // We have to be careful as shifting bits in an isize can lead to positive
+                        // numbers becoming negative in two's complement. For example, on a 64-bit
+                        // machine, (1isize<<63) == -9223372036854775808. To avoid this, if
+                        // shifting +ve number leads to a -ve number being produced, we know we've
+                        // exceeded an isize's ability to store the result, and need to fall back
+                        // to the ArbInt case.
+                        if lhs < 0 || (lhs > 0 && i > 0) {
+                            return Val::from_isize(vm, i as isize);
+                        }
+                    }
+                    return ArbInt::new(
+                        vm,
+                        BigInt::from_isize(lhs).unwrap() << usize::try_from(rhs_i).unwrap(),
+                    );
+                }
+            }
+            if let Some(_) = other.try_downcast::<ArbInt>(vm) {
+                return ValResult::from_vmerror(VMError::ShiftTooBig);
+            }
+            return ValResult::from_vmerror(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            });
+        }
+        self.tobj(vm).unwrap().shl(vm, other)
     }
 
     pub fn to_strval(&self, vm: &VM) -> ValResult {
@@ -631,7 +666,10 @@ mod tests {
             1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
         );
 
-        assert!(Val::from_usize(&vm, 1 << (BITSIZE - 1)).is_err());
+        assert!(Val::from_usize(&vm, 1 << (BITSIZE - 1))
+            .unwrap()
+            .try_downcast::<ArbInt>(&vm)
+            .is_some());
 
         let v = Val::from_usize(&vm, 1 << (BITSIZE - 2)).unwrap();
         assert_eq!(v.valkind(), ValKind::GCBOX);
