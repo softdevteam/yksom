@@ -37,6 +37,8 @@ pub const BITSIZE: usize = 64;
 pub const TAG_BITSIZE: usize = 3; // Number of bits
 #[cfg(target_pointer_width = "64")]
 pub const TAG_BITMASK: usize = (1 << 3) - 1;
+#[cfg(target_pointer_width = "64")]
+pub const INT_BITMASK: usize = (1 << 4) - 1;
 
 #[cfg(target_pointer_width = "64")]
 /// If a member of ValResult has this bit set, it is a `Box<VMError>`.
@@ -175,8 +177,8 @@ impl Val {
 
     /// Create a (possibly boxed) `Val` representing the `isize` integer `i`.
     pub fn from_isize(vm: &VM, i: isize) -> ValResult {
-        let top_bits = i as usize & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE));
-        if top_bits == 0 || top_bits == TAG_BITMASK << (BITSIZE - TAG_BITSIZE) {
+        let top_bits = i as usize & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1));
+        if top_bits == 0 || top_bits == INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1) {
             // top_bits == 0: A positive integer that fits in our tagging scheme
             // top_bits all set to 1: A negative integer that fits in our tagging scheme
             ValResult::from_val(Val {
@@ -191,17 +193,13 @@ impl Val {
     /// fail if `i` is too big (since we don't have BigNum support and ints are internally
     /// represented as `isize`).
     pub fn from_usize(vm: &VM, i: usize) -> ValResult {
-        if i & (TAG_BITMASK << (BITSIZE - TAG_BITSIZE)) == 0 {
+        if i & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1)) == 0 {
             // The top TAG_BITSIZE bits aren't set, so this fits within our pointer tagging scheme.
             ValResult::from_val(Val {
                 val: (i << TAG_BITSIZE) | (ValKind::INT as usize),
             })
-        } else if i & (1 << (BITSIZE - 1)) == 0 {
-            // One of the top TAG_BITSIZE bits is set, but not the topmost bit itself, so we can
-            // box this as an isize.
-            Int::boxed_isize(vm, i as isize)
         } else {
-            ValResult::from_vmerror(VMError::CantRepresentAsIsize)
+            ArbInt::new(vm, BigInt::from_usize(i).unwrap())
         }
     }
 
@@ -668,7 +666,10 @@ mod tests {
             1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
         );
 
-        assert!(Val::from_usize(&vm, 1 << (BITSIZE - 1)).is_err());
+        assert!(Val::from_usize(&vm, 1 << (BITSIZE - 1))
+            .unwrap()
+            .try_downcast::<ArbInt>(&vm)
+            .is_some());
 
         let v = Val::from_usize(&vm, 1 << (BITSIZE - 2)).unwrap();
         assert_eq!(v.valkind(), ValKind::GCBOX);

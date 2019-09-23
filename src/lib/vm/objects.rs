@@ -737,13 +737,13 @@ mod tests {
             Val::from_isize(&vm, 1 << (BITSIZE - 1 - TAG_BITSIZE))
                 .unwrap()
                 .valkind(),
-            ValKind::INT
+            ValKind::GCBOX
         );
         assert_eq!(
             Val::from_isize(&vm, -1 - 1 << (BITSIZE - 1 - TAG_BITSIZE))
                 .unwrap()
                 .valkind(),
-            ValKind::INT
+            ValKind::GCBOX
         );
         assert_eq!(
             Val::from_isize(&vm, 1 << (BITSIZE - 1)).unwrap().valkind(),
