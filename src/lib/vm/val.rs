@@ -7,6 +7,8 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+//! Tagged pointer support.
+
 #![allow(clippy::new_ret_no_self)]
 
 use std::{

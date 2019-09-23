@@ -7,6 +7,11 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+//! A SOM compiler. This is currently fairly simplistic, particularly in terms of code generation
+//! (though it does at least use [lrpar](https://crates.io/crates/lrpar), so one gets decent error
+//! messages). The interchange format between the compiler and the VM currently uses a Rust `enum`
+//! and is probably fairly inefficient.
+
 use std::{fs, path::Path, process};
 
 use lrlex::lrlex_mod;

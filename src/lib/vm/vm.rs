@@ -7,6 +7,8 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+//! The core part of the interpreter.
+
 use std::{
     cell::UnsafeCell,
     path::{Path, PathBuf},
