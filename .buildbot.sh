@@ -15,7 +15,7 @@ rustup component add --toolchain nightly rustfmt-preview || cargo +nightly insta
 cargo +nightly fmt --all -- --check
 cargo test
 
-if [ "`git branch --show-current`" = "staging" ]; then
+if [ "X`git rev-parse --abbrev-ref HEAD`" = "Xstaging" ]; then
     cargo doc --no-deps
     cd target/doc
     git init
