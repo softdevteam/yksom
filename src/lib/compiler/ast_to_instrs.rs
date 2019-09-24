@@ -235,7 +235,8 @@ impl<'a> Compiler<'a> {
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
                 "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
-                "println" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintLn)),
+                "printNewline" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintNewline)),
+                "printString:" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintString)),
                 "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
                 "value" | "value:" | "value:with:" => {
                     Ok(cobjects::MethodBody::Primitive(Primitive::Value))
@@ -354,6 +355,7 @@ impl<'a> Compiler<'a> {
                     Err(e) => match self.lexer.lexeme_str(&lexeme) {
                         "nil" => self.instrs.push(Instr::Builtin(Builtin::Nil)),
                         "false" => self.instrs.push(Instr::Builtin(Builtin::False)),
+                        "system" => self.instrs.push(Instr::Builtin(Builtin::System)),
                         "true" => self.instrs.push(Instr::Builtin(Builtin::True)),
                         _ => return Err(e),
                     },

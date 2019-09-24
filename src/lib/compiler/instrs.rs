@@ -25,6 +25,7 @@ pub enum Instr {
 pub enum Builtin {
     False,
     Nil,
+    System,
     True,
 }
 
@@ -44,7 +45,8 @@ pub enum Primitive {
     Name,
     NotEquals,
     New,
-    PrintLn,
+    PrintNewline,
+    PrintString,
     Restart,
     Shl,
     Sub,

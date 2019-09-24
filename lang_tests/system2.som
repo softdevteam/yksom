@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: TypeError { expected: String_, got: Inst }
+"
+
+system2 = (
+    run = (
+        system printString: system.
+    )
+)

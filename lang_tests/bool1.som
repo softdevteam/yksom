@@ -5,5 +5,5 @@ VM:
 "
 
 bool1 = (
-    run = ( true not asString println)
+    run = ( true not println)
 )

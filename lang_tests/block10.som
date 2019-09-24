@@ -13,6 +13,6 @@ block8 = (
     g: block = ( ^block value: 10 with: 3 )
 
     run = (
-        self f asString println
+        self f println
     )
 )
