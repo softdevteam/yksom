@@ -440,6 +440,10 @@ impl VM {
                 self.stack_push(stry!(rcv.not_equals(self, self.stack_pop())));
                 SendReturn::Val
             }
+            Primitive::RefEquals => {
+                self.stack_push(stry!(rcv.ref_equals(self, self.stack_pop())));
+                SendReturn::Val
+            }
             Primitive::Restart => unreachable!(),
             Primitive::PrintNewline => {
                 println!();

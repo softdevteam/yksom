@@ -142,6 +142,15 @@ impl Obj for ArbInt {
         }
     }
 
+    fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        let b = if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            self.val == rhs.val
+        } else {
+            false
+        };
+        Ok(Val::from_bool(vm, b))
+    }
+
     fn equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());

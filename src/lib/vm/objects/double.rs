@@ -90,6 +90,15 @@ impl Obj for Double {
             }))
         }
     }
+
+    fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        let b = if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            self.val == rhs.double()
+        } else {
+            false
+        };
+        Ok(Val::from_bool(vm, b))
+    }
 }
 
 impl StaticObjType for Double {

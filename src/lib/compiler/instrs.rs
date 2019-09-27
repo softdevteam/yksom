@@ -49,6 +49,7 @@ pub enum Primitive {
     New,
     PrintNewline,
     PrintString,
+    RefEquals,
     Restart,
     Shl,
     Sub,

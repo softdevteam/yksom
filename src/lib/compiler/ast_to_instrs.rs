@@ -204,6 +204,10 @@ impl<'a> Compiler<'a> {
                     requires_args(1)?;
                     Ok(cobjects::MethodBody::Primitive(Primitive::Equals))
                 }
+                "==" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::RefEquals))
+                }
                 "~=" => {
                     requires_args(1)?;
                     Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals))
