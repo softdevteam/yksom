@@ -4,5 +4,9 @@ Double = (
     * argument = primitive
     =  argument = primitive
     <  argument = primitive
+    >  argument = ( ^(self >= argument) and: [ self <> argument ] )
+    >= argument = ( ^(self < argument) not )
+    <= argument = ( ^(self < argument) or: [ self = argument ] )
+    negative = ( ^self < 0.0 )
     asString = primitive
 )

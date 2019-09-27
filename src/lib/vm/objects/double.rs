@@ -99,6 +99,42 @@ impl Obj for Double {
         };
         Ok(Val::from_bool(vm, b))
     }
+
+    fn equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        let b = if let Some(rhs) = other.as_isize(vm) {
+            self.val == (rhs as f64)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            self.val == rhs.double()
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            match rhs.bigint().to_f64() {
+                Some(i) => self.val == i,
+                None => false,
+            }
+        } else {
+            false
+        };
+
+        Ok(Val::from_bool(vm, b))
+    }
+
+    fn less_than(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        let b = if let Some(rhs) = other.as_isize(vm) {
+            self.val < (rhs as f64)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            self.val < rhs.double()
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            match rhs.bigint().to_f64() {
+                Some(i) => self.val < i,
+                None => false,
+            }
+        } else {
+            return Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }));
+        };
+
+        Ok(Val::from_bool(vm, b))
+    }
 }
 
 impl StaticObjType for Double {
