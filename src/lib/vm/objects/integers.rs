@@ -7,6 +7,10 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+//! yksom has three ways of representing integers: as tagged integer (inside a `Val`); boxed
+//! `isize`'s (the `Int` struct); and arbitrary sized integers (the `ArbInt` struct). This module
+//! contains the implementations of [`Int`](Int) and [`ArbInt`](ArbInt).
+
 #![allow(clippy::new_ret_no_self)]
 
 use std::convert::TryFrom;
