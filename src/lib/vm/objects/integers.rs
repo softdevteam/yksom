@@ -22,52 +22,6 @@ use crate::vm::{
 };
 
 #[derive(Debug, GcLayout)]
-/// A boxed `isize`.
-pub struct Int {
-    val: isize,
-}
-
-impl Obj for Int {
-    fn dyn_objtype(&self) -> ObjType {
-        ObjType::Int
-    }
-
-    fn get_class(&self, vm: &VM) -> Val {
-        vm.int_cls.clone()
-    }
-
-    fn to_strval(&self, vm: &VM) -> ValResult {
-        ValResult::from_val(String_::new(vm, self.val.to_string()))
-    }
-}
-
-impl StaticObjType for Int {
-    fn static_objtype() -> ObjType {
-        ObjType::Int
-    }
-}
-
-impl Int {
-    /// Create a `Val` representing the `usize` integer `i`. The `Val` is guaranteed to be boxed
-    /// internally.
-    pub fn boxed_isize(vm: &VM, i: isize) -> ValResult {
-        ValResult::from_val(Val::from_obj(vm, Int { val: i }))
-    }
-
-    pub fn as_isize(&self) -> isize {
-        self.val
-    }
-
-    pub fn as_usize(&self) -> Option<usize> {
-        if self.val >= 0 {
-            Some(self.val as usize)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, GcLayout)]
 /// A boxed arbitrary sized `BigInt`.
 pub struct ArbInt {
     val: BigInt,
@@ -286,6 +240,52 @@ impl ArbInt {
 
     pub fn bigint(&self) -> &BigInt {
         &self.val
+    }
+}
+
+#[derive(Debug, GcLayout)]
+/// A boxed `isize`.
+pub struct Int {
+    val: isize,
+}
+
+impl Obj for Int {
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Int
+    }
+
+    fn get_class(&self, vm: &VM) -> Val {
+        vm.int_cls.clone()
+    }
+
+    fn to_strval(&self, vm: &VM) -> ValResult {
+        ValResult::from_val(String_::new(vm, self.val.to_string()))
+    }
+}
+
+impl StaticObjType for Int {
+    fn static_objtype() -> ObjType {
+        ObjType::Int
+    }
+}
+
+impl Int {
+    /// Create a `Val` representing the `usize` integer `i`. The `Val` is guaranteed to be boxed
+    /// internally.
+    pub fn boxed_isize(vm: &VM, i: isize) -> ValResult {
+        ValResult::from_val(Val::from_obj(vm, Int { val: i }))
+    }
+
+    pub fn as_isize(&self) -> isize {
+        self.val
+    }
+
+    pub fn as_usize(&self) -> Option<usize> {
+        if self.val >= 0 {
+            Some(self.val as usize)
+        } else {
+            None
+        }
     }
 }
 
