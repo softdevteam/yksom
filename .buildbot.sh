@@ -14,6 +14,7 @@ rustup component add --toolchain nightly rustfmt-preview || cargo +nightly insta
 
 cargo +nightly fmt --all -- --check
 cargo test
+cargo test --release
 
 if [ "X`git rev-parse --abbrev-ref HEAD`" = "Xstaging" ]; then
     cargo doc --no-deps
