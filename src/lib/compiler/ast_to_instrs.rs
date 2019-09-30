@@ -296,6 +296,20 @@ impl<'a> Compiler<'a> {
                 self.blocks[block_off].num_vars = num_vars;
                 Ok(())
             }
+            ast::Expr::Double { is_negative, val } => {
+                let s = if *is_negative {
+                    format!("-{}", self.lexer.lexeme_str(&val))
+                } else {
+                    self.lexer.lexeme_str(&val).to_owned()
+                };
+                match s.parse::<f64>() {
+                    Ok(i) => {
+                        self.instrs.push(Instr::Double(i));
+                        Ok(())
+                    }
+                    Err(e) => Err(vec![(*val, format!("{}", e))]),
+                }
+            }
             ast::Expr::Int { is_negative, val } => {
                 match self.lexer.lexeme_str(&val).parse::<isize>() {
                     Ok(mut i) => {

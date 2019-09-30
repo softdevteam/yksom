@@ -57,6 +57,10 @@ pub enum Expr {
         vars: Vec<Lexeme<StorageT>>,
         exprs: Vec<Expr>,
     },
+    Double {
+        is_negative: bool,
+        val: Lexeme<StorageT>,
+    },
     Int {
         is_negative: bool,
         val: Lexeme<StorageT>,

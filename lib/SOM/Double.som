@@ -1,0 +1,8 @@
+Double = (
+    + argument = primitive
+    - argument = primitive
+    * argument = primitive
+    =  argument = primitive
+    <  argument = primitive
+    asString = primitive
+)
