@@ -131,28 +131,30 @@ impl Val {
         &self,
         _: &VM,
     ) -> Result<&T, Box<VMError>> {
-        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
-        debug_assert_eq!(ValKind::GCBOX as usize, 0);
-        debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-        debug_assert_ne!(self.val, 0);
-        let tobj = unsafe { &*(self.val as *const ThinObj) };
-
-        tobj.downcast().ok_or_else(|| {
-            Box::new(VMError::TypeError {
+        match self.valkind() {
+            ValKind::INT => Err(Box::new(VMError::TypeError {
                 expected: T::static_objtype(),
-                got: tobj.deref().dyn_objtype(),
-            })
-        })
+                got: Int::static_objtype(),
+            })),
+            ValKind::GCBOX => {
+                let tobj = unsafe { &*(self.val as *const ThinObj) };
+                tobj.downcast().ok_or_else(|| {
+                    Box::new(VMError::TypeError {
+                        expected: T::static_objtype(),
+                        got: tobj.deref().dyn_objtype(),
+                    })
+                })
+            }
+        }
     }
 
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
     /// be boxed) or return `None` if the cast is not valid.
     pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<&T> {
-        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
-        debug_assert_eq!(ValKind::GCBOX as usize, 0);
-        debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-        debug_assert_ne!(self.val, 0);
-        unsafe { &*(self.val as *const ThinObj) }.downcast()
+        match self.valkind() {
+            ValKind::INT => None,
+            ValKind::GCBOX => unsafe { &*(self.val as *const ThinObj) }.downcast(),
+        }
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
@@ -728,5 +730,9 @@ mod tests {
         assert!(v.downcast::<Class>(&vm).is_err());
         assert!(v.try_downcast::<String_>(&vm).is_some());
         assert!(v.try_downcast::<Class>(&vm).is_none());
+
+        let v = Val::from_isize(&vm, 0).unwrap();
+        assert!(v.downcast::<String_>(&vm).is_err());
+        assert!(v.try_downcast::<String_>(&vm).is_none());
     }
 }
