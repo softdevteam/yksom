@@ -54,9 +54,6 @@ use crate::vm::{
 };
 
 /// The SOM type of objects.
-///
-/// It might seem that we should use `TypeId` for this, but that requires types to have a 'static
-/// lifetime, which is an annoying restriction.
 #[derive(Debug, PartialEq)]
 pub enum ObjType {
     ArbInt,
