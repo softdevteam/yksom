@@ -200,13 +200,19 @@ impl VM {
     }
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
-    pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> ValResult {
+    pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> ValResult {
         let cls = rcv.get_class(self);
         let (meth_cls_val, meth) = rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, msg));
         self.send_internal(rcv, args, meth_cls_val, meth)
     }
 
-    fn send_internal(&self, rcv: Val, args: &[Val], meth_cls_val: Val, meth: &Method) -> ValResult {
+    fn send_internal(
+        &self,
+        rcv: Val,
+        args: Vec<Val>,
+        meth_cls_val: Val,
+        meth: &Method,
+    ) -> ValResult {
         match meth.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
             MethodBody::User {
@@ -219,7 +225,7 @@ impl VM {
         }
     }
 
-    fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> ValResult {
+    fn exec_primitive(&self, prim: Primitive, rcv: Val, args: Vec<Val>) -> ValResult {
         match prim {
             Primitive::Add => {
                 debug_assert_eq!(args.len(), 1);
@@ -315,7 +321,7 @@ impl VM {
         rcv: Val,
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
-        args: &[Val],
+        args: Vec<Val>,
     ) -> ValResult {
         let frame = Gc::new(Frame::new(
             self,
@@ -387,7 +393,7 @@ impl VM {
                         pc = meth_pc;
                         self.stack_truncate(frame.stack_start);
                     } else {
-                        let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
+                        let vr = self.send_internal(rcv, args, meth_cls_val, meth);
                         let r = if vr.is_val() {
                             vr.unwrap()
                         } else {
@@ -513,7 +519,7 @@ impl Frame {
         stack_start: usize,
         num_vars: usize,
         self_val: Val,
-        args: &[Val],
+        args: Vec<Val>,
     ) -> Self {
         let mut vars = Vec::new();
         vars.resize(num_vars, Val::illegal());
@@ -637,7 +643,7 @@ mod tests {
         let selfv = Val::from_isize(&vm, 42).unwrap();
         let v1 = Val::from_isize(&vm, 43).unwrap();
         let v2 = Val::from_isize(&vm, 44).unwrap();
-        let f = Frame::new(&vm, true, None, 0, 4, selfv, &[v1, v2]);
+        let f = Frame::new(&vm, true, None, 0, 4, selfv, vec![v1, v2]);
         assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
         assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);

@@ -42,8 +42,8 @@ fn main() {
 
     let vm = VM::new(matches.opt_strs("cp"));
     let cls = vm.compile(&Path::new(&matches.free[0]).canonicalize().unwrap(), true);
-    let obj = vm.send(cls, "new", &[]).unwrap();
-    let vr = vm.send(obj, "run", &[]);
+    let obj = vm.send(cls, "new", vec![]).unwrap();
+    let vr = vm.send(obj, "run", vec![]);
     if vr.is_err() {
         match *vr.unwrap_err() {
             VMError::Exit => (),
