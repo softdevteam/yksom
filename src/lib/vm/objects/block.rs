@@ -13,9 +13,9 @@ use abgc::Gc;
 use abgc_derive::GcLayout;
 
 use crate::vm::{
+    core::{Closure, VM},
     objects::{Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
-    vm::{Closure, VM},
 };
 
 #[derive(Debug, GcLayout)]

@@ -14,9 +14,9 @@ use abgc_derive::GcLayout;
 use crate::{
     compiler::instrs::Primitive,
     vm::{
+        core::VM,
         objects::{Obj, ObjType, StaticObjType},
         val::{NotUnboxable, Val},
-        vm::VM,
     },
 };
 

@@ -14,9 +14,9 @@ use std::str;
 use abgc_derive::GcLayout;
 
 use crate::vm::{
+    core::VM,
     objects::{Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val, ValResult},
-    vm::VM,
 };
 
 #[derive(Debug, GcLayout)]

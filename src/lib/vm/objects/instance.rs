@@ -14,9 +14,9 @@ use std::cell::UnsafeCell;
 use abgc_derive::GcLayout;
 
 use crate::vm::{
+    core::VM,
     objects::{Class, Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
-    vm::VM,
 };
 
 /// An instance of a user class.

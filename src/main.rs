@@ -16,7 +16,7 @@ use std::{
 
 use getopts::Options;
 
-use yksom::vm::vm::{VMError, VM};
+use yksom::vm::{VMError, VM};
 
 fn usage(prog: &str) -> ! {
     let path = Path::new(prog);
