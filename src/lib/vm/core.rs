@@ -92,6 +92,7 @@ pub struct VM {
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
+    stack: UnsafeCell<Vec<Val>>,
     frames: UnsafeCell<Vec<Gc<Frame>>>,
 }
 
@@ -122,6 +123,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            stack: UnsafeCell::new(Vec::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
 
@@ -319,6 +321,7 @@ impl VM {
             self,
             is_method,
             parent_closure,
+            self.stack_len(),
             num_vars,
             rcv.clone(),
             args,
@@ -329,7 +332,7 @@ impl VM {
             match cls.instrs[pc] {
                 Instr::Block(blkinfo_off) => {
                     let blkinfo = cls.blockinfo(blkinfo_off);
-                    frame.stack_push(Block::new(
+                    self.stack_push(Block::new(
                         self,
                         Val::recover(cls),
                         blkinfo_off,
@@ -339,7 +342,7 @@ impl VM {
                     pc = blkinfo.bytecode_end;
                 }
                 Instr::Builtin(b) => {
-                    frame.stack_push(match b {
+                    self.stack_push(match b {
                         Builtin::Nil => self.nil.clone(),
                         Builtin::False => self.false_.clone(),
                         Builtin::System => self.system.clone(),
@@ -348,38 +351,41 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Const(coff) => {
-                    frame.stack_push(cls.consts[coff].clone());
+                    self.stack_push(cls.consts[coff].clone());
                     pc += 1;
                 }
                 Instr::Double(i) => {
-                    frame.stack_push(Double::new(self, i));
+                    self.stack_push(Double::new(self, i));
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    frame.stack_push(inst.inst_var_lookup(n));
+                    self.stack_push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    inst.inst_var_set(n, frame.stack_peek());
+                    inst.inst_var_set(n, self.stack_peek());
                     pc += 1;
                 }
                 Instr::Pop => {
-                    frame.stack_pop();
+                    self.stack_pop();
                     pc += 1;
                 }
                 Instr::Send(moff) => {
                     let (ref name, nargs) = &cls.sends[moff];
-                    let args = frame.stack_drain_rev(frame.stack_len() - nargs);
-                    let rcv = frame.stack_pop();
+                    let args = unsafe { &mut *self.stack.get() }
+                        .drain(self.stack_len() - nargs..)
+                        .rev()
+                        .collect::<Vec<_>>();
+                    let rcv = self.stack_pop();
 
                     let cls = rcv.get_class(self);
                     let (meth_cls_val, meth) =
                         rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
                     if let MethodBody::Primitive(Primitive::Restart) = meth.body {
                         pc = meth_pc;
-                        frame.stack_clear();
+                        self.stack_truncate(frame.stack_start);
                     } else {
                         let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
                         let r = if vr.is_val() {
@@ -403,12 +409,12 @@ impl VM {
                                 }
                             }
                         };
-                        frame.stack_push(r);
+                        self.stack_push(r);
                         pc += 1;
                     }
                 }
                 Instr::Return(closure_depth) => {
-                    let v = frame.stack_pop();
+                    let v = self.stack_pop();
                     if closure_depth == 0 {
                         unsafe { &mut *self.frames.get() }.pop();
                         return ValResult::from_val(v);
@@ -432,11 +438,11 @@ impl VM {
                 }
                 Instr::VarLookup(d, n) => {
                     let val = vtry!(frame.var_lookup(d, n));
-                    frame.stack_push(val);
+                    self.stack_push(val);
                     pc += 1;
                 }
                 Instr::VarSet(d, n) => {
-                    let val = frame.stack_peek();
+                    let val = self.stack_peek();
                     frame.var_set(d, n, val);
                     pc += 1;
                 }
@@ -444,11 +450,52 @@ impl VM {
         }
         ValResult::from_vmerror(VMError::Exit)
     }
+
+    fn stack_len(&self) -> usize {
+        unsafe { &*self.stack.get() }.len()
+    }
+
+    /// Returns the top-most value of the stack without removing it. If the stack is empty, calling
+    /// this function will lead to undefined behaviour.
+    fn stack_peek(&self) -> Val {
+        // Since we know that there will be at least one element in the stack, we can use our own
+        // simplified version of pop() which avoids a branch and the wrapping of values in an
+        // Option.
+        let stack = unsafe { &*self.stack.get() };
+        debug_assert!(!stack.is_empty());
+        let i = stack.len() - 1;
+        unsafe { stack.get_unchecked(i) }.clone()
+    }
+
+    /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
+    /// this function will lead to undefined behaviour.
+    fn stack_pop(&self) -> Val {
+        // Since we know that there will be at least one element in the stack, we can use our own
+        // simplified version of pop() which avoids a branch and the wrapping of values in an
+        // Option.
+        unsafe {
+            let stack = &mut *self.stack.get();
+            debug_assert!(!stack.is_empty());
+            let i = stack.len() - 1;
+            let v = ptr::read(stack.get_unchecked(i));
+            stack.set_len(i);
+            v
+        }
+    }
+
+    /// Push `v` onto the stack.
+    fn stack_push(&self, v: Val) {
+        unsafe { &mut *self.stack.get() }.push(v);
+    }
+
+    fn stack_truncate(&self, i: usize) {
+        unsafe { &mut *self.stack.get() }.truncate(i);
+    }
 }
 
 #[derive(Debug)]
 pub struct Frame {
-    stack: UnsafeCell<Vec<Val>>,
+    stack_start: usize,
     closure: Gc<Closure>,
 }
 
@@ -463,6 +510,7 @@ impl Frame {
         _: &VM,
         is_method: bool,
         parent_closure: Option<Gc<Closure>>,
+        stack_start: usize,
         num_vars: usize,
         self_val: Val,
         args: &[Val],
@@ -482,49 +530,9 @@ impl Frame {
         }
 
         Frame {
-            stack: UnsafeCell::new(Vec::new()),
+            stack_start,
             closure: Gc::new(Closure::new(parent_closure, vars)),
         }
-    }
-
-    fn stack_len(&self) -> usize {
-        unsafe { &*self.stack.get() }.len()
-    }
-
-    fn stack_push(&self, v: Val) {
-        unsafe { &mut *self.stack.get() }.push(v);
-    }
-
-    fn stack_peek(&self) -> Val {
-        let stack = unsafe { &*self.stack.get() };
-        debug_assert!(!stack.is_empty());
-        let i = stack.len() - 1;
-        unsafe { stack.get_unchecked(i) }.clone()
-    }
-
-    fn stack_pop(&self) -> Val {
-        // Since we know that there will be at least one element in the stack, we can use our own
-        // simplified version of pop() which avoids a branch and the wrapping of values in an
-        // Option.
-        unsafe {
-            let stack = &mut *self.stack.get();
-            debug_assert!(!stack.is_empty());
-            let i = stack.len() - 1;
-            let v = ptr::read(stack.get_unchecked(i));
-            stack.set_len(i);
-            v
-        }
-    }
-
-    fn stack_clear(&self) {
-        unsafe { &mut *self.stack.get() }.clear();
-    }
-
-    fn stack_drain_rev(&self, start: usize) -> Vec<Val> {
-        unsafe { &mut *self.stack.get() }
-            .drain(start..)
-            .rev()
-            .collect()
     }
 
     fn var_lookup(&self, depth: usize, var: usize) -> ValResult {
@@ -613,6 +621,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            stack: UnsafeCell::new(Vec::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
     }
@@ -628,7 +637,7 @@ mod tests {
         let selfv = Val::from_isize(&vm, 42).unwrap();
         let v1 = Val::from_isize(&vm, 43).unwrap();
         let v2 = Val::from_isize(&vm, 44).unwrap();
-        let f = Frame::new(&vm, true, None, 4, selfv, &[v1, v2]);
+        let f = Frame::new(&vm, true, None, 0, 4, selfv, &[v1, v2]);
         assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
         assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);
