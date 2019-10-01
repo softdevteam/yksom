@@ -222,7 +222,7 @@ impl Val {
                 .tobj(vm)
                 .unwrap()
                 .downcast::<Int>()
-                .and_then(|tobj| Some(tobj.as_isize())),
+                .map(|tobj| tobj.as_isize()),
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
                     Some((self.val >> TAG_BITSIZE) as isize)
@@ -407,7 +407,7 @@ impl Val {
                     );
                 }
             }
-            if let Some(_) = other.try_downcast::<ArbInt>(vm) {
+            if other.try_downcast::<ArbInt>(vm).is_some() {
                 return ValResult::from_vmerror(VMError::ShiftTooBig);
             }
             return ValResult::from_vmerror(VMError::NotANumber {

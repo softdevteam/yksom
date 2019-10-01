@@ -65,7 +65,7 @@ impl Obj for ArbInt {
 
     fn sub(&self, vm: &VM, other: Val) -> ValResult {
         if let Some(rhs) = other.as_isize(vm) {
-            ArbInt::new(vm, &self.val - &rhs)
+            ArbInt::new(vm, &self.val - rhs)
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             ArbInt::new(vm, &self.val - &rhs.val)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -133,7 +133,7 @@ impl Obj for ArbInt {
                 let rhs_i = rtry!(usize::try_from(rhs).map_err(|_| Box::new(VMError::ShiftTooBig)));
                 ArbInt::new(vm, &self.val << rhs_i)
             }
-        } else if let Some(_) = other.try_downcast::<ArbInt>(vm) {
+        } else if other.try_downcast::<ArbInt>(vm).is_some() {
             ValResult::from_vmerror(VMError::ShiftTooBig)
         } else {
             ValResult::from_vmerror(VMError::NotANumber {
