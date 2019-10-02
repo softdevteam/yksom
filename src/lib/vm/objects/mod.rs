@@ -49,8 +49,8 @@ use abgc::{self, Gc};
 use natrob::narrowable_abgc;
 
 use crate::vm::{
+    core::VM,
     val::{Val, ValResult},
-    vm::VM,
 };
 
 /// The SOM type of objects.

@@ -43,8 +43,8 @@ macro_rules! rtry {
     }};
 }
 
+pub mod core;
 pub mod objects;
 pub mod val;
-pub mod vm;
 
-pub use crate::vm::vm::VM;
+pub use crate::vm::core::{VMError, VM};

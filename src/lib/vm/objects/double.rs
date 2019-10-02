@@ -13,9 +13,9 @@ use abgc_derive::GcLayout;
 use num_traits::ToPrimitive;
 
 use crate::vm::{
+    core::{VMError, VM},
     objects::{ArbInt, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val, ValResult},
-    vm::{VMError, VM},
 };
 
 #[derive(Debug, GcLayout)]

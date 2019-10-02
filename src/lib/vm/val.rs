@@ -23,8 +23,8 @@ use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::FromPrimitive;
 
 use super::{
+    core::{VMError, VM},
     objects::{ArbInt, Double, Int, Obj, ObjType, StaticObjType, String_, ThinObj},
-    vm::{VMError, VM},
 };
 
 // We use a fairly standard pointer tagging model where the low `TAG_BITSIZE` bits of a machine
@@ -616,8 +616,8 @@ impl Drop for ValResult {
 mod tests {
     use super::*;
     use crate::vm::{
+        core::{VMError, VM},
         objects::{Class, ObjType, String_},
-        vm::VM,
     };
 
     use std::ops::Deref;

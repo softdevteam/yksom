@@ -20,9 +20,9 @@ use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use crate::vm::{
+    core::{VMError, VM},
     objects::{Double, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val, ValResult},
-    vm::{VMError, VM},
 };
 
 #[derive(Debug, GcLayout)]
