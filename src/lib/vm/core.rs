@@ -225,94 +225,6 @@ impl VM {
         }
     }
 
-    fn exec_primitive(&self, prim: Primitive, rcv: Val, args: Vec<Val>) -> ValResult {
-        match prim {
-            Primitive::Add => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.add(self, args[0].clone())
-            }
-            Primitive::AsString => rcv.to_strval(self),
-            Primitive::Class => ValResult::from_val(rcv.get_class(self)),
-            Primitive::Concatenate => {
-                debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.downcast::<String_>(self)).concatenate(self, args[0].clone())
-            }
-            Primitive::Div => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.div(self, args[0].clone())
-            }
-            Primitive::Equals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.equals(self, args[0].clone())
-            }
-            Primitive::GreaterThan => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.greater_than(self, args[0].clone())
-            }
-            Primitive::GreaterThanEquals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.greater_than_equals(self, args[0].clone())
-            }
-            Primitive::LessThan => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.less_than(self, args[0].clone())
-            }
-            Primitive::LessThanEquals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.less_than_equals(self, args[0].clone())
-            }
-            Primitive::Mul => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.mul(self, args[0].clone())
-            }
-            Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
-            Primitive::New => {
-                debug_assert_eq!(args.len(), 0);
-                ValResult::from_val(Inst::new(self, rcv))
-            }
-            Primitive::NotEquals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.not_equals(self, args[0].clone())
-            }
-            Primitive::Restart => {
-                // This is handled directly by exec_user.
-                ValResult::from_vmerror(VMError::PrimitiveError)
-            }
-            Primitive::PrintNewline => {
-                println!();
-                ValResult::from_val(self.system.clone())
-            }
-            Primitive::PrintString => {
-                debug_assert_eq!(args.len(), 1);
-                let str_: &String_ = rtry!(args[0].downcast(self));
-                print!("{}", str_.as_str());
-                ValResult::from_val(self.system.clone())
-            }
-            Primitive::Shl => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.shl(self, args[0].clone())
-            }
-            Primitive::Sub => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.sub(self, args[0].clone())
-            }
-            Primitive::Value => {
-                let rcv_blk: &Block = rtry!(rcv.downcast(self));
-                let blk_cls: &Class = rtry!(rcv_blk.blockinfo_cls.downcast(self));
-                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
-                self.exec_user(
-                    blk_cls,
-                    false,
-                    blkinfo.bytecode_off,
-                    rcv.clone(),
-                    Some(Gc::clone(&rcv_blk.parent_closure)),
-                    blkinfo.num_vars,
-                    args,
-                )
-            }
-        }
-    }
-
     fn exec_user(
         &self,
         cls: &Class,
@@ -455,6 +367,94 @@ impl VM {
             }
         }
         ValResult::from_vmerror(VMError::Exit)
+    }
+
+    fn exec_primitive(&self, prim: Primitive, rcv: Val, args: Vec<Val>) -> ValResult {
+        match prim {
+            Primitive::Add => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.add(self, args[0].clone())
+            }
+            Primitive::AsString => rcv.to_strval(self),
+            Primitive::Class => ValResult::from_val(rcv.get_class(self)),
+            Primitive::Concatenate => {
+                debug_assert_eq!(args.len(), 1);
+                rtry!(rcv.downcast::<String_>(self)).concatenate(self, args[0].clone())
+            }
+            Primitive::Div => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.div(self, args[0].clone())
+            }
+            Primitive::Equals => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.equals(self, args[0].clone())
+            }
+            Primitive::GreaterThan => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.greater_than(self, args[0].clone())
+            }
+            Primitive::GreaterThanEquals => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.greater_than_equals(self, args[0].clone())
+            }
+            Primitive::LessThan => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.less_than(self, args[0].clone())
+            }
+            Primitive::LessThanEquals => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.less_than_equals(self, args[0].clone())
+            }
+            Primitive::Mul => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.mul(self, args[0].clone())
+            }
+            Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
+            Primitive::New => {
+                debug_assert_eq!(args.len(), 0);
+                ValResult::from_val(Inst::new(self, rcv))
+            }
+            Primitive::NotEquals => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.not_equals(self, args[0].clone())
+            }
+            Primitive::Restart => {
+                // This is handled directly by exec_user.
+                ValResult::from_vmerror(VMError::PrimitiveError)
+            }
+            Primitive::PrintNewline => {
+                println!();
+                ValResult::from_val(self.system.clone())
+            }
+            Primitive::PrintString => {
+                debug_assert_eq!(args.len(), 1);
+                let str_: &String_ = rtry!(args[0].downcast(self));
+                print!("{}", str_.as_str());
+                ValResult::from_val(self.system.clone())
+            }
+            Primitive::Shl => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.shl(self, args[0].clone())
+            }
+            Primitive::Sub => {
+                debug_assert_eq!(args.len(), 1);
+                rcv.sub(self, args[0].clone())
+            }
+            Primitive::Value => {
+                let rcv_blk: &Block = rtry!(rcv.downcast(self));
+                let blk_cls: &Class = rtry!(rcv_blk.blockinfo_cls.downcast(self));
+                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
+                self.exec_user(
+                    blk_cls,
+                    false,
+                    blkinfo.bytecode_off,
+                    rcv.clone(),
+                    Some(Gc::clone(&rcv_blk.parent_closure)),
+                    blkinfo.num_vars,
+                    args,
+                )
+            }
+        }
     }
 
     fn stack_len(&self) -> usize {
