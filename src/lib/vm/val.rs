@@ -599,6 +599,14 @@ impl ValResult {
         forget(self);
         unsafe { Box::from_raw(ptr) }
     }
+
+    pub fn as_result(self) -> Result<Val, Box<VMError>> {
+        if self.is_val() {
+            Ok(unsafe { self.unwrap_unsafe() })
+        } else {
+            Err(self.unwrap_err())
+        }
+    }
 }
 
 impl Drop for ValResult {
