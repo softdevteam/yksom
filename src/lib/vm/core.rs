@@ -23,7 +23,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, Class, Double, Inst, Method, MethodBody, ObjType, String_},
+        objects::{Block, Class, Double, Inst, MethodBody, ObjType, String_},
         val::{Val, ValResult},
     },
 };
@@ -212,7 +212,8 @@ impl VM {
                 bytecode_off,
             } => {
                 let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
-                self.exec_user(meth_cls, true, bytecode_off, rcv, None, num_vars, args)
+                rtry!(self.exec_user(meth_cls, true, bytecode_off, rcv, None, num_vars, args));
+                ValResult::from_val(self.stack_pop())
             }
         }
     }
@@ -226,7 +227,7 @@ impl VM {
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
         args: Vec<Val>,
-    ) -> ValResult {
+    ) -> Result<(), Box<VMError>> {
         let frame = Gc::new(Frame::new(
             self,
             meth_pc,
@@ -293,7 +294,7 @@ impl VM {
 
                     let cls = rcv.get_class(self);
                     let (meth_cls_val, meth) =
-                        rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
+                        cls.downcast::<Class>(self)?.get_method(self, &name)?;
                     match meth.body {
                         MethodBody::Primitive(p) => {
                             match self.exec_primitive(&frame, p, rcv, pc, args) {
@@ -302,15 +303,14 @@ impl VM {
                                     VMError::Return(depth, val) => {
                                         if depth > 0 {
                                             unsafe { &mut *self.frames.get() }.pop();
-                                            return ValResult::from_vmerror(VMError::Return(
-                                                depth - 1,
-                                                val,
-                                            ));
+                                            return Err(Box::new(VMError::Return(depth - 1, val)));
+                                        } else {
+                                            self.stack_push(val);
                                         }
                                     }
                                     e => {
                                         unsafe { &mut *self.frames.get() }.pop();
-                                        return ValResult::from_vmerror(e);
+                                        return Err(Box::new(e));
                                     }
                                 },
                             }
@@ -319,8 +319,8 @@ impl VM {
                             num_vars,
                             bytecode_off,
                         } => {
-                            let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
-                            let vr = self.exec_user(
+                            let meth_cls = meth_cls_val.downcast::<Class>(self)?;
+                            match self.exec_user(
                                 meth_cls,
                                 true,
                                 bytecode_off,
@@ -328,38 +328,31 @@ impl VM {
                                 None,
                                 num_vars,
                                 args,
-                            );
-                            let r = if vr.is_val() {
-                                vr.unwrap()
-                            } else {
-                                match *vr.unwrap_err() {
+                            ) {
+                                Ok(()) => (),
+                                Err(e) => match *e {
                                     VMError::Return(depth, val) => {
-                                        if depth == 0 {
-                                            val
-                                        } else {
+                                        if depth > 0 {
                                             unsafe { &mut *self.frames.get() }.pop();
-                                            return ValResult::from_vmerror(VMError::Return(
-                                                depth - 1,
-                                                val,
-                                            ));
+                                            return Err(Box::new(VMError::Return(depth - 1, val)));
+                                        } else {
+                                            self.stack_push(val);
                                         }
                                     }
                                     e => {
                                         unsafe { &mut *self.frames.get() }.pop();
-                                        return ValResult::from_vmerror(e);
+                                        return Err(Box::new(e));
                                     }
-                                }
-                            };
-                            self.stack_push(r);
+                                },
+                            }
                             pc += 1;
                         }
                     }
                 }
                 Instr::Return(closure_depth) => {
-                    let v = self.stack_pop();
                     if closure_depth == 0 {
                         unsafe { &mut *self.frames.get() }.pop();
-                        return ValResult::from_val(v);
+                        return Ok(());
                     } else {
                         // We want to do a non-local return. Before we attempt that, we need to
                         // check that the block hasn't escaped its function (and we know we're in a
@@ -367,19 +360,20 @@ impl VM {
                         // Fortunately, the `closure` pointer in a frame is a perfect proxy for
                         // determining this: if this frame's (i.e. block's!) parent closure is not
                         // consistent with the frame stack, then the block has escaped.
+                        let v = self.stack_pop();
                         let parent_closure = frame.closure(closure_depth);
                         for (frame_depth, pframe) in
                             unsafe { &*self.frames.get() }.iter().rev().enumerate()
                         {
                             if Gc::ptr_eq(&parent_closure, &pframe.closure) {
-                                return ValResult::from_vmerror(VMError::Return(frame_depth, v));
+                                return Err(Box::new(VMError::Return(frame_depth, v)));
                             }
                         }
                         panic!("Return from escaped block");
                     }
                 }
                 Instr::VarLookup(d, n) => {
-                    let val = vtry!(frame.var_lookup(d, n));
+                    let val = frame.var_lookup(d, n).as_result()?;
                     self.stack_push(val);
                     pc += 1;
                 }
@@ -390,7 +384,7 @@ impl VM {
                 }
             }
         }
-        ValResult::from_vmerror(VMError::Exit)
+        Err(Box::new(VMError::Exit))
     }
 
     fn exec_primitive(
@@ -503,18 +497,15 @@ impl VM {
                 let rcv_blk: &Block = rcv.downcast(self)?;
                 let blk_cls: &Class = rcv_blk.blockinfo_cls.downcast(self)?;
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
-                let v = self
-                    .exec_user(
-                        blk_cls,
-                        false,
-                        blkinfo.bytecode_off,
-                        rcv.clone(),
-                        Some(Gc::clone(&rcv_blk.parent_closure)),
-                        blkinfo.num_vars,
-                        args,
-                    )
-                    .as_result()?;
-                self.stack_push(v);
+                self.exec_user(
+                    blk_cls,
+                    false,
+                    blkinfo.bytecode_off,
+                    rcv.clone(),
+                    Some(Gc::clone(&rcv_blk.parent_closure)),
+                    blkinfo.num_vars,
+                    args,
+                )?;
                 Ok(pc + 1)
             }
         }
