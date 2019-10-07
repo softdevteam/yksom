@@ -24,7 +24,7 @@ use crate::{
     },
     vm::{
         objects::{Block, Class, Double, Inst, MethodBody, ObjType, String_},
-        val::{Val, ValResult},
+        val::Val,
     },
 };
 
@@ -220,9 +220,9 @@ impl VM {
     }
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
-    pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> ValResult {
+    pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
         let cls = rcv.get_class(self);
-        let (meth_cls_val, meth) = rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, msg));
+        let (meth_cls_val, meth) = cls.downcast::<Class>(self)?.get_method(self, msg)?;
         match meth.body {
             MethodBody::Primitive(_) => {
                 panic!("Primitives can't be called outside of a function frame.");
@@ -231,7 +231,7 @@ impl VM {
                 num_vars,
                 bytecode_off,
             } => {
-                let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
+                let meth_cls = meth_cls_val.downcast::<Class>(self)?;
                 self.stack_push(rcv.clone());
                 let nargs = args.len();
                 for a in args {
@@ -243,8 +243,8 @@ impl VM {
                 self.frame_pop();
                 match r {
                     SendReturn::ClosureReturn(_) => unimplemented!(),
-                    SendReturn::Err(e) => ValResult::from_vmerror(*e),
-                    SendReturn::Val => ValResult::from_val(self.stack_pop()),
+                    SendReturn::Err(e) => Err(Box::new(*e)),
+                    SendReturn::Val => Ok(self.stack_pop()),
                 }
             }
         }
@@ -364,7 +364,7 @@ impl VM {
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
-                    let val = stry!(self.current_frame().var_lookup(d, n).as_result());
+                    let val = stry!(self.current_frame().var_lookup(d, n));
                     self.stack_push(val);
                     pc += 1;
                 }
@@ -383,11 +383,11 @@ impl VM {
     fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
         match prim {
             Primitive::Add => {
-                self.stack_push(stry!(rcv.add(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.add(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::AsString => {
-                self.stack_push(stry!(rcv.to_strval(self).as_result()));
+                self.stack_push(stry!(rcv.to_strval(self)));
                 SendReturn::Val
             }
             Primitive::Class => {
@@ -395,47 +395,41 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Concatenate => {
-                self.stack_push(stry!(stry!(rcv.downcast::<String_>(self))
-                    .concatenate(self, self.stack_pop())
-                    .as_result()));
+                self.stack_push(stry!(
+                    stry!(rcv.downcast::<String_>(self)).concatenate(self, self.stack_pop())
+                ));
                 SendReturn::Val
             }
             Primitive::Div => {
-                self.stack_push(stry!(rcv.div(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.div(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::Equals => {
-                self.stack_push(stry!(rcv.equals(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.equals(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::GreaterThan => {
-                self.stack_push(stry!(rcv.greater_than(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.greater_than(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::GreaterThanEquals => {
-                self.stack_push(stry!(rcv
-                    .greater_than_equals(self, self.stack_pop())
-                    .as_result()));
+                self.stack_push(stry!(rcv.greater_than_equals(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::LessThan => {
-                self.stack_push(stry!(rcv.less_than(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.less_than(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::LessThanEquals => {
-                self.stack_push(stry!(rcv
-                    .less_than_equals(self, self.stack_pop())
-                    .as_result()));
+                self.stack_push(stry!(rcv.less_than_equals(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::Mul => {
-                self.stack_push(stry!(rcv.mul(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.mul(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::Name => {
-                self.stack_push(stry!(stry!(rcv.downcast::<Class>(self))
-                    .name(self)
-                    .as_result()));
+                self.stack_push(stry!(stry!(rcv.downcast::<Class>(self)).name(self)));
                 SendReturn::Val
             }
             Primitive::New => {
@@ -443,7 +437,7 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::NotEquals => {
-                self.stack_push(stry!(rcv.not_equals(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.not_equals(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::Restart => unreachable!(),
@@ -460,11 +454,11 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Shl => {
-                self.stack_push(stry!(rcv.shl(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.shl(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::Sub => {
-                self.stack_push(stry!(rcv.sub(self, self.stack_pop()).as_result()));
+                self.stack_push(stry!(rcv.sub(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::Value(nargs) => {
@@ -581,13 +575,13 @@ impl Frame {
         }
     }
 
-    fn var_lookup(&self, depth: usize, var: usize) -> ValResult {
+    fn var_lookup(&self, depth: usize, var: usize) -> Result<Val, Box<VMError>> {
         let cl = self.closure(depth);
         let v = cl.get_var(var);
         if v.is_illegal() {
-            ValResult::from_vmerror(VMError::UnassignedVar(var))
+            Err(Box::new(VMError::UnassignedVar(var)))
         } else {
-            ValResult::from_val(v.clone())
+            Ok(v.clone())
         }
     }
 

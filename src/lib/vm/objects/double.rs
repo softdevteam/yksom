@@ -15,7 +15,7 @@ use num_traits::ToPrimitive;
 use crate::vm::{
     core::{VMError, VM},
     objects::{ArbInt, Obj, ObjType, StaticObjType, String_},
-    val::{NotUnboxable, Val, ValResult},
+    val::{NotUnboxable, Val},
 };
 
 #[derive(Debug, GcLayout)]
@@ -35,59 +35,59 @@ impl Obj for Double {
         vm.double_cls.clone()
     }
 
-    fn to_strval(&self, vm: &VM) -> ValResult {
+    fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
         let mut buf = ryu::Buffer::new();
-        ValResult::from_val(String_::new(vm, buf.format(self.val).to_owned()))
+        Ok(String_::new(vm, buf.format(self.val).to_owned()))
     }
 
-    fn add(&self, vm: &VM, other: Val) -> ValResult {
+    fn add(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
-            ValResult::from_val(Double::new(vm, self.val + (rhs as f64)))
+            Ok(Double::new(vm, self.val + (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            ValResult::from_val(Double::new(vm, self.val + rhs.val))
+            Ok(Double::new(vm, self.val + rhs.val))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             match rhs.bigint().to_f64() {
-                Some(i) => ValResult::from_val(Double::new(vm, self.val + i)),
-                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+                Some(i) => Ok(Double::new(vm, self.val + i)),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
             }
         } else {
-            ValResult::from_vmerror(VMError::NotANumber {
+            Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            })
+            }))
         }
     }
 
-    fn sub(&self, vm: &VM, other: Val) -> ValResult {
+    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
-            ValResult::from_val(Double::new(vm, self.val - (rhs as f64)))
+            Ok(Double::new(vm, self.val - (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            ValResult::from_val(Double::new(vm, self.val - rhs.val))
+            Ok(Double::new(vm, self.val - rhs.val))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             match rhs.bigint().to_f64() {
-                Some(i) => ValResult::from_val(Double::new(vm, self.val - i)),
-                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+                Some(i) => Ok(Double::new(vm, self.val - i)),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
             }
         } else {
-            ValResult::from_vmerror(VMError::NotANumber {
+            Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            })
+            }))
         }
     }
 
-    fn mul(&self, vm: &VM, other: Val) -> ValResult {
+    fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
-            ValResult::from_val(Double::new(vm, self.val * (rhs as f64)))
+            Ok(Double::new(vm, self.val * (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            ValResult::from_val(Double::new(vm, self.val * rhs.val))
+            Ok(Double::new(vm, self.val * rhs.val))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             match rhs.bigint().to_f64() {
-                Some(i) => ValResult::from_val(Double::new(vm, self.val * i)),
-                None => ValResult::from_vmerror(VMError::CantRepresentAsDouble),
+                Some(i) => Ok(Double::new(vm, self.val * i)),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
             }
         } else {
-            ValResult::from_vmerror(VMError::NotANumber {
+            Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            })
+            }))
         }
     }
 }

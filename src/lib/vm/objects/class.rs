@@ -18,7 +18,7 @@ use crate::{
     vm::{
         core::{VMError, VM},
         objects::{Method, MethodBody, Obj, ObjType, StaticObjType, String_},
-        val::{NotUnboxable, Val, ValResult},
+        val::{NotUnboxable, Val},
     },
 };
 
@@ -63,7 +63,7 @@ impl StaticObjType for Class {
 }
 
 impl Class {
-    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> ValResult {
+    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, Box<VMError>> {
         let supercls = match ccls.supercls {
             Some(ref x) => match x.as_str() {
                 "Block" => Some(vm.block_cls.clone()),
@@ -111,10 +111,10 @@ impl Class {
         for c in ccls.consts {
             consts.push(match c {
                 cobjects::Const::String(s) => String_::new(vm, s),
-                cobjects::Const::Int(i) => vtry!(Val::from_isize(vm, i)),
+                cobjects::Const::Int(i) => Val::from_isize(vm, i)?,
             });
         }
-        ValResult::from_val(Val::from_obj(
+        Ok(Val::from_obj(
             vm,
             Class {
                 name: String_::new(vm, ccls.name),
@@ -130,8 +130,8 @@ impl Class {
         ))
     }
 
-    pub fn name(&self, _: &VM) -> ValResult {
-        ValResult::from_val(self.name.clone())
+    pub fn name(&self, _: &VM) -> Result<Val, Box<VMError>> {
+        Ok(self.name.clone())
     }
 
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, &Method), Box<VMError>> {

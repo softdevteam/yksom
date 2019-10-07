@@ -49,8 +49,8 @@ use abgc::{self, Gc};
 use natrob::narrowable_abgc;
 
 use crate::vm::{
-    core::VM,
-    val::{Val, ValResult},
+    core::{VMError, VM},
+    val::Val,
 };
 
 /// The SOM type of objects.
@@ -76,62 +76,62 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
     fn get_class(&self, vm: &VM) -> Val;
 
     /// Convert this object to a `Val` that represents a SOM string.
-    fn to_strval(&self, _: &VM) -> ValResult {
+    fn to_strval(&self, _: &VM) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Produce a new `Val` which adds `other` to this.
-    fn add(&self, _: &VM, _: Val) -> ValResult {
+    fn add(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Produce a new `Val` which subtracts `other` from this.
-    fn sub(&self, _: &VM, _: Val) -> ValResult {
+    fn sub(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
-    fn mul(&self, _: &VM, _: Val) -> ValResult {
+    fn mul(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Produce a new `Val` which divides `other` from this.
-    fn div(&self, _: &VM, _: Val) -> ValResult {
+    fn div(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
-    fn shl(&self, _: &VM, _: Val) -> ValResult {
+    fn shl(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Does this `Val` equal `other`?
-    fn equals(&self, _: &VM, _: Val) -> ValResult {
+    fn equals(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Does this `Val` not equal `other`?
-    fn not_equals(&self, _: &VM, _: Val) -> ValResult {
+    fn not_equals(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Is this `Val` greater than `other`?
-    fn greater_than(&self, _: &VM, _: Val) -> ValResult {
+    fn greater_than(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Is this `Val` greater than or equal to `other`?
-    fn greater_than_equals(&self, _: &VM, _: Val) -> ValResult {
+    fn greater_than_equals(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Is this `Val` less than `other`?
-    fn less_than(&self, _: &VM, _: Val) -> ValResult {
+    fn less_than(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Is this `Val` less than or equal to `other`?
-    fn less_than_equals(&self, _: &VM, _: Val) -> ValResult {
+    fn less_than_equals(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 }

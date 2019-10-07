@@ -13,7 +13,7 @@
 
 use std::{
     convert::TryFrom,
-    mem::{forget, size_of, transmute},
+    mem::{size_of, transmute},
     ops::Deref,
 };
 
@@ -41,16 +41,11 @@ pub const TAG_BITMASK: usize = (1 << 3) - 1;
 pub const INT_BITMASK: usize = (1 << 4) - 1;
 
 #[cfg(target_pointer_width = "64")]
-/// If a member of ValResult has this bit set, it is a `Box<VMError>`.
-const VALRESULT_ERR_BIT: usize = 0b010;
-
-#[cfg(target_pointer_width = "64")]
 #[derive(Debug, PartialEq, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(usize)]
 // All of the values here must:
 //   1) Fit inside TAG_BITSIZE bits
 //   2) Safely convert to usize using `as`
-//   3) Not have the VALRESULT_ERR_BIT bit set or else `ValResult` will do weird things.
 pub enum ValKind {
     GCBOX = 0b000,
     // Anything which can be stored unboxed *must* not have the `NotUnboxable` trait implemented
@@ -166,24 +161,17 @@ impl Val {
                 debug_assert_ne!(self.val, 0);
                 Ok(unsafe { Gc::clone_from_raw(self.val as *const _) })
             }
-            ValKind::INT => {
-                let vr = Int::boxed_isize(vm, self.as_isize(vm).unwrap());
-                if vr.is_val() {
-                    vr.unwrap().tobj(vm)
-                } else {
-                    Err(vr.unwrap_err())
-                }
-            }
+            ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap()).map(|v| v.tobj(vm))?,
         }
     }
 
     /// Create a (possibly boxed) `Val` representing the `isize` integer `i`.
-    pub fn from_isize(vm: &VM, i: isize) -> ValResult {
+    pub fn from_isize(vm: &VM, i: isize) -> Result<Val, Box<VMError>> {
         let top_bits = i as usize & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1));
         if top_bits == 0 || top_bits == INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1) {
             // top_bits == 0: A positive integer that fits in our tagging scheme
             // top_bits all set to 1: A negative integer that fits in our tagging scheme
-            ValResult::from_val(Val {
+            Ok(Val {
                 val: ((i as usize) << TAG_BITSIZE) | (ValKind::INT as usize),
             })
         } else {
@@ -194,10 +182,10 @@ impl Val {
     /// Create a (possibly boxed) `Val` representing the `usize` integer `i`. Notice that this can
     /// fail if `i` is too big (since we don't have BigNum support and ints are internally
     /// represented as `isize`).
-    pub fn from_usize(vm: &VM, i: usize) -> ValResult {
+    pub fn from_usize(vm: &VM, i: usize) -> Result<Val, Box<VMError>> {
         if i & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1)) == 0 {
             // The top TAG_BITSIZE bits aren't set, so this fits within our pointer tagging scheme.
-            ValResult::from_val(Val {
+            Ok(Val {
                 val: (i << TAG_BITSIZE) | (ValKind::INT as usize),
             })
         } else {
@@ -277,7 +265,7 @@ impl Val {
     }
 
     /// Produce a new `Val` which adds `other` to this.
-    pub fn add(&self, vm: &VM, other: Val) -> ValResult {
+    pub fn add(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 match lhs.checked_add(rhs) {
@@ -293,17 +281,17 @@ impl Val {
                 // temporary BigInt.
                 return ArbInt::new(vm, rhs.bigint() + lhs);
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return ValResult::from_val(Double::new(vm, (lhs as f64) + rhs.double()));
+                return Ok(Double::new(vm, (lhs as f64) + rhs.double()));
             }
-            return ValResult::from_vmerror(VMError::NotANumber {
+            return Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            });
+            }));
         }
         self.tobj(vm).unwrap().add(vm, other)
     }
 
     /// Produce a new `Val` which subtracts `other` from this.
-    pub fn sub(&self, vm: &VM, other: Val) -> ValResult {
+    pub fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 match lhs.checked_sub(rhs) {
@@ -315,17 +303,17 @@ impl Val {
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs.bigint());
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return ValResult::from_val(Double::new(vm, (lhs as f64) - rhs.double()));
+                return Ok(Double::new(vm, (lhs as f64) - rhs.double()));
             }
-            return ValResult::from_vmerror(VMError::NotANumber {
+            return Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            });
+            }));
         }
         self.tobj(vm).unwrap().sub(vm, other)
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
-    pub fn mul(&self, vm: &VM, other: Val) -> ValResult {
+    pub fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 match lhs.checked_mul(rhs) {
@@ -341,31 +329,31 @@ impl Val {
                 // temporary BigInt.
                 return ArbInt::new(vm, rhs.bigint() * lhs);
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return ValResult::from_val(Double::new(vm, (lhs as f64) * rhs.double()));
+                return Ok(Double::new(vm, (lhs as f64) * rhs.double()));
             }
-            return ValResult::from_vmerror(VMError::NotANumber {
+            return Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            });
+            }));
         }
         self.tobj(vm).unwrap().mul(vm, other)
     }
 
     /// Produce a new `Val` which divides `other` from this.
-    pub fn div(&self, vm: &VM, other: Val) -> ValResult {
+    pub fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 match lhs.checked_div(rhs) {
                     Some(i) => return Val::from_isize(vm, i),
-                    None => return ValResult::from_vmerror(VMError::DivisionByZero),
+                    None => return Err(Box::new(VMError::DivisionByZero)),
                 }
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 match BigInt::from_isize(lhs).unwrap().checked_div(rhs.bigint()) {
                     Some(i) => return ArbInt::new(vm, i),
-                    None => return ValResult::from_vmerror(VMError::DivisionByZero),
+                    None => return Err(Box::new(VMError::DivisionByZero)),
                 }
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
                 if rhs.double() == 0f64 {
-                    return ValResult::from_vmerror(VMError::DivisionByZero);
+                    return Err(Box::new(VMError::DivisionByZero));
                 } else {
                     // Note that converting an f64 to an isize in Rust can lead to undefined
                     // behaviour https://github.com/rust-lang/rust/issues/10184 -- it's not obvious
@@ -374,22 +362,21 @@ impl Val {
                     return Val::from_isize(vm, ((lhs as f64) / rhs.double()) as isize);
                 }
             }
-            return ValResult::from_vmerror(VMError::NotANumber {
+            return Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            });
+            }));
         }
         self.tobj(vm).unwrap().div(vm, other)
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
-    pub fn shl(&self, vm: &VM, other: Val) -> ValResult {
+    pub fn shl(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 if rhs < 0 {
-                    return ValResult::from_vmerror(VMError::NegativeShift);
+                    return Err(Box::new(VMError::NegativeShift));
                 } else {
-                    let rhs_i =
-                        rtry!(u32::try_from(rhs).map_err(|_| Box::new(VMError::ShiftTooBig)));
+                    let rhs_i = u32::try_from(rhs).map_err(|_| Box::new(VMError::ShiftTooBig))?;
                     if let Some(i) = lhs.checked_shl(rhs_i) {
                         // We have to be careful as shifting bits in an isize can lead to positive
                         // numbers becoming negative in two's complement. For example, on a 64-bit
@@ -408,21 +395,19 @@ impl Val {
                 }
             }
             if other.try_downcast::<ArbInt>(vm).is_some() {
-                return ValResult::from_vmerror(VMError::ShiftTooBig);
+                return Err(Box::new(VMError::ShiftTooBig));
             }
-            return ValResult::from_vmerror(VMError::NotANumber {
+            return Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
-            });
+            }));
         }
         self.tobj(vm).unwrap().shl(vm, other)
     }
 
-    pub fn to_strval(&self, vm: &VM) -> ValResult {
+    pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
         debug_assert!(!self.is_illegal());
         match self.valkind() {
-            ValKind::INT => {
-                ValResult::from_val(String_::new(vm, self.as_isize(vm).unwrap().to_string()))
-            }
+            ValKind::INT => Ok(String_::new(vm, self.as_isize(vm).unwrap().to_string())),
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
         }
     }
@@ -431,15 +416,15 @@ impl Val {
 macro_rules! binop_all {
     ($name:ident, $op:tt, $tf:ident) => {
         impl Val {
-            pub fn $name(&self, vm: &VM, other: Val) -> ValResult {
+            pub fn $name(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
                 if let Some(lhs) = self.as_isize(vm) {
                     if let Some(rhs) = other.as_isize(vm) {
-                        ValResult::from_val(Val::from_bool(vm, lhs $op rhs))
+                        Ok(Val::from_bool(vm, lhs $op rhs))
                     } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                        ValResult::from_val(Val::from_bool(vm,
+                        Ok(Val::from_bool(vm,
                             &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
                     } else {
-                        ValResult::from_val(vm.$tf.clone())
+                        Ok(vm.$tf.clone())
                     }
                 } else {
                     self.tobj(vm).unwrap().$name(vm, other)
@@ -452,17 +437,17 @@ macro_rules! binop_all {
 macro_rules! binop_typeerror {
     ($name:ident, $op:tt) => {
         impl Val {
-            pub fn $name(&self, vm: &VM, other: Val) -> ValResult {
+            pub fn $name(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
                 if let Some(lhs) = self.as_isize(vm) {
                     if let Some(rhs) = other.as_isize(vm) {
-                        ValResult::from_val(Val::from_bool(vm, lhs $op rhs))
+                        Ok(Val::from_bool(vm, lhs $op rhs))
                     } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                        ValResult::from_val(Val::from_bool(vm,
+                        Ok(Val::from_bool(vm,
                             &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
                     } else {
-                        ValResult::from_vmerror(VMError::NotANumber {
+                        Err(Box::new(VMError::NotANumber {
                           got: other.dyn_objtype(vm),
-                        })
+                        }))
                     }
                 } else {
                     self.tobj(vm).unwrap().$name(vm, other)
@@ -508,114 +493,6 @@ impl Drop for Val {
                 }
             }
             ValKind::INT => (),
-        }
-    }
-}
-
-/// A compact representation of a `Val` or a `Box<VMError>`.
-#[derive(Debug, PartialEq)]
-pub struct ValResult {
-    // If VALRESULT_ERR_BIT is set, this is a `Box<VMError>`, otherwise it is a `Val`.
-    val: usize,
-}
-
-impl ValResult {
-    /// Construct a `ValResult` from a `Val`.
-    pub fn from_val(val: Val) -> ValResult {
-        let vr = ValResult { val: val.val };
-        std::mem::forget(val);
-        vr
-    }
-
-    /// Construct a `ValResult` from a `VMError`.
-    pub fn from_vmerror(err: VMError) -> ValResult {
-        let b = Box::new(err);
-        let ptr = Box::into_raw(b) as *const usize as usize;
-        ValResult {
-            val: ptr | VALRESULT_ERR_BIT,
-        }
-    }
-
-    /// Construct a `ValResult` from a `Box<VMError>`.
-    pub fn from_boxvmerror(err: Box<VMError>) -> ValResult {
-        let ptr = Box::into_raw(err) as *const usize as usize;
-        ValResult {
-            val: ptr | VALRESULT_ERR_BIT,
-        }
-    }
-
-    /// Is this `ValResult` a `Val`? If not, it is one of the extra kinds defined in
-    /// `ValResultKind`.
-    pub fn is_val(&self) -> bool {
-        (self.val & VALRESULT_ERR_BIT) == 0
-    }
-
-    /// Is this `ValResult` a `Box<VMError>`? If not, it is a `Val`.
-    pub fn is_err(&self) -> bool {
-        (self.val & VALRESULT_ERR_BIT) != 0
-    }
-
-    /// Unwraps a `ValResult`, yielding a `Val`.
-    ///
-    /// # Panics
-    ///
-    /// If the `ValResult` represents a `Box<VMError>`.
-    pub fn unwrap(self) -> Val {
-        if !self.is_val() {
-            panic!("Trying to unwrap non-Val.");
-        }
-        unsafe { self.unwrap_unsafe() }
-    }
-
-    /// Unwraps a `ValResult`, yielding a `Val` without checking whether this `ValResult` actually
-    /// represents a `Val` or not.
-    #[doc(hidden)]
-    pub unsafe fn unwrap_unsafe(self) -> Val {
-        let v = Val { val: self.val };
-        forget(self);
-        v
-    }
-
-    /// Unwraps a `ValResult`, yielding a `Val`. If the value is a `Box<VMError>` then it calls
-    /// `op` with its value.
-    pub fn unwrap_or_else<F: FnOnce(Box<VMError>) -> Val>(self, op: F) -> Val {
-        if self.is_val() {
-            unsafe { self.unwrap_unsafe() }
-        } else {
-            op(self.unwrap_err())
-        }
-    }
-
-    /// Unwraps a `ValResult`, yielding a `Box<VMError>`.
-    ///
-    /// # Panics
-    ///
-    /// If the `ValResult` represents a `Val`.
-    pub fn unwrap_err(self) -> Box<VMError> {
-        if !self.is_err() {
-            panic!("Trying to unwrap non-VMError.");
-        }
-        let ptr = (self.val & !VALRESULT_ERR_BIT) as *mut VMError;
-        forget(self);
-        unsafe { Box::from_raw(ptr) }
-    }
-
-    pub fn as_result(self) -> Result<Val, Box<VMError>> {
-        if self.is_val() {
-            Ok(unsafe { self.unwrap_unsafe() })
-        } else {
-            Err(self.unwrap_err())
-        }
-    }
-}
-
-impl Drop for ValResult {
-    fn drop(&mut self) {
-        if self.is_val() {
-            drop(Val { val: self.val });
-        } else {
-            let ptr = (self.val & !TAG_BITMASK) as *mut VMError;
-            drop(*unsafe { Box::from_raw(ptr) });
         }
     }
 }
