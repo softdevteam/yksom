@@ -345,7 +345,11 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::Return(expr) => {
                 self.c_expr(expr)?;
-                self.instrs.push(Instr::Return(self.closure_depth));
+                if self.closure_depth == 0 {
+                    self.instrs.push(Instr::Return);
+                } else {
+                    self.instrs.push(Instr::ClosureReturn(self.closure_depth));
+                }
                 Ok(())
             }
             ast::Expr::String(lexeme) => {
@@ -433,7 +437,7 @@ impl<'a> Compiler<'a> {
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
             self.instrs.push(Instr::VarLookup(0, 0));
         }
-        self.instrs.push(Instr::Return(0));
+        self.instrs.push(Instr::Return);
         self.vars_stack.pop();
 
         Ok(num_vars)

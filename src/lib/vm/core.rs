@@ -280,6 +280,27 @@ impl VM {
                     });
                     pc += 1;
                 }
+                Instr::ClosureReturn(closure_depth) => {
+                    // We want to do a non-local return. Before we attempt that, we need to
+                    // check that the block hasn't escaped its function (and we know we're in a
+                    // block because only a block can attempt a non-local return).
+                    // Fortunately, the `closure` pointer in a frame is a perfect proxy for
+                    // determining this: if this frame's (i.e. block's!) parent closure is not
+                    // consistent with the frame stack, then the block has escaped.
+                    let v = self.stack_pop();
+                    let parent_closure = self.current_frame().closure(closure_depth);
+                    for (frame_depth, pframe) in
+                        unsafe { &*self.frames.get() }.iter().rev().enumerate()
+                    {
+                        if Gc::ptr_eq(&parent_closure, &pframe.closure) {
+                            self.stack_truncate(pframe.sp());
+                            self.frame_pop();
+                            self.stack_push(v);
+                            return SendReturn::ClosureReturn(frame_depth);
+                        }
+                    }
+                    panic!("Return from escaped block");
+                }
                 Instr::Const(coff) => {
                     self.stack_push(cls.consts[coff].clone());
                     pc += 1;
@@ -302,31 +323,9 @@ impl VM {
                     self.stack_pop();
                     pc += 1;
                 }
-                Instr::Return(closure_depth) => {
-                    if closure_depth == 0 {
-                        self.frame_pop();
-                        return SendReturn::Val;
-                    } else {
-                        // We want to do a non-local return. Before we attempt that, we need to
-                        // check that the block hasn't escaped its function (and we know we're in a
-                        // block because only a block can attempt a non-local return).
-                        // Fortunately, the `closure` pointer in a frame is a perfect proxy for
-                        // determining this: if this frame's (i.e. block's!) parent closure is not
-                        // consistent with the frame stack, then the block has escaped.
-                        let v = self.stack_pop();
-                        let parent_closure = self.current_frame().closure(closure_depth);
-                        for (frame_depth, pframe) in
-                            unsafe { &*self.frames.get() }.iter().rev().enumerate()
-                        {
-                            if Gc::ptr_eq(&parent_closure, &pframe.closure) {
-                                self.stack_truncate(pframe.sp());
-                                self.frame_pop();
-                                self.stack_push(v);
-                                return SendReturn::ClosureReturn(frame_depth);
-                            }
-                        }
-                        panic!("Return from escaped block");
-                    }
+                Instr::Return => {
+                    self.frame_pop();
+                    return SendReturn::Val;
                 }
                 Instr::Send(moff) => {
                     let (ref name, nargs) = &cls.sends[moff];
