@@ -232,7 +232,11 @@ impl VM {
                 bytecode_off,
             } => {
                 let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
-                match self.exec_user(true, rcv, meth_cls, bytecode_off, None, num_vars, args) {
+                let frame = Frame::new(self, true, rcv.clone(), None, num_vars, args);
+                unsafe { &mut *self.frames.get() }.push(frame);
+                let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                self.frame_pop();
+                match r {
                     SendReturn::ClosureReturn(_) => unimplemented!(),
                     SendReturn::Err(e) => ValResult::from_vmerror(*e),
                     SendReturn::Val => ValResult::from_val(self.stack_pop()),
@@ -241,21 +245,9 @@ impl VM {
         }
     }
 
-    fn exec_user(
-        &self,
-        is_method: bool,
-        rcv: Val,
-        cls: &Class,
-        meth_start_pc: usize,
-        parent_closure: Option<Gc<Closure>>,
-        num_vars: usize,
-        args: Vec<Val>,
-    ) -> SendReturn {
-        {
-            let frame = Frame::new(self, is_method, rcv.clone(), parent_closure, num_vars, args);
-            unsafe { &mut *self.frames.get() }.push(frame);
-        };
-
+    /// Execute a SOM method. Note that the frame for this method must have been created *before*
+    /// calling this function.
+    fn exec_user(&self, rcv: Val, cls: &Class, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
         let stack_start = self.stack_len();
         while let Some(instr) = cls.instrs.get(pc) {
@@ -294,7 +286,6 @@ impl VM {
                     {
                         if Gc::ptr_eq(&parent_closure, &pframe.closure) {
                             self.stack_truncate(pframe.sp());
-                            self.frame_pop();
                             self.stack_push(v);
                             return SendReturn::ClosureReturn(frame_depth);
                         }
@@ -324,7 +315,6 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Return => {
-                    self.frame_pop();
                     return SendReturn::Val;
                 }
                 Instr::Send(moff) => {
@@ -351,27 +341,21 @@ impl VM {
                             bytecode_off,
                         } => {
                             let meth_cls = stry!(meth_cls_val.downcast::<Class>(self));
-                            let r = self.exec_user(
-                                true,
-                                rcv,
-                                meth_cls,
-                                bytecode_off,
-                                None,
-                                num_vars,
-                                args,
-                            );
+
+                            let nframe = Frame::new(self, true, rcv.clone(), None, num_vars, args);
+                            unsafe { &mut *self.frames.get() }.push(nframe);
+                            let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                            self.frame_pop();
                             r
                         }
                     };
                     match r {
                         SendReturn::ClosureReturn(d) => {
                             if d > 0 {
-                                self.frame_pop();
                                 return SendReturn::ClosureReturn(d - 1);
                             }
                         }
                         SendReturn::Err(e) => {
-                            self.frame_pop();
                             return SendReturn::Err(e);
                         }
                         SendReturn::Val => (),
@@ -499,15 +483,18 @@ impl VM {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
                 let blk_cls: &Class = stry!(rcv_blk.blockinfo_cls.downcast(self));
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
-                self.exec_user(
+                let frame = Frame::new(
+                    self,
                     false,
                     rcv.clone(),
-                    blk_cls,
-                    blkinfo.bytecode_off,
                     Some(Gc::clone(&rcv_blk.parent_closure)),
                     blkinfo.num_vars,
                     args,
-                )
+                );
+                unsafe { &mut *self.frames.get() }.push(frame);
+                let r = self.exec_user(rcv.clone(), blk_cls, blkinfo.bytecode_off);
+                self.frame_pop();
+                r
             }
         }
     }
