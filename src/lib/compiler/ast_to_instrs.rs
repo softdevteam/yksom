@@ -238,9 +238,9 @@ impl<'a> Compiler<'a> {
                 "printNewline" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintNewline)),
                 "printString:" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintString)),
                 "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
-                "value" | "value:" | "value:with:" => {
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Value))
-                }
+                "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(0))),
+                "value:" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(1))),
+                "value:with:" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(2))),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
             ast::MethodBody::Body {
@@ -412,8 +412,8 @@ impl<'a> Compiler<'a> {
         };
 
         // The VM assumes that a blocks's arguments are stored in variables
-        // 0..n and a method's arguments in 1..n+1 (in both cases in reverse order).
-        for lexeme in params.iter().rev() {
+        // 0..n and a method's arguments in 1..n+1.
+        for lexeme in params.iter() {
             process_var(*lexeme)?;
         }
 
