@@ -238,9 +238,9 @@ impl<'a> Compiler<'a> {
                 "printNewline" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintNewline)),
                 "printString:" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintString)),
                 "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
-                "value" | "value:" | "value:with:" => {
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Value))
-                }
+                "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(0))),
+                "value:" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(1))),
+                "value:with:" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(2))),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
             ast::MethodBody::Body {
@@ -345,7 +345,11 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::Return(expr) => {
                 self.c_expr(expr)?;
-                self.instrs.push(Instr::Return(self.closure_depth));
+                if self.closure_depth == 0 {
+                    self.instrs.push(Instr::Return);
+                } else {
+                    self.instrs.push(Instr::ClosureReturn(self.closure_depth));
+                }
                 Ok(())
             }
             ast::Expr::String(lexeme) => {
@@ -408,8 +412,8 @@ impl<'a> Compiler<'a> {
         };
 
         // The VM assumes that a blocks's arguments are stored in variables
-        // 0..n and a method's arguments in 1..n+1 (in both cases in reverse order).
-        for lexeme in params.iter().rev() {
+        // 0..n and a method's arguments in 1..n+1.
+        for lexeme in params.iter() {
             process_var(*lexeme)?;
         }
 
@@ -433,7 +437,7 @@ impl<'a> Compiler<'a> {
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
             self.instrs.push(Instr::VarLookup(0, 0));
         }
-        self.instrs.push(Instr::Return(0));
+        self.instrs.push(Instr::Return);
         self.vars_stack.pop();
 
         Ok(num_vars)

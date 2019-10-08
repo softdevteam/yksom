@@ -11,12 +11,13 @@
 pub enum Instr {
     Block(usize),
     Builtin(Builtin),
+    ClosureReturn(usize),
     Const(usize),
     Double(f64),
     InstVarLookup(usize),
     InstVarSet(usize),
     Pop,
-    Return(usize),
+    Return,
     Send(usize),
     VarLookup(usize, usize),
     VarSet(usize, usize),
@@ -51,5 +52,6 @@ pub enum Primitive {
     Restart,
     Shl,
     Sub,
-    Value,
+    /// Is this `value` (0), `value:` (1), or `value:with:` (2)?
+    Value(u8),
 }

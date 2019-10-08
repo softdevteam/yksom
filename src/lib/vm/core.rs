@@ -23,7 +23,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, Class, Double, Inst, Method, MethodBody, ObjType, String_},
+        objects::{Block, Class, Double, Inst, MethodBody, ObjType, String_},
         val::{Val, ValResult},
     },
 };
@@ -58,8 +58,6 @@ pub enum VMError {
     },
     /// Something went wrong when trying to execute a primitive.
     PrimitiveError,
-    /// Percolate a non-local return up the call stack.
-    Return(usize, Val),
     /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
     ShiftTooBig,
     /// A dynamic type error.
@@ -71,6 +69,28 @@ pub enum VMError {
     UnassignedVar(usize),
     /// An unknown method.
     UnknownMethod(String),
+}
+
+#[derive(Debug)]
+/// The (internal) result of a SOM send.
+enum SendReturn {
+    /// A closure wants to perform a return *n* frames up the call stack.
+    ClosureReturn(usize),
+    /// An error has occurred.
+    Err(Box<VMError>),
+    /// A return value has been left at the appropriate place on the SOM stack.
+    Val,
+}
+
+/// A convenience macro for use in the `exec_*` functions.
+macro_rules! stry {
+    ($elem:expr) => {{
+        let e = $elem;
+        match e {
+            Ok(o) => o,
+            Err(e) => return SendReturn::Err(e),
+        }
+    }};
 }
 
 pub struct VM {
@@ -92,7 +112,8 @@ pub struct VM {
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
-    frames: UnsafeCell<Vec<Gc<Frame>>>,
+    stack: UnsafeCell<Vec<Val>>,
+    frames: UnsafeCell<Vec<Frame>>,
 }
 
 impl VM {
@@ -122,6 +143,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            stack: UnsafeCell::new(Vec::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
 
@@ -198,148 +220,56 @@ impl VM {
     }
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
-    pub fn send(&self, rcv: Val, msg: &str, args: &[Val]) -> ValResult {
+    pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> ValResult {
         let cls = rcv.get_class(self);
         let (meth_cls_val, meth) = rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, msg));
-        self.send_internal(rcv, args, meth_cls_val, meth)
-    }
-
-    fn send_internal(&self, rcv: Val, args: &[Val], meth_cls_val: Val, meth: &Method) -> ValResult {
         match meth.body {
-            MethodBody::Primitive(p) => self.exec_primitive(p, rcv, args),
+            MethodBody::Primitive(_) => {
+                panic!("Primitives can't be called outside of a function frame.");
+            }
             MethodBody::User {
                 num_vars,
                 bytecode_off,
             } => {
                 let meth_cls = rtry!(meth_cls_val.downcast::<Class>(self));
-                self.exec_user(meth_cls, true, bytecode_off, rcv, None, num_vars, args)
+                self.stack_push(rcv.clone());
+                let nargs = args.len();
+                for a in args {
+                    self.stack_push(a);
+                }
+                let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
+                unsafe { &mut *self.frames.get() }.push(frame);
+                let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                self.frame_pop();
+                match r {
+                    SendReturn::ClosureReturn(_) => unimplemented!(),
+                    SendReturn::Err(e) => ValResult::from_vmerror(*e),
+                    SendReturn::Val => ValResult::from_val(self.stack_pop()),
+                }
             }
         }
     }
 
-    fn exec_primitive(&self, prim: Primitive, rcv: Val, args: &[Val]) -> ValResult {
-        match prim {
-            Primitive::Add => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.add(self, args[0].clone())
-            }
-            Primitive::AsString => rcv.to_strval(self),
-            Primitive::Class => ValResult::from_val(rcv.get_class(self)),
-            Primitive::Concatenate => {
-                debug_assert_eq!(args.len(), 1);
-                rtry!(rcv.downcast::<String_>(self)).concatenate(self, args[0].clone())
-            }
-            Primitive::Div => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.div(self, args[0].clone())
-            }
-            Primitive::Equals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.equals(self, args[0].clone())
-            }
-            Primitive::GreaterThan => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.greater_than(self, args[0].clone())
-            }
-            Primitive::GreaterThanEquals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.greater_than_equals(self, args[0].clone())
-            }
-            Primitive::LessThan => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.less_than(self, args[0].clone())
-            }
-            Primitive::LessThanEquals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.less_than_equals(self, args[0].clone())
-            }
-            Primitive::Mul => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.mul(self, args[0].clone())
-            }
-            Primitive::Name => rtry!(rcv.downcast::<Class>(self)).name(self),
-            Primitive::New => {
-                debug_assert_eq!(args.len(), 0);
-                ValResult::from_val(Inst::new(self, rcv))
-            }
-            Primitive::NotEquals => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.not_equals(self, args[0].clone())
-            }
-            Primitive::Restart => {
-                // This is handled directly by exec_user.
-                ValResult::from_vmerror(VMError::PrimitiveError)
-            }
-            Primitive::PrintNewline => {
-                println!();
-                ValResult::from_val(self.system.clone())
-            }
-            Primitive::PrintString => {
-                debug_assert_eq!(args.len(), 1);
-                let str_: &String_ = rtry!(args[0].downcast(self));
-                print!("{}", str_.as_str());
-                ValResult::from_val(self.system.clone())
-            }
-            Primitive::Shl => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.shl(self, args[0].clone())
-            }
-            Primitive::Sub => {
-                debug_assert_eq!(args.len(), 1);
-                rcv.sub(self, args[0].clone())
-            }
-            Primitive::Value => {
-                let rcv_blk: &Block = rtry!(rcv.downcast(self));
-                let blk_cls: &Class = rtry!(rcv_blk.blockinfo_cls.downcast(self));
-                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
-                self.exec_user(
-                    blk_cls,
-                    false,
-                    blkinfo.bytecode_off,
-                    rcv.clone(),
-                    Some(Gc::clone(&rcv_blk.parent_closure)),
-                    blkinfo.num_vars,
-                    args,
-                )
-            }
-        }
-    }
-
-    fn exec_user(
-        &self,
-        cls: &Class,
-        is_method: bool,
-        meth_pc: usize,
-        rcv: Val,
-        parent_closure: Option<Gc<Closure>>,
-        num_vars: usize,
-        args: &[Val],
-    ) -> ValResult {
-        let frame = Gc::new(Frame::new(
-            self,
-            is_method,
-            parent_closure,
-            num_vars,
-            rcv.clone(),
-            args,
-        ));
-        unsafe { &mut *self.frames.get() }.push(Gc::clone(&frame));
-        let mut pc = meth_pc;
-        while pc < cls.instrs.len() {
-            match cls.instrs[pc] {
+    /// Execute a SOM method. Note that the frame for this method must have been created *before*
+    /// calling this function.
+    fn exec_user(&self, rcv: Val, cls: &Class, meth_start_pc: usize) -> SendReturn {
+        let mut pc = meth_start_pc;
+        let stack_start = self.stack_len();
+        while let Some(instr) = cls.instrs.get(pc) {
+            match *instr {
                 Instr::Block(blkinfo_off) => {
                     let blkinfo = cls.blockinfo(blkinfo_off);
-                    frame.stack_push(Block::new(
+                    self.stack_push(Block::new(
                         self,
                         Val::recover(cls),
                         blkinfo_off,
-                        Gc::clone(&frame.closure),
+                        Gc::clone(&self.current_frame().closure),
                         blkinfo.num_params,
                     ));
                     pc = blkinfo.bytecode_end;
                 }
                 Instr::Builtin(b) => {
-                    frame.stack_push(match b {
+                    self.stack_push(match b {
                         Builtin::Nil => self.nil.clone(),
                         Builtin::False => self.false_.clone(),
                         Builtin::System => self.system.clone(),
@@ -347,161 +277,244 @@ impl VM {
                     });
                     pc += 1;
                 }
+                Instr::ClosureReturn(closure_depth) => {
+                    // We want to do a non-local return. Before we attempt that, we need to
+                    // check that the block hasn't escaped its function (and we know we're in a
+                    // block because only a block can attempt a non-local return).
+                    // Fortunately, the `closure` pointer in a frame is a perfect proxy for
+                    // determining this: if this frame's (i.e. block's!) parent closure is not
+                    // consistent with the frame stack, then the block has escaped.
+                    let v = self.stack_pop();
+                    let parent_closure = self.current_frame().closure(closure_depth);
+                    for (frame_depth, pframe) in
+                        unsafe { &*self.frames.get() }.iter().rev().enumerate()
+                    {
+                        if Gc::ptr_eq(&parent_closure, &pframe.closure) {
+                            self.stack_truncate(pframe.sp());
+                            self.stack_push(v);
+                            return SendReturn::ClosureReturn(frame_depth);
+                        }
+                    }
+                    panic!("Return from escaped block");
+                }
                 Instr::Const(coff) => {
-                    frame.stack_push(cls.consts[coff].clone());
+                    self.stack_push(cls.consts[coff].clone());
                     pc += 1;
                 }
                 Instr::Double(i) => {
-                    frame.stack_push(Double::new(self, i));
+                    self.stack_push(Double::new(self, i));
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    frame.stack_push(inst.inst_var_lookup(n));
+                    self.stack_push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    inst.inst_var_set(n, frame.stack_peek());
+                    inst.inst_var_set(n, self.stack_peek());
                     pc += 1;
                 }
                 Instr::Pop => {
-                    frame.stack_pop();
+                    self.stack_pop();
                     pc += 1;
+                }
+                Instr::Return => {
+                    return SendReturn::Val;
                 }
                 Instr::Send(moff) => {
                     let (ref name, nargs) = &cls.sends[moff];
-                    let args = frame.stack_drain_rev(frame.stack_len() - nargs);
-                    let rcv = frame.stack_pop();
+                    let rcv = self.stack_pop_n(*nargs);
 
                     let cls = rcv.get_class(self);
                     let (meth_cls_val, meth) =
-                        rtry!(rtry!(cls.downcast::<Class>(self)).get_method(self, &name));
-                    if let MethodBody::Primitive(Primitive::Restart) = meth.body {
-                        pc = meth_pc;
-                        frame.stack_clear();
-                    } else {
-                        let vr = self.send_internal(rcv, &args, meth_cls_val, meth);
-                        let r = if vr.is_val() {
-                            vr.unwrap()
-                        } else {
-                            match *vr.unwrap_err() {
-                                VMError::Return(depth, val) => {
-                                    if depth == 0 {
-                                        val
-                                    } else {
-                                        unsafe { &mut *self.frames.get() }.pop();
-                                        return ValResult::from_vmerror(VMError::Return(
-                                            depth - 1,
-                                            val,
-                                        ));
-                                    }
-                                }
-                                e => {
-                                    unsafe { &mut *self.frames.get() }.pop();
-                                    return ValResult::from_vmerror(e);
-                                }
-                            }
-                        };
-                        frame.stack_push(r);
-                        pc += 1;
-                    }
-                }
-                Instr::Return(closure_depth) => {
-                    let v = frame.stack_pop();
-                    if closure_depth == 0 {
-                        unsafe { &mut *self.frames.get() }.pop();
-                        return ValResult::from_val(v);
-                    } else {
-                        // We want to do a non-local return. Before we attempt that, we need to
-                        // check that the block hasn't escaped its function (and we know we're in a
-                        // block because only a block can attempt a non-local return).
-                        // Fortunately, the `closure` pointer in a frame is a perfect proxy for
-                        // determining this: if this frame's (i.e. block's!) parent closure is not
-                        // consistent with the frame stack, then the block has escaped.
-                        let parent_closure = frame.closure(closure_depth);
-                        for (frame_depth, pframe) in
-                            unsafe { &*self.frames.get() }.iter().rev().enumerate()
-                        {
-                            if Gc::ptr_eq(&parent_closure, &pframe.closure) {
-                                return ValResult::from_vmerror(VMError::Return(frame_depth, v));
+                        stry!(stry!(cls.downcast::<Class>(self)).get_method(self, &name));
+                    self.current_frame().set_sp(self.stack_len());
+                    let r = match meth.body {
+                        MethodBody::Primitive(Primitive::Restart) => {
+                            self.stack_truncate(stack_start);
+                            pc = meth_start_pc;
+                            continue;
+                        }
+                        MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
+                        MethodBody::User {
+                            num_vars,
+                            bytecode_off,
+                        } => {
+                            let meth_cls = stry!(meth_cls_val.downcast::<Class>(self));
+                            let nframe =
+                                Frame::new(self, true, rcv.clone(), None, num_vars, *nargs);
+                            unsafe { &mut *self.frames.get() }.push(nframe);
+                            let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                            self.frame_pop();
+                            r
+                        }
+                    };
+                    match r {
+                        SendReturn::ClosureReturn(d) => {
+                            if d > 0 {
+                                return SendReturn::ClosureReturn(d - 1);
                             }
                         }
-                        panic!("Return from escaped block");
+                        SendReturn::Err(e) => {
+                            return SendReturn::Err(e);
+                        }
+                        SendReturn::Val => (),
                     }
+                    pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
-                    let val = vtry!(frame.var_lookup(d, n));
-                    frame.stack_push(val);
+                    let val = stry!(self.current_frame().var_lookup(d, n).as_result());
+                    self.stack_push(val);
                     pc += 1;
                 }
                 Instr::VarSet(d, n) => {
-                    let val = frame.stack_peek();
-                    frame.var_set(d, n, val);
+                    let val = self.stack_peek();
+                    self.current_frame().var_set(d, n, val);
                     pc += 1;
                 }
             }
         }
-        ValResult::from_vmerror(VMError::Exit)
+
+        unsafe { &mut *self.frames.get() }.pop();
+        SendReturn::Err(Box::new(VMError::Exit))
     }
-}
 
-#[derive(Debug)]
-pub struct Frame {
-    stack: UnsafeCell<Vec<Val>>,
-    closure: Gc<Closure>,
-}
-
-impl GcLayout for Frame {
-    fn layout(&self) -> std::alloc::Layout {
-        std::alloc::Layout::new::<Self>()
-    }
-}
-
-impl Frame {
-    fn new(
-        _: &VM,
-        is_method: bool,
-        parent_closure: Option<Gc<Closure>>,
-        num_vars: usize,
-        self_val: Val,
-        args: &[Val],
-    ) -> Self {
-        let mut vars = Vec::new();
-        vars.resize(num_vars, Val::illegal());
-
-        if is_method {
-            vars[0] = self_val;
-            for (i, arg) in args.iter().enumerate() {
-                vars[i + 1] = arg.clone();
+    fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
+        match prim {
+            Primitive::Add => {
+                self.stack_push(stry!(rcv.add(self, self.stack_pop()).as_result()));
+                SendReturn::Val
             }
-        } else {
-            for (i, arg) in args.iter().enumerate() {
-                vars[i] = arg.clone();
+            Primitive::AsString => {
+                self.stack_push(stry!(rcv.to_strval(self).as_result()));
+                SendReturn::Val
+            }
+            Primitive::Class => {
+                self.stack_push(rcv.get_class(self));
+                SendReturn::Val
+            }
+            Primitive::Concatenate => {
+                self.stack_push(stry!(stry!(rcv.downcast::<String_>(self))
+                    .concatenate(self, self.stack_pop())
+                    .as_result()));
+                SendReturn::Val
+            }
+            Primitive::Div => {
+                self.stack_push(stry!(rcv.div(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::Equals => {
+                self.stack_push(stry!(rcv.equals(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::GreaterThan => {
+                self.stack_push(stry!(rcv.greater_than(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::GreaterThanEquals => {
+                self.stack_push(stry!(rcv
+                    .greater_than_equals(self, self.stack_pop())
+                    .as_result()));
+                SendReturn::Val
+            }
+            Primitive::LessThan => {
+                self.stack_push(stry!(rcv.less_than(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::LessThanEquals => {
+                self.stack_push(stry!(rcv
+                    .less_than_equals(self, self.stack_pop())
+                    .as_result()));
+                SendReturn::Val
+            }
+            Primitive::Mul => {
+                self.stack_push(stry!(rcv.mul(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::Name => {
+                self.stack_push(stry!(stry!(rcv.downcast::<Class>(self))
+                    .name(self)
+                    .as_result()));
+                SendReturn::Val
+            }
+            Primitive::New => {
+                self.stack_push(Inst::new(self, rcv));
+                SendReturn::Val
+            }
+            Primitive::NotEquals => {
+                self.stack_push(stry!(rcv.not_equals(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::Restart => unreachable!(),
+            Primitive::PrintNewline => {
+                println!();
+                self.stack_push(self.system.clone());
+                SendReturn::Val
+            }
+            Primitive::PrintString => {
+                let v = self.stack_pop();
+                let str_: &String_ = stry!(v.downcast(self));
+                print!("{}", str_.as_str());
+                self.stack_push(self.system.clone());
+                SendReturn::Val
+            }
+            Primitive::Shl => {
+                self.stack_push(stry!(rcv.shl(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::Sub => {
+                self.stack_push(stry!(rcv.sub(self, self.stack_pop()).as_result()));
+                SendReturn::Val
+            }
+            Primitive::Value(nargs) => {
+                let rcv_blk: &Block = stry!(rcv.downcast(self));
+                let blk_cls: &Class = stry!(rcv_blk.blockinfo_cls.downcast(self));
+                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
+                let frame = Frame::new(
+                    self,
+                    false,
+                    rcv.clone(),
+                    Some(Gc::clone(&rcv_blk.parent_closure)),
+                    blkinfo.num_vars,
+                    nargs as usize,
+                );
+                unsafe { &mut *self.frames.get() }.push(frame);
+                let r = self.exec_user(rcv.clone(), blk_cls, blkinfo.bytecode_off);
+                self.frame_pop();
+                r
             }
         }
+    }
 
-        Frame {
-            stack: UnsafeCell::new(Vec::new()),
-            closure: Gc::new(Closure::new(parent_closure, vars)),
-        }
+    fn current_frame(&self) -> &Frame {
+        debug_assert!(!unsafe { &*self.frames.get() }.is_empty());
+        let frames_len = unsafe { &*self.frames.get() }.len();
+        unsafe { (&mut *self.frames.get()).get_unchecked(frames_len - 1) }
+    }
+
+    fn frame_pop(&self) {
+        unsafe { &mut *self.frames.get() }.pop();
     }
 
     fn stack_len(&self) -> usize {
         unsafe { &*self.stack.get() }.len()
     }
 
-    fn stack_push(&self, v: Val) {
-        unsafe { &mut *self.stack.get() }.push(v);
-    }
-
+    /// Returns the top-most value of the stack without removing it. If the stack is empty, calling
+    /// this function will lead to undefined behaviour.
     fn stack_peek(&self) -> Val {
+        // Since we know that there will be at least one element in the stack, we can use our own
+        // simplified version of pop() which avoids a branch and the wrapping of values in an
+        // Option.
         let stack = unsafe { &*self.stack.get() };
         debug_assert!(!stack.is_empty());
         let i = stack.len() - 1;
         unsafe { stack.get_unchecked(i) }.clone()
     }
 
+    /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
+    /// this function will lead to undefined behaviour.
     fn stack_pop(&self) -> Val {
         // Since we know that there will be at least one element in the stack, we can use our own
         // simplified version of pop() which avoids a branch and the wrapping of values in an
@@ -516,15 +529,56 @@ impl Frame {
         }
     }
 
-    fn stack_clear(&self) {
-        unsafe { &mut *self.stack.get() }.clear();
+    fn stack_pop_n(&self, n: usize) -> Val {
+        let len = unsafe { &mut *self.stack.get() }.len();
+        unsafe { &mut *self.stack.get() }.remove(len - n - 1)
     }
 
-    fn stack_drain_rev(&self, start: usize) -> Vec<Val> {
-        unsafe { &mut *self.stack.get() }
-            .drain(start..)
-            .rev()
-            .collect()
+    /// Push `v` onto the stack.
+    fn stack_push(&self, v: Val) {
+        unsafe { &mut *self.stack.get() }.push(v);
+    }
+
+    fn stack_truncate(&self, i: usize) {
+        unsafe { &mut *self.stack.get() }.truncate(i);
+    }
+}
+
+#[derive(Debug)]
+pub struct Frame {
+    /// Stack pointer. Note that this is updated lazily (i.e. it might not be accurate at all
+    /// points, but it is guaranteed to be correct over function calls).
+    sp: UnsafeCell<usize>,
+    closure: Gc<Closure>,
+}
+
+impl Frame {
+    fn new(
+        vm: &VM,
+        is_method: bool,
+        self_val: Val,
+        parent_closure: Option<Gc<Closure>>,
+        num_vars: usize,
+        num_args: usize,
+    ) -> Self {
+        let mut vars = Vec::new();
+        vars.resize(num_vars, Val::illegal());
+
+        if is_method {
+            vars[0] = self_val;
+            for i in 0..num_args {
+                vars[num_args - i] = vm.stack_pop();
+            }
+        } else {
+            for i in 0..num_args {
+                vars[num_args - i - 1] = vm.stack_pop();
+            }
+        }
+
+        Frame {
+            sp: UnsafeCell::new(0),
+            closure: Gc::new(Closure::new(parent_closure, vars)),
+        }
     }
 
     fn var_lookup(&self, depth: usize, var: usize) -> ValResult {
@@ -550,6 +604,16 @@ impl Frame {
             depth -= 1;
         }
         c
+    }
+
+    /// Return this frame's stack pointer.
+    fn sp(&self) -> usize {
+        *unsafe { &*self.sp.get() }
+    }
+
+    /// Set this frame's stack pointer to `sp`.
+    fn set_sp(&self, sp: usize) {
+        *unsafe { &mut *self.sp.get() } = sp;
     }
 }
 
@@ -613,6 +677,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            stack: UnsafeCell::new(Vec::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
     }
@@ -626,9 +691,9 @@ mod tests {
     fn test_frame() {
         let vm = VM::new_no_bootstrap();
         let selfv = Val::from_isize(&vm, 42).unwrap();
-        let v1 = Val::from_isize(&vm, 43).unwrap();
-        let v2 = Val::from_isize(&vm, 44).unwrap();
-        let f = Frame::new(&vm, true, None, 4, selfv, &[v1, v2]);
+        vm.stack_push(Val::from_isize(&vm, 43).unwrap());
+        vm.stack_push(Val::from_isize(&vm, 44).unwrap());
+        let f = Frame::new(&vm, true, selfv, None, 4, 2);
         assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
         assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);
