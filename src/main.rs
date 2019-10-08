@@ -7,6 +7,8 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+#![feature(box_patterns)]
+
 use std::{
     env,
     io::{stderr, Write},
@@ -43,14 +45,11 @@ fn main() {
     let vm = VM::new(matches.opt_strs("cp"));
     let cls = vm.compile(&Path::new(&matches.free[0]).canonicalize().unwrap(), true);
     let app = Inst::new(&vm, cls);
-    let vr = vm.send(app, "run", vec![]);
-    if vr.is_err() {
-        match *vr.unwrap_err() {
-            VMError::Exit => (),
-            e => {
-                eprintln!("{:?}", e);
-                process::exit(1);
-            }
+    match vm.send(app, "run", vec![]) {
+        Ok(_) | Err(box VMError::Exit) => (),
+        Err(e) => {
+            eprintln!("{:?}", e);
+            process::exit(1);
         }
     }
 }

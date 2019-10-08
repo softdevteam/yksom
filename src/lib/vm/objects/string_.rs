@@ -14,9 +14,9 @@ use std::str;
 use abgc_derive::GcLayout;
 
 use crate::vm::{
-    core::VM,
+    core::{VMError, VM},
     objects::{Obj, ObjType, StaticObjType},
-    val::{NotUnboxable, Val, ValResult},
+    val::{NotUnboxable, Val},
 };
 
 #[derive(Debug, GcLayout)]
@@ -52,20 +52,20 @@ impl String_ {
     }
 
     /// Concatenate this string with another string and return the result.
-    pub fn concatenate(&self, vm: &VM, other: Val) -> ValResult {
-        let other_str: &String_ = rtry!(other.downcast(vm));
+    pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        let other_str: &String_ = other.downcast(vm)?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.
         if self.s.is_empty() {
-            return ValResult::from_val(other);
+            return Ok(other);
         } else if other_str.s.is_empty() {
-            return ValResult::from_val(Val::recover(self));
+            return Ok(Val::recover(self));
         }
 
         let mut new = String::with_capacity(self.s.len() + other_str.s.len());
         new.push_str(&self.s);
         new.push_str(&other_str.s);
-        ValResult::from_val(String_::new(vm, new))
+        Ok(String_::new(vm, new))
     }
 }
