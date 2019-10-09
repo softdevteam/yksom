@@ -232,7 +232,6 @@ impl VM {
                 bytecode_off,
             } => {
                 let meth_cls = meth_cls_val.downcast::<Class>(self)?;
-                self.stack_push(rcv.clone());
                 let nargs = args.len();
                 for a in args {
                     self.stack_push(a);
