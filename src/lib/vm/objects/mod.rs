@@ -105,6 +105,18 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
         unimplemented!();
     }
 
+    /// Is this `Val` reference equality equal to `other`? Only number types are likely to want to
+    /// override this.
+    fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        let other_tobj = other.tobj(vm)?;
+        let other_data =
+            unsafe { std::mem::transmute::<&dyn Obj, (*const u8, usize)>(&**other_tobj).0 };
+        Ok(Val::from_bool(
+            vm,
+            (self as *const _ as *const u8) == other_data,
+        ))
+    }
+
     /// Does this `Val` equal `other`?
     fn equals(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();

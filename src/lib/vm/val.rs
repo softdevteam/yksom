@@ -411,6 +411,15 @@ impl Val {
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
         }
     }
+
+    /// Is this `Val` reference equal to `other`? Notice that for integers (but not Doubles)
+    /// "reference equal" is equivalent to "equals".
+    pub fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        match self.valkind() {
+            ValKind::INT => self.equals(vm, other),
+            ValKind::GCBOX => self.tobj(vm)?.ref_equals(vm, other),
+        }
+    }
 }
 
 macro_rules! binop_all {
