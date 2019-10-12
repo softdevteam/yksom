@@ -290,6 +290,22 @@ impl Val {
         self.tobj(vm).unwrap().add(vm, other)
     }
 
+    /// Produce a new `Val` which performs a bitwise xor operation with `other` and this.
+    pub fn bit_xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                return Val::from_isize(vm, lhs ^ rhs);
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() ^ rhs.bigint());
+            }
+            return Err(Box::new(VMError::TypeError {
+                expected: self.dyn_objtype(vm),
+                got: other.dyn_objtype(vm),
+            }));
+        }
+        self.tobj(vm).unwrap().bit_xor(vm, other)
+    }
+
     /// Produce a new `Val` which subtracts `other` from this.
     pub fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {

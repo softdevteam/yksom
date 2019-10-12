@@ -390,6 +390,10 @@ impl VM {
                 self.stack_push(stry!(rcv.to_strval(self)));
                 SendReturn::Val
             }
+            Primitive::BitXor => {
+                self.stack_push(stry!(rcv.bit_xor(self, self.stack_pop())));
+                SendReturn::Val
+            }
             Primitive::Class => {
                 self.stack_push(rcv.get_class(self));
                 SendReturn::Val

@@ -35,6 +35,7 @@ pub enum Builtin {
 pub enum Primitive {
     Add,
     AsString,
+    BitXor,
     Class,
     Concatenate,
     Div,

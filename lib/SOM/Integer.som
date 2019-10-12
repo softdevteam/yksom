@@ -10,7 +10,7 @@ Integer = (
     <= argument = primitive
     >= argument = primitive
     << argument = primitive
-
+    bitXor: argument = primitive
     asString    = primitive
 
     to: limit do: block = (

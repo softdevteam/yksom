@@ -63,6 +63,19 @@ impl Obj for ArbInt {
         }
     }
 
+    fn bit_xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val ^ BigInt::from_isize(rhs).unwrap())
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val ^ &rhs.val)
+        } else {
+            Err(Box::new(VMError::TypeError {
+                expected: self.dyn_objtype(),
+                got: other.dyn_objtype(vm),
+            }))
+        }
+    }
+
     fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             ArbInt::new(vm, &self.val - rhs)
