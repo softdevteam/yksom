@@ -234,6 +234,10 @@ impl<'a> Compiler<'a> {
                         Primitive::GreaterThanEquals,
                     ))
                 }
+                "bitXor:" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::BitXor))
+                }
                 "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),

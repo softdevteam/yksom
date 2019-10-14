@@ -80,6 +80,11 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
         unimplemented!();
     }
 
+    /// Produce a new `Val` which performs a bitwise xor with `other` and this
+    fn bit_xor(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
+        unimplemented!();
+    }
+
     /// Produce a new `Val` which adds `other` to this.
     fn add(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
