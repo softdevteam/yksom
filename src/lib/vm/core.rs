@@ -41,6 +41,8 @@ pub enum VMError {
     /// A value which can't be represented in an `usize`.
     CantRepresentAsUsize,
     DivisionByZero,
+    /// A value which is mathematically undefined.
+    DomainError,
     /// The VM is trying to exit.
     Exit,
     /// Tried to perform a `Val::downcast` operation on a non-boxed `Val`. Note that `expected`
@@ -463,6 +465,10 @@ impl VM {
             }
             Primitive::Shl => {
                 self.stack_push(stry!(rcv.shl(self, self.stack_pop())));
+                SendReturn::Val
+            }
+            Primitive::Sqrt => {
+                self.stack_push(stry!(rcv.sqrt(self)));
                 SendReturn::Val
             }
             Primitive::Sub => {

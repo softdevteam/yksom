@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: DomainError
+"
+
+int28 = (
+    run = (
+        (-1 << 200) sqrt.
+    )
+)

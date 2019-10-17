@@ -17,7 +17,7 @@ use std::convert::TryFrom;
 
 use abgc_derive::GcLayout;
 use num_bigint::BigInt;
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
 use crate::vm::{
     core::{VMError, VM},
@@ -152,6 +152,14 @@ impl Obj for ArbInt {
             Err(Box::new(VMError::NotANumber {
                 got: other.dyn_objtype(vm),
             }))
+        }
+    }
+
+    fn sqrt(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+        if self.val < Zero::zero() {
+            Err(Box::new(VMError::DomainError))
+        } else {
+            ArbInt::new(vm, self.val.sqrt())
         }
     }
 
