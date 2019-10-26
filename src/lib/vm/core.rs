@@ -328,7 +328,7 @@ impl VM {
                     let cls = rcv.get_class(self);
                     let (meth_cls_val, meth) =
                         stry!(stry!(cls.downcast::<Class>(self)).get_method(self, &name));
-                    self.current_frame().set_sp(self.stack_len());
+                    self.current_frame().set_sp(self.stack_len() - *nargs);
                     let r = match meth.body {
                         MethodBody::Primitive(Primitive::Restart) => {
                             self.stack_truncate(stack_start);
@@ -541,6 +541,7 @@ impl VM {
     }
 
     fn stack_truncate(&self, i: usize) {
+        debug_assert!(i <= unsafe { &mut *self.stack.get() }.len());
         unsafe { &mut *self.stack.get() }.truncate(i);
     }
 }
