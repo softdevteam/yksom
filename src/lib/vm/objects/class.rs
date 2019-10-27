@@ -42,6 +42,7 @@ pub struct BlockInfo {
     pub bytecode_end: usize,
     pub num_params: usize,
     pub num_vars: usize,
+    pub max_stack: usize,
 }
 
 impl Obj for Class {
@@ -84,9 +85,11 @@ impl Class {
                 cobjects::MethodBody::User {
                     num_vars,
                     bytecode_off,
+                    max_stack,
                 } => MethodBody::User {
                     num_vars,
                     bytecode_off,
+                    max_stack,
                 },
             };
             let meth = Method {
@@ -104,6 +107,7 @@ impl Class {
                 bytecode_end: b.bytecode_end,
                 num_params: b.num_params,
                 num_vars: b.num_vars,
+                max_stack: b.max_stack,
             })
             .collect();
 

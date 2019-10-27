@@ -36,6 +36,7 @@ pub enum MethodBody {
         num_vars: usize,
         /// The offset of this method's bytecode in its parent class.
         bytecode_off: usize,
+        max_stack: usize,
     },
 }
 

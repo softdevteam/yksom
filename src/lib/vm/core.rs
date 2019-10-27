@@ -16,6 +16,7 @@ use std::{
 };
 
 use abgc::{Gc, GcLayout};
+use arrayvec::ArrayVec;
 
 use crate::{
     compiler::{
@@ -29,6 +30,8 @@ use crate::{
 };
 
 pub const SOM_EXTENSION: &str = "som";
+
+pub const SOM_STACK_LEN: usize = 4096;
 
 #[derive(Debug, PartialEq)]
 pub enum VMError {
@@ -112,7 +115,7 @@ pub struct VM {
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
-    stack: UnsafeCell<Vec<Val>>,
+    stack: UnsafeCell<ArrayVec<[Val; SOM_STACK_LEN]>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
 
@@ -143,7 +146,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
-            stack: UnsafeCell::new(Vec::new()),
+            stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
 
@@ -230,7 +233,11 @@ impl VM {
             MethodBody::User {
                 num_vars,
                 bytecode_off,
+                max_stack,
             } => {
+                if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
+                    panic!("Not enough stack space to execute method.");
+                }
                 let meth_cls = meth_cls_val.downcast::<Class>(self)?;
                 let nargs = args.len();
                 for a in args {
@@ -339,7 +346,11 @@ impl VM {
                         MethodBody::User {
                             num_vars,
                             bytecode_off,
+                            max_stack,
                         } => {
+                            if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
+                                panic!("Not enough stack space to execute method.");
+                            }
                             let meth_cls = stry!(meth_cls_val.downcast::<Class>(self));
                             let nframe =
                                 Frame::new(self, true, rcv.clone(), None, num_vars, *nargs);
@@ -472,6 +483,9 @@ impl VM {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
                 let blk_cls: &Class = stry!(rcv_blk.blockinfo_cls.downcast(self));
                 let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
+                if unsafe { &*self.stack.get() }.remaining_capacity() < blkinfo.max_stack {
+                    panic!("Not enough stack space to execute block.");
+                }
                 let frame = Frame::new(
                     self,
                     false,
@@ -537,7 +551,7 @@ impl VM {
 
     /// Push `v` onto the stack.
     fn stack_push(&self, v: Val) {
-        unsafe { &mut *self.stack.get() }.push(v);
+        unsafe { (&mut *self.stack.get()).push_unchecked(v) };
     }
 
     fn stack_truncate(&self, i: usize) {
@@ -679,7 +693,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
-            stack: UnsafeCell::new(Vec::new()),
+            stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
     }
