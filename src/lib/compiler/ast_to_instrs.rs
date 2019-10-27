@@ -267,6 +267,73 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    /// Evaluate an expression, returning `Ok(max_stack_size)` if successful. Note that there is an
+    /// implicit assumption that primitives never need more stack size than they take in (e.g. if
+    /// they push an item on to the stack, they must have popped at least one element off it
+    /// beforehand).
+    fn c_block(
+        &mut self,
+        is_method: bool,
+        params: &[Lexeme<StorageT>],
+        vars_lexemes: &[Lexeme<StorageT>],
+        exprs: &[ast::Expr],
+    ) -> Result<(usize, usize), Vec<(Lexeme<StorageT>, String)>> {
+        let mut vars = HashMap::new();
+        if is_method {
+            // The VM assumes that the first variable of a method is "self".
+            vars.insert("self", 0);
+        }
+
+        let mut process_var = |lexeme| {
+            let vars_len = vars.len();
+            let var_str = self.lexer.lexeme_str(&lexeme);
+            match vars.entry(var_str) {
+                hash_map::Entry::Occupied(_) => Err(vec![(
+                    lexeme,
+                    format!("Variable '{}' shadows another of the same name", var_str),
+                )]),
+                hash_map::Entry::Vacant(e) => {
+                    e.insert(vars_len);
+                    Ok(vars_len)
+                }
+            }
+        };
+
+        // The VM assumes that a blocks's arguments are stored in variables
+        // 0..n and a method's arguments in 1..n+1.
+        for lexeme in params.iter() {
+            process_var(*lexeme)?;
+        }
+
+        for lexeme in vars_lexemes {
+            process_var(*lexeme)?;
+        }
+
+        let num_vars = vars.len();
+        self.vars_stack.push(vars);
+        let mut max_stack = 0;
+        for (i, e) in exprs.iter().enumerate() {
+            // We deliberately bomb out at the first error in a method on the basis that
+            // it's likely to lead to many repetitive errors.
+            let stack_size = self.c_expr(e)?;
+            max_stack = max(max_stack, stack_size);
+            if i != exprs.len() - 1 {
+                self.instrs.push(Instr::Pop);
+            }
+        }
+        // Blocks return the value of the last statement, but methods return `self`.
+        if is_method {
+            self.instrs.push(Instr::Pop);
+            debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
+            self.instrs.push(Instr::VarLookup(0, 0));
+            max_stack = max(max_stack, 1);
+        }
+        self.instrs.push(Instr::Return);
+        self.vars_stack.pop();
+
+        Ok((num_vars, max_stack))
+    }
+
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
     fn c_expr(&mut self, expr: &ast::Expr) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
         match expr {
@@ -400,73 +467,6 @@ impl<'a> Compiler<'a> {
                 Ok(1)
             }
         }
-    }
-
-    /// Evaluate an expression, returning `Ok(max_stack_size)` if successful. Note that there is an
-    /// implicit assumption that primitives never need more stack size than they take in (e.g. if
-    /// they push an item on to the stack, they must have popped at least one element off it
-    /// beforehand).
-    fn c_block(
-        &mut self,
-        is_method: bool,
-        params: &[Lexeme<StorageT>],
-        vars_lexemes: &[Lexeme<StorageT>],
-        exprs: &[ast::Expr],
-    ) -> Result<(usize, usize), Vec<(Lexeme<StorageT>, String)>> {
-        let mut vars = HashMap::new();
-        if is_method {
-            // The VM assumes that the first variable of a method is "self".
-            vars.insert("self", 0);
-        }
-
-        let mut process_var = |lexeme| {
-            let vars_len = vars.len();
-            let var_str = self.lexer.lexeme_str(&lexeme);
-            match vars.entry(var_str) {
-                hash_map::Entry::Occupied(_) => Err(vec![(
-                    lexeme,
-                    format!("Variable '{}' shadows another of the same name", var_str),
-                )]),
-                hash_map::Entry::Vacant(e) => {
-                    e.insert(vars_len);
-                    Ok(vars_len)
-                }
-            }
-        };
-
-        // The VM assumes that a blocks's arguments are stored in variables
-        // 0..n and a method's arguments in 1..n+1.
-        for lexeme in params.iter() {
-            process_var(*lexeme)?;
-        }
-
-        for lexeme in vars_lexemes {
-            process_var(*lexeme)?;
-        }
-
-        let num_vars = vars.len();
-        self.vars_stack.push(vars);
-        let mut max_stack = 0;
-        for (i, e) in exprs.iter().enumerate() {
-            // We deliberately bomb out at the first error in a method on the basis that
-            // it's likely to lead to many repetitive errors.
-            let stack_size = self.c_expr(e)?;
-            max_stack = max(max_stack, stack_size);
-            if i != exprs.len() - 1 {
-                self.instrs.push(Instr::Pop);
-            }
-        }
-        // Blocks return the value of the last statement, but methods return `self`.
-        if is_method {
-            self.instrs.push(Instr::Pop);
-            debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
-            self.instrs.push(Instr::VarLookup(0, 0));
-            max_stack = max(max_stack, 1);
-        }
-        self.instrs.push(Instr::Return);
-        self.vars_stack.pop();
-
-        Ok((num_vars, max_stack))
     }
 
     /// Find the variable `name` in the variable stack returning a tuple `Some((depth, var_num))`
