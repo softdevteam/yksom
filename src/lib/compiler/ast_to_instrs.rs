@@ -8,6 +8,7 @@
 // terms.
 
 use std::{
+    cmp::max,
     collections::hash_map::{self, HashMap},
     path::Path,
 };
@@ -256,148 +257,27 @@ impl<'a> Compiler<'a> {
                 exprs,
             } => {
                 let bytecode_off = self.instrs.len();
-                let num_vars = self.c_block(true, &params, vars_lexemes, exprs)?;
+                let (num_vars, max_stack) = self.c_block(true, &params, vars_lexemes, exprs)?;
                 Ok(cobjects::MethodBody::User {
                     num_vars,
                     bytecode_off,
+                    max_stack,
                 })
             }
         }
     }
 
-    fn c_expr(&mut self, expr: &ast::Expr) -> Result<(), Vec<(Lexeme<StorageT>, String)>> {
-        match expr {
-            ast::Expr::Assign { id, expr } => {
-                let (depth, var_num) = self.find_var(&id)?;
-                self.c_expr(expr)?;
-                if depth == self.vars_stack.len() - 1 {
-                    self.instrs.push(Instr::InstVarSet(var_num));
-                } else {
-                    self.instrs.push(Instr::VarSet(depth, var_num));
-                }
-                Ok(())
-            }
-            ast::Expr::BinaryMsg { lhs, op, rhs } => {
-                self.c_expr(lhs)?;
-                self.c_expr(rhs)?;
-                let send_off = self.send_off((self.lexer.lexeme_str(&op).to_string(), 1));
-                self.instrs.push(Instr::Send(send_off));
-                Ok(())
-            }
-            ast::Expr::Block {
-                params,
-                vars,
-                exprs,
-            } => {
-                let block_off = self.blocks.len();
-                self.instrs.push(Instr::Block(block_off));
-                self.blocks.push(cobjects::Block {
-                    bytecode_off: self.instrs.len(),
-                    bytecode_end: 0,
-                    num_params: params.len(),
-                    num_vars: 0,
-                });
-                self.closure_depth += 1;
-                let num_vars = self.c_block(false, params, vars, exprs)?;
-                self.closure_depth -= 1;
-                self.blocks[block_off].bytecode_end = self.instrs.len();
-                self.blocks[block_off].num_vars = num_vars;
-                Ok(())
-            }
-            ast::Expr::Double { is_negative, val } => {
-                let s = if *is_negative {
-                    format!("-{}", self.lexer.lexeme_str(&val))
-                } else {
-                    self.lexer.lexeme_str(&val).to_owned()
-                };
-                match s.parse::<f64>() {
-                    Ok(i) => {
-                        self.instrs.push(Instr::Double(i));
-                        Ok(())
-                    }
-                    Err(e) => Err(vec![(*val, format!("{}", e))]),
-                }
-            }
-            ast::Expr::Int { is_negative, val } => {
-                match self.lexer.lexeme_str(&val).parse::<isize>() {
-                    Ok(mut i) => {
-                        if *is_negative {
-                            // With twos complement, `0-i` will always succeed, but just in case...
-                            i = 0isize.checked_sub(i).unwrap();
-                        }
-                        let const_off = self.const_off(cobjects::Const::Int(i));
-                        self.instrs.push(Instr::Const(const_off));
-                        Ok(())
-                    }
-                    Err(e) => Err(vec![(*val, format!("{}", e))]),
-                }
-            }
-            ast::Expr::KeywordMsg { receiver, msglist } => {
-                self.c_expr(receiver)?;
-                let mut mn = String::new();
-                for (kw, expr) in msglist {
-                    mn.push_str(self.lexer.lexeme_str(&kw));
-                    self.c_expr(expr)?;
-                }
-                let send_off = self.send_off((mn, msglist.len()));
-                self.instrs.push(Instr::Send(send_off));
-                Ok(())
-            }
-            ast::Expr::UnaryMsg { receiver, ids } => {
-                self.c_expr(receiver)?;
-                for id in ids {
-                    let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
-                    self.instrs.push(Instr::Send(send_off));
-                }
-                Ok(())
-            }
-            ast::Expr::Return(expr) => {
-                self.c_expr(expr)?;
-                if self.closure_depth == 0 {
-                    self.instrs.push(Instr::Return);
-                } else {
-                    self.instrs.push(Instr::ClosureReturn(self.closure_depth));
-                }
-                Ok(())
-            }
-            ast::Expr::String(lexeme) => {
-                // XXX are there string escaping rules we need to take account of?
-                let s_orig = self.lexer.lexeme_str(&lexeme);
-                // Strip off the beginning/end quotes.
-                let s = s_orig[1..s_orig.len() - 1].to_owned();
-                let const_off = self.const_off(cobjects::Const::String(s));
-                self.instrs.push(Instr::Const(const_off));
-                Ok(())
-            }
-            ast::Expr::VarLookup(lexeme) => {
-                match self.find_var(&lexeme) {
-                    Ok((depth, var_num)) => {
-                        if depth == self.vars_stack.len() - 1 {
-                            self.instrs.push(Instr::InstVarLookup(var_num));
-                        } else {
-                            self.instrs.push(Instr::VarLookup(depth, var_num));
-                        }
-                    }
-                    Err(e) => match self.lexer.lexeme_str(&lexeme) {
-                        "nil" => self.instrs.push(Instr::Builtin(Builtin::Nil)),
-                        "false" => self.instrs.push(Instr::Builtin(Builtin::False)),
-                        "system" => self.instrs.push(Instr::Builtin(Builtin::System)),
-                        "true" => self.instrs.push(Instr::Builtin(Builtin::True)),
-                        _ => return Err(e),
-                    },
-                }
-                Ok(())
-            }
-        }
-    }
-
+    /// Evaluate an expression, returning `Ok(max_stack_size)` if successful. Note that there is an
+    /// implicit assumption that primitives never need more stack size than they take in (e.g. if
+    /// they push an item on to the stack, they must have popped at least one element off it
+    /// beforehand).
     fn c_block(
         &mut self,
         is_method: bool,
         params: &[Lexeme<StorageT>],
         vars_lexemes: &[Lexeme<StorageT>],
         exprs: &[ast::Expr],
-    ) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
+    ) -> Result<(usize, usize), Vec<(Lexeme<StorageT>, String)>> {
         let mut vars = HashMap::new();
         if is_method {
             // The VM assumes that the first variable of a method is "self".
@@ -431,10 +311,12 @@ impl<'a> Compiler<'a> {
 
         let num_vars = vars.len();
         self.vars_stack.push(vars);
+        let mut max_stack = 0;
         for (i, e) in exprs.iter().enumerate() {
             // We deliberately bomb out at the first error in a method on the basis that
             // it's likely to lead to many repetitive errors.
-            self.c_expr(e)?;
+            let stack_size = self.c_expr(e)?;
+            max_stack = max(max_stack, stack_size);
             if i != exprs.len() - 1 {
                 self.instrs.push(Instr::Pop);
             }
@@ -444,11 +326,147 @@ impl<'a> Compiler<'a> {
             self.instrs.push(Instr::Pop);
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
             self.instrs.push(Instr::VarLookup(0, 0));
+            max_stack = max(max_stack, 1);
         }
         self.instrs.push(Instr::Return);
         self.vars_stack.pop();
 
-        Ok(num_vars)
+        Ok((num_vars, max_stack))
+    }
+
+    /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
+    fn c_expr(&mut self, expr: &ast::Expr) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
+        match expr {
+            ast::Expr::Assign { id, expr } => {
+                let (depth, var_num) = self.find_var(&id)?;
+                let max_stack = self.c_expr(expr)?;
+                if depth == self.vars_stack.len() - 1 {
+                    self.instrs.push(Instr::InstVarSet(var_num));
+                } else {
+                    self.instrs.push(Instr::VarSet(depth, var_num));
+                }
+                debug_assert!(max_stack > 0);
+                Ok(max_stack)
+            }
+            ast::Expr::BinaryMsg { lhs, op, rhs } => {
+                let mut stack_size = self.c_expr(lhs)?;
+                stack_size = max(stack_size, 1 + self.c_expr(rhs)?);
+                let send_off = self.send_off((self.lexer.lexeme_str(&op).to_string(), 1));
+                self.instrs.push(Instr::Send(send_off));
+                debug_assert!(stack_size > 0);
+                Ok(stack_size)
+            }
+            ast::Expr::Block {
+                params,
+                vars,
+                exprs,
+            } => {
+                let block_off = self.blocks.len();
+                self.instrs.push(Instr::Block(block_off));
+                self.blocks.push(cobjects::Block {
+                    bytecode_off: self.instrs.len(),
+                    bytecode_end: 0,
+                    num_params: params.len(),
+                    num_vars: 0,
+                    max_stack: 0,
+                });
+                self.closure_depth += 1;
+                let (num_vars, max_stack) = self.c_block(false, params, vars, exprs)?;
+                self.closure_depth -= 1;
+                self.blocks[block_off].bytecode_end = self.instrs.len();
+                self.blocks[block_off].num_vars = num_vars;
+                self.blocks[block_off].max_stack = max_stack;
+                Ok(1)
+            }
+            ast::Expr::Double { is_negative, val } => {
+                let s = if *is_negative {
+                    format!("-{}", self.lexer.lexeme_str(&val))
+                } else {
+                    self.lexer.lexeme_str(&val).to_owned()
+                };
+                match s.parse::<f64>() {
+                    Ok(i) => {
+                        self.instrs.push(Instr::Double(i));
+                        Ok(1)
+                    }
+                    Err(e) => Err(vec![(*val, format!("{}", e))]),
+                }
+            }
+            ast::Expr::Int { is_negative, val } => {
+                match self.lexer.lexeme_str(&val).parse::<isize>() {
+                    Ok(mut i) => {
+                        if *is_negative {
+                            // With twos complement, `0-i` will always succeed, but just in case...
+                            i = 0isize.checked_sub(i).unwrap();
+                        }
+                        let const_off = self.const_off(cobjects::Const::Int(i));
+                        self.instrs.push(Instr::Const(const_off));
+                        Ok(1)
+                    }
+                    Err(e) => Err(vec![(*val, format!("{}", e))]),
+                }
+            }
+            ast::Expr::KeywordMsg { receiver, msglist } => {
+                let mut max_stack = self.c_expr(receiver)?;
+                let mut mn = String::new();
+                for (i, (kw, expr)) in msglist.into_iter().enumerate() {
+                    mn.push_str(self.lexer.lexeme_str(&kw));
+                    let expr_stack = self.c_expr(expr)?;
+                    max_stack = max(max_stack, 1 + i + expr_stack);
+                }
+                let send_off = self.send_off((mn, msglist.len()));
+                self.instrs.push(Instr::Send(send_off));
+                debug_assert!(max_stack > 0);
+                Ok(max_stack)
+            }
+            ast::Expr::UnaryMsg { receiver, ids } => {
+                let max_stack = self.c_expr(receiver)?;
+                for id in ids {
+                    let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
+                    self.instrs.push(Instr::Send(send_off));
+                }
+                debug_assert!(max_stack > 0);
+                Ok(max_stack)
+            }
+            ast::Expr::Return(expr) => {
+                let max_stack = self.c_expr(expr)?;
+                if self.closure_depth == 0 {
+                    self.instrs.push(Instr::Return);
+                } else {
+                    self.instrs.push(Instr::ClosureReturn(self.closure_depth));
+                }
+                debug_assert!(max_stack > 0);
+                Ok(max_stack)
+            }
+            ast::Expr::String(lexeme) => {
+                // XXX are there string escaping rules we need to take account of?
+                let s_orig = self.lexer.lexeme_str(&lexeme);
+                // Strip off the beginning/end quotes.
+                let s = s_orig[1..s_orig.len() - 1].to_owned();
+                let const_off = self.const_off(cobjects::Const::String(s));
+                self.instrs.push(Instr::Const(const_off));
+                Ok(1)
+            }
+            ast::Expr::VarLookup(lexeme) => {
+                match self.find_var(&lexeme) {
+                    Ok((depth, var_num)) => {
+                        if depth == self.vars_stack.len() - 1 {
+                            self.instrs.push(Instr::InstVarLookup(var_num));
+                        } else {
+                            self.instrs.push(Instr::VarLookup(depth, var_num));
+                        }
+                    }
+                    Err(e) => match self.lexer.lexeme_str(&lexeme) {
+                        "nil" => self.instrs.push(Instr::Builtin(Builtin::Nil)),
+                        "false" => self.instrs.push(Instr::Builtin(Builtin::False)),
+                        "system" => self.instrs.push(Instr::Builtin(Builtin::System)),
+                        "true" => self.instrs.push(Instr::Builtin(Builtin::True)),
+                        _ => return Err(e),
+                    },
+                }
+                Ok(1)
+            }
+        }
     }
 
     /// Find the variable `name` in the variable stack returning a tuple `Some((depth, var_num))`
