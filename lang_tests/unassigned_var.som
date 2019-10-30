@@ -1,10 +1,9 @@
 "
 VM:
-  status: error
-  stderr: UnassignedVar(1)
+  stdout: nil
 "
 
-Unassigned_Var = (
+unassigned_var = (
     run = (
         |v|
         v println.
