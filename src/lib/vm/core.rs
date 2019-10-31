@@ -68,8 +68,6 @@ pub enum VMError {
         expected: ObjType,
         got: ObjType,
     },
-    /// Tried to read from a local variable that hasn't had a value assigned to it yet.
-    UnassignedVar(usize),
     /// An unknown method.
     UnknownMethod(String),
 }
@@ -374,7 +372,7 @@ impl VM {
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
-                    let val = stry!(self.current_frame().var_lookup(d, n));
+                    let val = self.current_frame().var_lookup(d, n);
                     self.stack_push(val);
                     pc += 1;
                 }
@@ -577,7 +575,7 @@ impl Frame {
         num_vars: usize,
         num_args: usize,
     ) -> Self {
-        let mut vars = Vec::new();
+        let mut vars = Vec::with_capacity(num_vars);
         vars.resize(num_vars, Val::illegal());
 
         if is_method {
@@ -585,9 +583,15 @@ impl Frame {
             for i in 0..num_args {
                 vars[num_args - i] = vm.stack_pop();
             }
+            for i in num_args + 1..num_vars {
+                vars[i] = vm.nil.clone();
+            }
         } else {
             for i in 0..num_args {
                 vars[num_args - i - 1] = vm.stack_pop();
+            }
+            for i in num_args..num_vars {
+                vars[i] = vm.nil.clone();
             }
         }
 
@@ -597,14 +601,8 @@ impl Frame {
         }
     }
 
-    fn var_lookup(&self, depth: usize, var: usize) -> Result<Val, Box<VMError>> {
-        let cl = self.closure(depth);
-        let v = cl.get_var(var);
-        if v.is_illegal() {
-            Err(Box::new(VMError::UnassignedVar(var)))
-        } else {
-            Ok(v.clone())
-        }
+    fn var_lookup(&self, depth: usize, var: usize) -> Val {
+        self.closure(depth).get_var(var).clone()
     }
 
     fn var_set(&self, depth: usize, var: usize, val: Val) {
@@ -709,10 +707,9 @@ mod tests {
         let selfv = Val::from_isize(&vm, 42).unwrap();
         vm.stack_push(Val::from_isize(&vm, 43).unwrap());
         vm.stack_push(Val::from_isize(&vm, 44).unwrap());
-        let f = Frame::new(&vm, true, selfv, None, 4, 2);
-        assert_eq!(f.var_lookup(0, 0).unwrap().as_isize(&vm).unwrap(), 42);
-        assert_eq!(f.var_lookup(0, 1).unwrap().as_isize(&vm).unwrap(), 43);
-        assert_eq!(f.var_lookup(0, 2).unwrap().as_isize(&vm).unwrap(), 44);
-        assert!(f.var_lookup(0, 3).is_err());
+        let f = Frame::new(&vm, true, selfv, None, 3, 2);
+        assert_eq!(f.var_lookup(0, 0).as_isize(&vm).unwrap(), 42);
+        assert_eq!(f.var_lookup(0, 1).as_isize(&vm).unwrap(), 43);
+        assert_eq!(f.var_lookup(0, 2).as_isize(&vm).unwrap(), 44);
     }
 }
