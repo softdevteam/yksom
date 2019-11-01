@@ -4,7 +4,7 @@ VM:
     7
 "
 
-block8 = (
+block10 = (
     f = (
         self g: [ :x :y | ^ (x - y) ].
         ^'b'
