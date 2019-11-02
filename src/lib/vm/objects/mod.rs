@@ -110,6 +110,11 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
         unimplemented!();
     }
 
+    /// Produces a new `Val` which is the square root of this.
+    fn sqrt(&self, _: &VM) -> Result<Val, Box<VMError>> {
+        unimplemented!();
+    }
+
     /// Is this `Val` reference equality equal to `other`? Only number types are likely to want to
     /// override this.
     fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {

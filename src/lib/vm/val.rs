@@ -420,6 +420,23 @@ impl Val {
         self.tobj(vm).unwrap().shl(vm, other)
     }
 
+    /// Produces a new `Val` which is the square root of this.
+    pub fn sqrt(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+        if let Some(lhs) = self.as_isize(vm) {
+            if lhs < 0 {
+                return Err(Box::new(VMError::DomainError));
+            } else {
+                let result = (lhs as f64).sqrt();
+                if result.round() == result {
+                    return Val::from_isize(vm, result as isize);
+                } else {
+                    return Ok(Double::new(vm, result));
+                }
+            }
+        }
+        self.tobj(vm).unwrap().sqrt(vm)
+    }
+
     pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
         debug_assert!(!self.is_illegal());
         match self.valkind() {

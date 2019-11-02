@@ -11,6 +11,7 @@ Integer = (
     >= argument = primitive
     << argument = primitive
     bitXor: argument = primitive
+    sqrt        = primitive
     asString    = primitive
 
     to: limit do: block = (

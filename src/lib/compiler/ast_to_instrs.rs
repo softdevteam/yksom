@@ -239,6 +239,7 @@ impl<'a> Compiler<'a> {
                     requires_args(1)?;
                     Ok(cobjects::MethodBody::Primitive(Primitive::BitXor))
                 }
+                "sqrt" => Ok(cobjects::MethodBody::Primitive(Primitive::Sqrt)),
                 "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
                 "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),

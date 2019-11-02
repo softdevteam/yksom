@@ -8,5 +8,6 @@ Double = (
     >= argument = ( ^(self < argument) not )
     <= argument = ( ^(self < argument) or: [ self = argument ] )
     negative = ( ^self < 0.0 )
+    sqrt     = primitive
     asString = primitive
 )

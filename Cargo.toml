@@ -39,6 +39,7 @@ itertools = "0.8"
 lrlex = "0.4"
 lrpar = "0.4"
 num-bigint = "0.2"
+num-integer = "0.1"
 num_enum = "0.3"
 num-traits = "0.2"
 natrob = { git="https://github.com/softdevteam/natrob", features=["abgc"] }
