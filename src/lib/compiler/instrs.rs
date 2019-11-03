@@ -11,10 +11,7 @@ use std::cell::UnsafeCell;
 
 use abgc::Gc;
 
-use crate::vm::{
-    objects::Method,
-    val::Val
-};
+use crate::vm::{objects::Method, val::Val};
 
 #[derive(Debug)]
 pub enum Instr {

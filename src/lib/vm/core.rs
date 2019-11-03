@@ -328,13 +328,28 @@ impl VM {
                 &Instr::Return => {
                     return SendReturn::Val;
                 }
-                &Instr::Send(moff, _ic) => {
+                &Instr::Send(moff, cache) => {
                     let (ref name, nargs) = &cls.sends[*moff];
                     let rcv = self.stack_pop_n(*nargs);
 
-                    let cls = rcv.get_class(self);
-                    let (meth_cls_val, meth) =
-                        stry!(stry!(cls.downcast::<Class>(self)).get_method(self, &name));
+                    let rcv_cls = rcv.get_class(self);
+                    // Implement our simple inline cache which just remembers the last class used
+                    // at this particular message send: if the cache is empty, or the receiver
+                    // class we find doesn't match, we update the cache.
+                    let (meth_cls_val, meth) = loop {
+                        let cache_cell = unsafe { &mut *cache.get() };
+                        if let Some((cls, (meth_cls_val, meth))) = cache_cell {
+                            if cls.bit_eq(&rcv_cls) {
+                                break (meth_cls_val.clone(), Gc::clone(meth));
+                            }
+                        }
+                        let (meth_cls_val, meth) =
+                            stry!(stry!(rcv_cls.downcast::<Class>(self)).get_method(self, &name));
+                        *cache_cell =
+                            Some((rcv_cls.clone(), (meth_cls_val.clone(), Gc::clone(&meth))));
+                        break (meth_cls_val, meth);
+                    };
+
                     self.current_frame().set_sp(self.stack_len() - *nargs);
                     let r = match meth.body {
                         MethodBody::Primitive(Primitive::Restart) => {
