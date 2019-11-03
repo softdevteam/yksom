@@ -261,20 +261,20 @@ impl VM {
     fn exec_user(&self, rcv: Val, cls: &Class, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
         let stack_start = self.stack_len();
-        while let Some(instr) = cls.instrs.get(pc) {
-            match *instr {
-                Instr::Block(blkinfo_off) => {
-                    let blkinfo = cls.blockinfo(blkinfo_off);
+        while let Some(ref instr) = cls.instrs.get(pc) {
+            match instr {
+                &Instr::Block(blkinfo_off) => {
+                    let blkinfo = cls.blockinfo(*blkinfo_off);
                     self.stack_push(Block::new(
                         self,
                         Val::recover(cls),
-                        blkinfo_off,
+                        *blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
                         blkinfo.num_params,
                     ));
                     pc = blkinfo.bytecode_end;
                 }
-                Instr::Builtin(b) => {
+                &Instr::Builtin(b) => {
                     self.stack_push(match b {
                         Builtin::Nil => self.nil.clone(),
                         Builtin::False => self.false_.clone(),
@@ -283,7 +283,7 @@ impl VM {
                     });
                     pc += 1;
                 }
-                Instr::ClosureReturn(closure_depth) => {
+                &Instr::ClosureReturn(closure_depth) => {
                     // We want to do a non-local return. Before we attempt that, we need to
                     // check that the block hasn't escaped its function (and we know we're in a
                     // block because only a block can attempt a non-local return).
@@ -291,7 +291,7 @@ impl VM {
                     // determining this: if this frame's (i.e. block's!) parent closure is not
                     // consistent with the frame stack, then the block has escaped.
                     let v = self.stack_pop();
-                    let parent_closure = self.current_frame().closure(closure_depth);
+                    let parent_closure = self.current_frame().closure(*closure_depth);
                     for (frame_depth, pframe) in
                         unsafe { &*self.frames.get() }.iter().rev().enumerate()
                     {
@@ -303,33 +303,33 @@ impl VM {
                     }
                     panic!("Return from escaped block");
                 }
-                Instr::Double(i) => {
-                    self.stack_push(Double::new(self, i));
+                &Instr::Double(i) => {
+                    self.stack_push(Double::new(self, *i));
                     pc += 1;
                 }
-                Instr::InstVarLookup(n) => {
+                &Instr::InstVarLookup(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    self.stack_push(inst.inst_var_lookup(n));
+                    self.stack_push(inst.inst_var_lookup(*n));
                     pc += 1;
                 }
-                Instr::InstVarSet(n) => {
+                &Instr::InstVarSet(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    inst.inst_var_set(n, self.stack_peek());
+                    inst.inst_var_set(*n, self.stack_peek());
                     pc += 1;
                 }
-                Instr::Int(i) => {
-                    self.stack_push(stry!(Val::from_isize(self, i)));
+                &Instr::Int(i) => {
+                    self.stack_push(stry!(Val::from_isize(self, *i)));
                     pc += 1;
                 }
-                Instr::Pop => {
+                &Instr::Pop => {
                     self.stack_pop();
                     pc += 1;
                 }
-                Instr::Return => {
+                &Instr::Return => {
                     return SendReturn::Val;
                 }
-                Instr::Send(moff) => {
-                    let (ref name, nargs) = &cls.sends[moff];
+                &Instr::Send(moff, _ic) => {
+                    let (ref name, nargs) = &cls.sends[*moff];
                     let rcv = self.stack_pop_n(*nargs);
 
                     let cls = rcv.get_class(self);
@@ -373,18 +373,18 @@ impl VM {
                     }
                     pc += 1;
                 }
-                Instr::String(string_off) => {
-                    self.stack_push(cls.strings[string_off].clone());
+                &Instr::String(string_off) => {
+                    self.stack_push(cls.strings[*string_off].clone());
                     pc += 1;
                 }
-                Instr::VarLookup(d, n) => {
-                    let val = self.current_frame().var_lookup(d, n);
+                &Instr::VarLookup(d, n) => {
+                    let val = self.current_frame().var_lookup(*d, *n);
                     self.stack_push(val);
                     pc += 1;
                 }
-                Instr::VarSet(d, n) => {
+                &Instr::VarSet(d, n) => {
                     let val = self.stack_peek();
-                    self.current_frame().var_set(d, n, val);
+                    self.current_frame().var_set(*d, *n, val);
                     pc += 1;
                 }
             }
