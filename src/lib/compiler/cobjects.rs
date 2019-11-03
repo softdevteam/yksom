@@ -13,7 +13,6 @@ use crate::compiler::instrs::{Instr, Primitive};
 
 #[derive(Eq, Hash, PartialEq)]
 pub enum Const {
-    Int(isize),
     String(String),
 }
 

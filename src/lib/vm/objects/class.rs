@@ -115,7 +115,6 @@ impl Class {
         for c in ccls.consts {
             consts.push(match c {
                 cobjects::Const::String(s) => String_::new(vm, s),
-                cobjects::Const::Int(i) => Val::from_isize(vm, i)?,
             });
         }
         Ok(Val::from_obj(

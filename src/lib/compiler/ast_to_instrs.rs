@@ -400,8 +400,7 @@ impl<'a> Compiler<'a> {
                             // With twos complement, `0-i` will always succeed, but just in case...
                             i = 0isize.checked_sub(i).unwrap();
                         }
-                        let const_off = self.const_off(cobjects::Const::Int(i));
-                        self.instrs.push(Instr::Const(const_off));
+                        self.instrs.push(Instr::Int(i));
                         Ok(1)
                     }
                     Err(e) => Err(vec![(*val, format!("{}", e))]),

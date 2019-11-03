@@ -16,6 +16,7 @@ pub enum Instr {
     Double(f64),
     InstVarLookup(usize),
     InstVarSet(usize),
+    Int(isize),
     Pop,
     Return,
     Send(usize),

@@ -321,6 +321,10 @@ impl VM {
                     inst.inst_var_set(n, self.stack_peek());
                     pc += 1;
                 }
+                Instr::Int(i) => {
+                    self.stack_push(stry!(Val::from_isize(self, i)));
+                    pc += 1;
+                }
                 Instr::Pop => {
                     self.stack_pop();
                     pc += 1;
