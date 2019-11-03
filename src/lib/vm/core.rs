@@ -303,10 +303,6 @@ impl VM {
                     }
                     panic!("Return from escaped block");
                 }
-                Instr::Const(coff) => {
-                    self.stack_push(cls.consts[coff].clone());
-                    pc += 1;
-                }
                 Instr::Double(i) => {
                     self.stack_push(Double::new(self, i));
                     pc += 1;
@@ -375,6 +371,10 @@ impl VM {
                         }
                         SendReturn::Val => (),
                     }
+                    pc += 1;
+                }
+                Instr::String(string_off) => {
+                    self.stack_push(cls.strings[string_off].clone());
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {

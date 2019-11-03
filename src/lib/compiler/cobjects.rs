@@ -11,11 +11,6 @@ use std::path::PathBuf;
 
 use crate::compiler::instrs::{Instr, Primitive};
 
-#[derive(Eq, Hash, PartialEq)]
-pub enum Const {
-    String(String),
-}
-
 pub struct Class {
     pub name: String,
     pub path: PathBuf,
@@ -24,8 +19,8 @@ pub struct Class {
     pub methods: Vec<Method>,
     pub blocks: Vec<Block>,
     pub instrs: Vec<Instr>,
-    pub consts: Vec<Const>,
     pub sends: Vec<(String, usize)>,
+    pub strings: Vec<String>,
 }
 
 pub struct Method {

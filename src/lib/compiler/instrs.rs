@@ -12,7 +12,6 @@ pub enum Instr {
     Block(usize),
     Builtin(Builtin),
     ClosureReturn(usize),
-    Const(usize),
     Double(f64),
     InstVarLookup(usize),
     InstVarSet(usize),
@@ -20,6 +19,7 @@ pub enum Instr {
     Pop,
     Return,
     Send(usize),
+    String(usize),
     VarLookup(usize, usize),
     VarSet(usize, usize),
 }

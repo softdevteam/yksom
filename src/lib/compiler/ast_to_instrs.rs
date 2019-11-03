@@ -30,9 +30,9 @@ pub struct Compiler<'a> {
     /// We collect all message sends together so that repeated calls of e.g. "println" take up
     /// constant space, no matter how many calls there are.
     sends: IndexMap<(String, usize), usize>,
-    /// We map constants to an offset so that we only store constants once, no matter how many
-    /// times they are reference in source code.
-    consts: IndexMap<cobjects::Const, usize>,
+    /// We map strings to an offset so that we only store them once, no matter how many times they
+    /// are referenced in source code.
+    strings: IndexMap<String, usize>,
     /// All the blocks a class contains.
     blocks: Vec<cobjects::Block>,
     /// The stack of variables at the current point of evaluation.
@@ -54,7 +54,7 @@ impl<'a> Compiler<'a> {
             path,
             instrs: Vec::new(),
             sends: IndexMap::new(),
-            consts: IndexMap::new(),
+            strings: IndexMap::new(),
             blocks: Vec::new(),
             vars_stack: Vec::new(),
             closure_depth: 0,
@@ -108,15 +108,15 @@ impl<'a> Compiler<'a> {
             num_inst_vars: astcls.inst_vars.len(),
             methods,
             instrs: compiler.instrs,
-            consts: compiler.consts.into_iter().map(|(k, _)| k).collect(),
             blocks: compiler.blocks,
             sends: compiler.sends.into_iter().map(|(k, _)| k).collect(),
+            strings: compiler.strings.into_iter().map(|(k, _)| k).collect(),
         })
     }
 
-    fn const_off(&mut self, c: cobjects::Const) -> usize {
-        let off = self.consts.len();
-        match self.consts.entry(c) {
+    fn string_off(&mut self, c: String) -> usize {
+        let off = self.strings.len();
+        match self.strings.entry(c) {
             indexmap::map::Entry::Occupied(e) => *e.get(),
             indexmap::map::Entry::Vacant(e) => {
                 e.insert(off);
@@ -443,8 +443,8 @@ impl<'a> Compiler<'a> {
                 let s_orig = self.lexer.lexeme_str(&lexeme);
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
-                let const_off = self.const_off(cobjects::Const::String(s));
-                self.instrs.push(Instr::Const(const_off));
+                let string_off = self.string_off(s);
+                self.instrs.push(Instr::String(string_off));
                 Ok(1)
             }
             ast::Expr::VarLookup(lexeme) => {
