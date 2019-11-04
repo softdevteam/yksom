@@ -8,6 +8,7 @@
 // terms.
 
 use std::{
+    cell::UnsafeCell,
     cmp::max,
     collections::hash_map::{self, HashMap},
     path::Path,
@@ -353,7 +354,8 @@ impl<'a> Compiler<'a> {
                 let mut stack_size = self.c_expr(lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(rhs)?);
                 let send_off = self.send_off((self.lexer.lexeme_str(&op).to_string(), 1));
-                self.instrs.push(Instr::Send(send_off));
+                self.instrs
+                    .push(Instr::Send(send_off, UnsafeCell::new(None)));
                 debug_assert!(stack_size > 0);
                 Ok(stack_size)
             }
@@ -415,7 +417,8 @@ impl<'a> Compiler<'a> {
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
                 let send_off = self.send_off((mn, msglist.len()));
-                self.instrs.push(Instr::Send(send_off));
+                self.instrs
+                    .push(Instr::Send(send_off, UnsafeCell::new(None)));
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
             }
@@ -423,7 +426,8 @@ impl<'a> Compiler<'a> {
                 let max_stack = self.c_expr(receiver)?;
                 for id in ids {
                     let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
-                    self.instrs.push(Instr::Send(send_off));
+                    self.instrs
+                        .push(Instr::Send(send_off, UnsafeCell::new(None)));
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)

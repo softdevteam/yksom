@@ -11,6 +11,7 @@
 
 use std::{collections::HashMap, path::PathBuf, str};
 
+use abgc::Gc;
 use abgc_derive::GcLayout;
 
 use crate::{
@@ -28,7 +29,7 @@ pub struct Class {
     pub path: PathBuf,
     pub supercls: Option<Val>,
     pub num_inst_vars: usize,
-    pub methods: HashMap<String, Method>,
+    pub methods: HashMap<String, Gc<Method>>,
     pub blockinfos: Vec<BlockInfo>,
     pub instrs: Vec<Instr>,
     pub sends: Vec<(String, usize)>,
@@ -96,7 +97,7 @@ impl Class {
                 name: cmeth.name.clone(),
                 body,
             };
-            methods.insert(cmeth.name, meth);
+            methods.insert(cmeth.name, Gc::new(meth));
         }
 
         let blockinfos = ccls
@@ -136,10 +137,10 @@ impl Class {
         Ok(self.name.clone())
     }
 
-    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, &Method), Box<VMError>> {
+    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, Gc<Method>), Box<VMError>> {
         self.methods
             .get(msg)
-            .map(|x| Ok((Val::recover(self), x)))
+            .map(|x| Ok((Val::recover(self), Gc::clone(x))))
             .unwrap_or_else(|| match &self.supercls {
                 Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
                 None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),

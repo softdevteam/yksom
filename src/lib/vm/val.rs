@@ -242,6 +242,13 @@ impl Val {
             }
         }
     }
+
+    /// Is this `Val` bit equal to `other`? This is a very strong property, generally used as a
+    /// fast proxy for "if both `Val`s are `GCBox`s then do they point to the same thing?" since,
+    /// in such cases, at least one of the sides has been pre-guaranteed to be a `GCBox`.
+    pub fn bit_eq(&self, other: &Val) -> bool {
+        self.val == other.val
+    }
 }
 
 // Implement each function from the `Obj` type so that we can efficiently deal with tagged values.

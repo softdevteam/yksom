@@ -7,7 +7,13 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-#[derive(Clone, Copy, Debug)]
+use std::cell::UnsafeCell;
+
+use abgc::Gc;
+
+use crate::vm::{objects::Method, val::Val};
+
+#[derive(Debug)]
 pub enum Instr {
     Block(usize),
     Builtin(Builtin),
@@ -18,7 +24,7 @@ pub enum Instr {
     Int(isize),
     Pop,
     Return,
-    Send(usize),
+    Send(usize, UnsafeCell<Option<(Val, (Val, Gc<Method>))>>),
     String(usize),
     VarLookup(usize, usize),
     VarSet(usize, usize),
