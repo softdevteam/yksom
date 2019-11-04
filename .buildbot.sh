@@ -15,15 +15,3 @@ rustup component add --toolchain nightly rustfmt-preview || cargo +nightly insta
 cargo +nightly fmt --all -- --check
 cargo test
 cargo test --release
-
-if [ "X`git rev-parse --abbrev-ref HEAD`" = "Xstaging" ]; then
-    cargo doc --no-deps
-    cd target/doc
-    git init
-    git config user.email "noreply@soft-dev.org"
-    git config user.name "buildbot"
-    git add .
-    git commit -m "Deploy gh-pages"
-    git remote add origin git@github.com:softdevteam/yksom.git
-    GIT_SSH_COMMAND="/usr/bin/ssh -o StrictHostKeyChecking=no -i /opt/ssh-keys/github_yksom" git push -f git@github.com:softdevteam/yksom.git HEAD:gh-pages
-fi
