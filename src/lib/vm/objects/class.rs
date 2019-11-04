@@ -31,8 +31,8 @@ pub struct Class {
     pub methods: HashMap<String, Method>,
     pub blockinfos: Vec<BlockInfo>,
     pub instrs: Vec<Instr>,
-    pub consts: Vec<Val>,
     pub sends: Vec<(String, usize)>,
+    pub strings: Vec<Val>,
 }
 
 /// Minimal information about a SOM block.
@@ -111,13 +111,11 @@ impl Class {
             })
             .collect();
 
-        let mut consts = Vec::with_capacity(ccls.consts.len());
-        for c in ccls.consts {
-            consts.push(match c {
-                cobjects::Const::String(s) => String_::new(vm, s),
-                cobjects::Const::Int(i) => Val::from_isize(vm, i)?,
-            });
-        }
+        let strings = ccls
+            .strings
+            .into_iter()
+            .map(|s| String_::new(vm, s))
+            .collect();
         Ok(Val::from_obj(
             vm,
             Class {
@@ -128,8 +126,8 @@ impl Class {
                 methods,
                 blockinfos,
                 instrs: ccls.instrs,
-                consts,
                 sends: ccls.sends,
+                strings,
             },
         ))
     }
