@@ -34,11 +34,11 @@ use super::{
 #[cfg(target_pointer_width = "64")]
 pub const BITSIZE: usize = 64;
 #[cfg(target_pointer_width = "64")]
-pub const TAG_BITSIZE: usize = 3; // Number of bits
+pub const TAG_BITSIZE: usize = 1; // Number of bits
 #[cfg(target_pointer_width = "64")]
-pub const TAG_BITMASK: usize = (1 << 3) - 1;
+pub const TAG_BITMASK: usize = 0b1;
 #[cfg(target_pointer_width = "64")]
-pub const INT_BITMASK: usize = (1 << 4) - 1;
+pub const INT_BITMASK: usize = 0b11;
 
 #[cfg(target_pointer_width = "64")]
 #[derive(Debug, PartialEq, IntoPrimitive, UnsafeFromPrimitive)]
