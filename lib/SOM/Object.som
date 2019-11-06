@@ -7,6 +7,8 @@ Object = nil (
     == other = primitive
     ~= other = (^ (self == other) not )
 
+    value = ( ^self )
+
     print = ( self asString print )
     println = (
         self print.
