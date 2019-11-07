@@ -64,7 +64,7 @@ pub trait NotUnboxable {}
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
-    pub(crate) val: usize,
+    val: usize,
 }
 
 impl Val {
