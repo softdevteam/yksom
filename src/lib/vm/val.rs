@@ -81,6 +81,14 @@ impl Val {
         }
     }
 
+    /// If this `Val` is a `GCBox` then convert it into `ThinObj`. The caller of this function
+    /// must ensure that the `Val` is a `GCBox`, so this is not a public function.
+    fn val_to_tobj(&self) -> &ThinObj {
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        let ptr = (self.val & !(ValKind::GCBOX as usize)) as *const ThinObj;
+        unsafe { &*ptr }
+    }
+
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
     /// then turned into an actual object with `tobj`: failure to follow these steps will result in
     /// undefined behaviour.
@@ -132,7 +140,7 @@ impl Val {
                 got: Int::static_objtype(),
             })),
             ValKind::GCBOX => {
-                let tobj = unsafe { &*(self.val as *const ThinObj) };
+                let tobj = self.val_to_tobj();
                 tobj.downcast().ok_or_else(|| {
                     Box::new(VMError::TypeError {
                         expected: T::static_objtype(),
@@ -146,20 +154,20 @@ impl Val {
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
     /// be boxed) or return `None` if the cast is not valid.
     pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<&T> {
+        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::INT => None,
-            ValKind::GCBOX => unsafe { &*(self.val as *const ThinObj) }.downcast(),
+            ValKind::GCBOX => self.val_to_tobj().downcast(),
         }
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
     pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, Box<VMError>> {
+        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::GCBOX => {
-                debug_assert_eq!(ValKind::GCBOX as usize, 0);
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                debug_assert_ne!(self.val, 0);
-                Ok(unsafe { Gc::clone_from_raw(self.val as *const _) })
+                Ok(unsafe { Gc::clone_from_raw(self.val_to_tobj()) })
             }
             ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap()).map(|v| v.tobj(vm))?,
         }
@@ -515,18 +523,13 @@ binop_typeerror!(less_than_equals, <=);
 
 impl Clone for Val {
     fn clone(&self) -> Self {
+        debug_assert!(!self.is_illegal());
         let val = match self.valkind() {
-            ValKind::GCBOX => {
-                if self.val != 0 {
-                    unsafe {
-                        transmute::<*const ThinObj, usize>(
-                            Gc::<ThinObj>::clone_from_raw(self.val as *const _).into_raw(),
-                        )
-                    }
-                } else {
-                    0
-                }
-            }
+            ValKind::GCBOX => unsafe {
+                transmute::<*const ThinObj, usize>(
+                    Gc::<ThinObj>::clone_from_raw(self.val_to_tobj()).into_raw(),
+                )
+            },
             ValKind::INT => self.val,
         };
         Val { val }
@@ -538,7 +541,7 @@ impl Drop for Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 if self.val != 0 {
-                    drop(unsafe { Gc::<ThinObj>::from_raw(self.val as *const _) });
+                    drop(unsafe { Gc::<ThinObj>::from_raw(self.val_to_tobj()) });
                 }
             }
             ValKind::INT => (),
