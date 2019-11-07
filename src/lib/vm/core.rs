@@ -449,6 +449,12 @@ impl VM {
                 self.stack_push(stry!(rcv.greater_than_equals(self, self.stack_pop())));
                 SendReturn::Val
             }
+            Primitive::Halt => unimplemented!(),
+            Primitive::Hashcode => unimplemented!(),
+            Primitive::Inspect => unimplemented!(),
+            Primitive::InstVarAt => unimplemented!(),
+            Primitive::InstVarAtPut => unimplemented!(),
+            Primitive::InstVarNamed => unimplemented!(),
             Primitive::LessThan => {
                 self.stack_push(stry!(rcv.less_than(self, self.stack_pop())));
                 SendReturn::Val
@@ -473,6 +479,11 @@ impl VM {
                 self.stack_push(stry!(rcv.not_equals(self, self.stack_pop())));
                 SendReturn::Val
             }
+            Primitive::ObjectSize => unimplemented!(),
+            Primitive::Perform => unimplemented!(),
+            Primitive::PerformInSuperClass => unimplemented!(),
+            Primitive::PerformWithArguments => unimplemented!(),
+            Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
             Primitive::RefEquals => {
                 self.stack_push(stry!(rcv.ref_equals(self, self.stack_pop())));
                 SendReturn::Val
