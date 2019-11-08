@@ -428,7 +428,7 @@ impl<'a> Compiler<'a> {
             ast::Expr::KeywordMsg { receiver, msglist } => {
                 let mut max_stack = self.c_expr(receiver)?;
                 let mut mn = String::new();
-                for (i, (kw, expr)) in msglist.into_iter().enumerate() {
+                for (i, (kw, expr)) in msglist.iter().enumerate() {
                     mn.push_str(self.lexer.lexeme_str(&kw));
                     let expr_stack = self.c_expr(expr)?;
                     max_stack = max(max_stack, 1 + i + expr_stack);

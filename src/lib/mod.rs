@@ -23,6 +23,8 @@
 #![feature(specialization)]
 #![feature(unsize)]
 #![allow(clippy::cognitive_complexity)]
+#![allow(clippy::float_cmp)]
+#![allow(clippy::never_loop)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
