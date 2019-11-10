@@ -5,4 +5,5 @@ Boolean = (
     )
 
     && boolean = ( ^self and: boolean )
+    || boolean = ( ^self or: boolean )
 )
