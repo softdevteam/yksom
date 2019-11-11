@@ -159,7 +159,12 @@ impl Obj for ArbInt {
         if self.val < Zero::zero() {
             Err(Box::new(VMError::DomainError))
         } else {
-            ArbInt::new(vm, self.val.sqrt())
+            let result = self.val.sqrt();
+            if let Some(i) = result.to_isize() {
+                Val::from_isize(vm, i)
+            } else {
+                ArbInt::new(vm, result)
+            }
         }
     }
 
