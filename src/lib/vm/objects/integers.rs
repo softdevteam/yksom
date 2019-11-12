@@ -10,6 +10,13 @@
 //! yksom has three ways of representing integers: as tagged integer (inside a `Val`); boxed
 //! `isize`'s (the `Int` struct); and arbitrary sized integers (the `ArbInt` struct). This module
 //! contains the implementations of [`Int`](Int) and [`ArbInt`](ArbInt).
+//!
+//! There is an implicit constraint between `ArbInt` and the other two types of integers: an
+//! `ArbInt` must never be small enough to fit in a boxed isize (or, by extension, in a tagged
+//! integer). That means that any operations which might narrow an `ArbInt` need to check whether
+//! the result is now small enough to fit in one of the smaller integer types. Note that there is
+//! no such constraint between tagged and boxed integers: sometimes integers that are small enough
+//! to be tagged are boxed (mostly for convenience).
 
 #![allow(clippy::new_ret_no_self)]
 
