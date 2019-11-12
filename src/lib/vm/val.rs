@@ -282,26 +282,11 @@ impl Val {
 
     /// Produce a new `Val` which adds `other` to this.
     pub fn add(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_add(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => {
-                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs);
-                    }
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                // The "obvious" way of implementing this is as:
-                //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs.bigint())
-                // but because `+` is commutative, we can avoid creating a
-                // temporary BigInt.
-                return ArbInt::new(vm, rhs.bigint() + lhs);
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return Ok(Double::new(vm, (lhs as f64) + rhs.double()));
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_add(other.val) {
+                return Ok(Val { val });
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().add(vm, other)
     }
@@ -324,79 +309,37 @@ impl Val {
 
     /// Produce a new `Val` which subtracts `other` from this.
     pub fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_sub(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => {
-                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs);
-                    }
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs.bigint());
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return Ok(Double::new(vm, (lhs as f64) - rhs.double()));
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_sub(other.val) {
+                return Ok(Val { val });
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().sub(vm, other)
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
     pub fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_mul(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => {
-                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs);
-                    }
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                // The "obvious" way of implementing this is as:
-                //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs.bigint())
-                // but because `*` is commutative, we can avoid creating a
-                // temporary BigInt.
-                return ArbInt::new(vm, rhs.bigint() * lhs);
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return Ok(Double::new(vm, (lhs as f64) * rhs.double()));
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_mul(other.val / (1 << TAG_BITSIZE)) {
+                return Ok(Val { val });
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().mul(vm, other)
     }
 
     /// Produce a new `Val` which divides `other` from this.
     pub fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_div(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => return Err(Box::new(VMError::DivisionByZero)),
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                match BigInt::from_isize(lhs).unwrap().checked_div(rhs.bigint()) {
-                    Some(i) => return ArbInt::new(vm, i),
-                    None => return Err(Box::new(VMError::DivisionByZero)),
-                }
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                if rhs.double() == 0f64 {
-                    return Err(Box::new(VMError::DivisionByZero));
-                } else {
-                    // Note that converting an f64 to an isize in Rust can lead to undefined
-                    // behaviour https://github.com/rust-lang/rust/issues/10184 -- it's not obvious
-                    // that we can do anything about this other than wait for it to be fixed in
-                    // LLVM and Rust.
-                    return Val::from_isize(vm, ((lhs as f64) / rhs.double()) as isize);
-                }
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if other.val != 0 {
+                return Ok(Val {
+                    val: (self.val / other.val) * (1 << TAG_BITSIZE),
+                });
+            } else {
+                return Err(Box::new(VMError::DivisionByZero));
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().div(vm, other)
     }
