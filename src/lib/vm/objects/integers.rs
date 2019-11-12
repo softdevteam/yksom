@@ -127,7 +127,7 @@ impl Obj for ArbInt {
                 Err(Box::new(VMError::DivisionByZero))
             } else {
                 match self.val.to_f64() {
-                    Some(i) => Ok(Double::new(vm, i / rhs.double())),
+                    Some(i) => ArbInt::new(vm, BigInt::from_f64(i / rhs.double()).unwrap()),
                     None => Err(Box::new(VMError::CantRepresentAsDouble)),
                 }
             }
