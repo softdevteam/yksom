@@ -80,12 +80,12 @@ impl Val {
         }
     }
 
-    /// If this `Val` is a `GCBox` then convert it into `ThinObj`. The caller of this function
-    /// must ensure that the `Val` is a `GCBox`, so this is not a public function.
-    fn val_to_tobj(&self) -> &ThinObj {
+    /// If this `Val` is a `GCBox` then convert it into `ThinObj`; if this `Val` is not a `GCBox`
+    /// then undefined behaviour will occur (hence why this function is `unsafe`).
+    unsafe fn val_to_tobj(&self) -> &ThinObj {
         debug_assert_eq!(self.valkind(), ValKind::GCBOX);
         let ptr = (self.val & !(ValKind::GCBOX as usize)) as *const ThinObj;
-        unsafe { &*ptr }
+        &*ptr
     }
 
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
@@ -141,7 +141,7 @@ impl Val {
                 got: Int::static_objtype(),
             })),
             ValKind::GCBOX => {
-                let tobj = self.val_to_tobj();
+                let tobj = unsafe { self.val_to_tobj() };
                 tobj.downcast().ok_or_else(|| {
                     Box::new(VMError::TypeError {
                         expected: T::static_objtype(),
@@ -158,7 +158,7 @@ impl Val {
         debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::INT => None,
-            ValKind::GCBOX => self.val_to_tobj().downcast(),
+            ValKind::GCBOX => unsafe { self.val_to_tobj() }.downcast(),
         }
     }
 
