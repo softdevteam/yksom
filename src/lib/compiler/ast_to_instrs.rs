@@ -236,6 +236,10 @@ impl<'a> Compiler<'a> {
                         Primitive::GreaterThanEquals,
                     ))
                 }
+                "&" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::And))
+                }
                 "bitXor:" => {
                     requires_args(1)?;
                     Ok(cobjects::MethodBody::Primitive(Primitive::BitXor))

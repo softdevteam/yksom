@@ -41,6 +41,7 @@ pub enum Builtin {
 #[derive(Clone, Copy, Debug)]
 pub enum Primitive {
     Add,
+    And,
     AsString,
     BitXor,
     Class,
