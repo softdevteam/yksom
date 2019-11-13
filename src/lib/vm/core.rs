@@ -612,7 +612,7 @@ impl Frame {
         num_args: usize,
     ) -> Self {
         let mut vars = Vec::with_capacity(num_vars);
-        vars.resize(num_vars, Val::illegal());
+        vars.resize_with(num_vars, || Val::illegal());
 
         if is_method {
             vars[0] = self_val;

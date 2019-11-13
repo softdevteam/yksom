@@ -34,11 +34,11 @@ use super::{
 #[cfg(target_pointer_width = "64")]
 pub const BITSIZE: usize = 64;
 #[cfg(target_pointer_width = "64")]
-pub const TAG_BITSIZE: usize = 3; // Number of bits
+pub const TAG_BITSIZE: usize = 1; // Number of bits
 #[cfg(target_pointer_width = "64")]
-pub const TAG_BITMASK: usize = (1 << 3) - 1;
+pub const TAG_BITMASK: usize = 0b1;
 #[cfg(target_pointer_width = "64")]
-pub const INT_BITMASK: usize = (1 << 4) - 1;
+pub const INT_BITMASK: usize = 0b11;
 
 #[cfg(target_pointer_width = "64")]
 #[derive(Debug, PartialEq, IntoPrimitive, UnsafeFromPrimitive)]
@@ -47,11 +47,11 @@ pub const INT_BITMASK: usize = (1 << 4) - 1;
 //   1) Fit inside TAG_BITSIZE bits
 //   2) Safely convert to usize using `as`
 pub enum ValKind {
-    GCBOX = 0b000,
+    GCBOX = 0b1,
     // Anything which can be stored unboxed *must* not have the `NotUnboxable` trait implemented
     // for them. In other words, if an existing type is added to the list of unboxable things, you
     // need to check whether it implemented `NotUnboxable` and, if so, remove that implementation.
-    INT = 0b001,
+    INT = 0b0,
 }
 
 /// Objects which `impl` this trait guarantee that they can only ever be stored boxed.
@@ -64,7 +64,7 @@ pub trait NotUnboxable {}
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
-    pub(crate) val: usize,
+    val: usize,
 }
 
 impl Val {
@@ -73,12 +73,19 @@ impl Val {
     /// [In an ideal world, this would be a function on `Obj` itself, but that would mean that
     /// `Obj` couldn't be a trait object. Oh well.]
     pub fn from_obj<T: Obj + 'static>(_: &VM, obj: T) -> Self {
-        debug_assert_eq!(ValKind::GCBOX as usize, 0);
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
         Val {
-            val: unsafe { transmute::<*const ThinObj, usize>(ptr) },
+            val: unsafe { transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize) },
         }
+    }
+
+    /// If this `Val` is a `GCBox` then convert it into `ThinObj`. The caller of this function
+    /// must ensure that the `Val` is a `GCBox`, so this is not a public function.
+    fn val_to_tobj(&self) -> &ThinObj {
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        let ptr = (self.val & !(ValKind::GCBOX as usize)) as *const ThinObj;
+        unsafe { &*ptr }
     }
 
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
@@ -88,7 +95,7 @@ impl Val {
         unsafe {
             let ptr = ThinObj::recover(obj).into_raw();
             Val {
-                val: transmute::<*const ThinObj, usize>(ptr),
+                val: transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize),
             }
         }
     }
@@ -96,12 +103,14 @@ impl Val {
     /// Create a value upon which all operations are invalid. This can be used as a sentinel or
     /// while initialising part of the system.
     pub fn illegal() -> Val {
-        Val { val: 0 }
+        Val {
+            val: ValKind::GCBOX as usize,
+        }
     }
 
     /// Is this `Var` illegal i.e. is it an empty placeholder waiting for a "proper" value?
     pub fn is_illegal(&self) -> bool {
-        self.val == 0
+        self.val == (ValKind::GCBOX as usize)
     }
 
     pub fn valkind(&self) -> ValKind {
@@ -132,7 +141,7 @@ impl Val {
                 got: Int::static_objtype(),
             })),
             ValKind::GCBOX => {
-                let tobj = unsafe { &*(self.val as *const ThinObj) };
+                let tobj = self.val_to_tobj();
                 tobj.downcast().ok_or_else(|| {
                     Box::new(VMError::TypeError {
                         expected: T::static_objtype(),
@@ -146,20 +155,20 @@ impl Val {
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
     /// be boxed) or return `None` if the cast is not valid.
     pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<&T> {
+        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::INT => None,
-            ValKind::GCBOX => unsafe { &*(self.val as *const ThinObj) }.downcast(),
+            ValKind::GCBOX => self.val_to_tobj().downcast(),
         }
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
     pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, Box<VMError>> {
+        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::GCBOX => {
-                debug_assert_eq!(ValKind::GCBOX as usize, 0);
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                debug_assert_ne!(self.val, 0);
-                Ok(unsafe { Gc::clone_from_raw(self.val as *const _) })
+                Ok(unsafe { Gc::clone_from_raw(self.val_to_tobj()) })
             }
             ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap()).map(|v| v.tobj(vm))?,
         }
@@ -273,26 +282,11 @@ impl Val {
 
     /// Produce a new `Val` which adds `other` to this.
     pub fn add(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_add(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => {
-                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs);
-                    }
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                // The "obvious" way of implementing this is as:
-                //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() + rhs.bigint())
-                // but because `+` is commutative, we can avoid creating a
-                // temporary BigInt.
-                return ArbInt::new(vm, rhs.bigint() + lhs);
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return Ok(Double::new(vm, (lhs as f64) + rhs.double()));
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_add(other.val) {
+                return Ok(Val { val });
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().add(vm, other)
     }
@@ -315,79 +309,37 @@ impl Val {
 
     /// Produce a new `Val` which subtracts `other` from this.
     pub fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_sub(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => {
-                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs);
-                    }
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() - rhs.bigint());
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return Ok(Double::new(vm, (lhs as f64) - rhs.double()));
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_sub(other.val) {
+                return Ok(Val { val });
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().sub(vm, other)
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
     pub fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_mul(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => {
-                        return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs);
-                    }
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                // The "obvious" way of implementing this is as:
-                //   ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() * rhs.bigint())
-                // but because `*` is commutative, we can avoid creating a
-                // temporary BigInt.
-                return ArbInt::new(vm, rhs.bigint() * lhs);
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                return Ok(Double::new(vm, (lhs as f64) * rhs.double()));
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_mul(other.val / (1 << TAG_BITSIZE)) {
+                return Ok(Val { val });
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().mul(vm, other)
     }
 
     /// Produce a new `Val` which divides `other` from this.
     pub fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                match lhs.checked_div(rhs) {
-                    Some(i) => return Val::from_isize(vm, i),
-                    None => return Err(Box::new(VMError::DivisionByZero)),
-                }
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                match BigInt::from_isize(lhs).unwrap().checked_div(rhs.bigint()) {
-                    Some(i) => return ArbInt::new(vm, i),
-                    None => return Err(Box::new(VMError::DivisionByZero)),
-                }
-            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-                if rhs.double() == 0f64 {
-                    return Err(Box::new(VMError::DivisionByZero));
-                } else {
-                    // Note that converting an f64 to an isize in Rust can lead to undefined
-                    // behaviour https://github.com/rust-lang/rust/issues/10184 -- it's not obvious
-                    // that we can do anything about this other than wait for it to be fixed in
-                    // LLVM and Rust.
-                    return Val::from_isize(vm, ((lhs as f64) / rhs.double()) as isize);
-                }
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if other.val != 0 {
+                return Ok(Val {
+                    val: (self.val / other.val) * (1 << TAG_BITSIZE),
+                });
+            } else {
+                return Err(Box::new(VMError::DivisionByZero));
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
         }
         self.tobj(vm).unwrap().div(vm, other)
     }
@@ -515,18 +467,13 @@ binop_typeerror!(less_than_equals, <=);
 
 impl Clone for Val {
     fn clone(&self) -> Self {
+        debug_assert!(!self.is_illegal());
         let val = match self.valkind() {
-            ValKind::GCBOX => {
-                if self.val != 0 {
-                    unsafe {
-                        transmute::<*const ThinObj, usize>(
-                            Gc::<ThinObj>::clone_from_raw(self.val as *const _).into_raw(),
-                        )
-                    }
-                } else {
-                    0
-                }
-            }
+            ValKind::GCBOX => unsafe {
+                transmute::<*const ThinObj, usize>(
+                    Gc::<ThinObj>::clone_from_raw(self.val_to_tobj()).into_raw(),
+                ) | (ValKind::GCBOX as usize)
+            },
             ValKind::INT => self.val,
         };
         Val { val }
@@ -535,13 +482,13 @@ impl Clone for Val {
 
 impl Drop for Val {
     fn drop(&mut self) {
-        match self.valkind() {
-            ValKind::GCBOX => {
-                if self.val != 0 {
-                    drop(unsafe { Gc::<ThinObj>::from_raw(self.val as *const _) });
+        if !self.is_illegal() {
+            match self.valkind() {
+                ValKind::GCBOX => {
+                    drop(unsafe { Gc::<ThinObj>::from_raw(self.val_to_tobj()) });
                 }
+                ValKind::INT => (),
             }
-            ValKind::INT => (),
         }
     }
 }
