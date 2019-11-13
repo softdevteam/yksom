@@ -10,6 +10,7 @@ Integer = (
     <= argument = primitive
     >= argument = primitive
     << argument = primitive
+    & argument = primitive
     bitXor: argument = primitive
     sqrt        = primitive
     asString    = primitive

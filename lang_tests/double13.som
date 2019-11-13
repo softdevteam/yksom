@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: TypeError { expected: Int, got: Double }
+"
+
+double13 = (
+    run = (
+        1 & 1.1.
+    )
+)

@@ -415,6 +415,10 @@ impl VM {
                 self.stack_push(stry!(rcv.add(self, self.stack_pop())));
                 SendReturn::Val
             }
+            Primitive::And => {
+                self.stack_push(stry!(rcv.and(self, self.stack_pop())));
+                SendReturn::Val
+            }
             Primitive::AsString => {
                 self.stack_push(stry!(rcv.to_strval(self)));
                 SendReturn::Val

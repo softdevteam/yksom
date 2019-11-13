@@ -90,6 +90,11 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
         unimplemented!();
     }
 
+    /// Produce a new `Val` which performs a bitwise and with `other` and this.
+    fn and(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
+        unimplemented!();
+    }
+
     /// Produce a new `Val` which subtracts `other` from this.
     fn sub(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();

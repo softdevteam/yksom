@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: TypeError { expected: Int, got: String_ }
+"
+
+int31 = (
+    run = (
+        1 & 'a'.
+    )
+)
