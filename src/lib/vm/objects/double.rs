@@ -57,23 +57,6 @@ impl Obj for Double {
         }
     }
 
-    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
-            Ok(Double::new(vm, self.val - (rhs as f64)))
-        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            Ok(Double::new(vm, self.val - rhs.val))
-        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            match rhs.bigint().to_f64() {
-                Some(i) => Ok(Double::new(vm, self.val - i)),
-                None => Err(Box::new(VMError::CantRepresentAsDouble)),
-            }
-        } else {
-            Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }))
-        }
-    }
-
     fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val * (rhs as f64)))
@@ -93,6 +76,23 @@ impl Obj for Double {
 
     fn sqrt(&self, vm: &VM) -> Result<Val, Box<VMError>> {
         Ok(Double::new(vm, self.val.sqrt()))
+    }
+
+    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            Ok(Double::new(vm, self.val - (rhs as f64)))
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            Ok(Double::new(vm, self.val - rhs.val))
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            match rhs.bigint().to_f64() {
+                Some(i) => Ok(Double::new(vm, self.val - i)),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
+            }
+        } else {
+            Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }))
+        }
     }
 
     fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {

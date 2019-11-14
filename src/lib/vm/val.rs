@@ -280,6 +280,14 @@ impl Val {
         }
     }
 
+    pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+        debug_assert!(!self.is_illegal());
+        match self.valkind() {
+            ValKind::INT => Ok(String_::new(vm, self.as_isize(vm).unwrap().to_string())),
+            ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
+        }
+    }
+
     /// Produce a new `Val` which adds `other` to this.
     pub fn add(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);
@@ -307,44 +315,6 @@ impl Val {
         self.tobj(vm).unwrap().and(vm, other)
     }
 
-    /// Produce a new `Val` which performs a bitwise xor operation with `other` and this.
-    pub fn bit_xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
-                return Val::from_isize(vm, lhs ^ rhs);
-            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() ^ rhs.bigint());
-            }
-            return Err(Box::new(VMError::TypeError {
-                expected: self.dyn_objtype(vm),
-                got: other.dyn_objtype(vm),
-            }));
-        }
-        self.tobj(vm).unwrap().bit_xor(vm, other)
-    }
-
-    /// Produce a new `Val` which subtracts `other` from this.
-    pub fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        debug_assert_eq!(ValKind::INT as usize, 0);
-        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
-            if let Some(val) = self.val.checked_sub(other.val) {
-                return Ok(Val { val });
-            }
-        }
-        self.tobj(vm).unwrap().sub(vm, other)
-    }
-
-    /// Produce a new `Val` which multiplies `other` to this.
-    pub fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        debug_assert_eq!(ValKind::INT as usize, 0);
-        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
-            if let Some(val) = self.val.checked_mul(other.val / (1 << TAG_BITSIZE)) {
-                return Ok(Val { val });
-            }
-        }
-        self.tobj(vm).unwrap().mul(vm, other)
-    }
-
     /// Produce a new `Val` which divides `other` from this.
     pub fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);
@@ -358,6 +328,17 @@ impl Val {
             }
         }
         self.tobj(vm).unwrap().div(vm, other)
+    }
+
+    /// Produce a new `Val` which multiplies `other` to this.
+    pub fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_mul(other.val / (1 << TAG_BITSIZE)) {
+                return Ok(Val { val });
+            }
+        }
+        self.tobj(vm).unwrap().mul(vm, other)
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
@@ -412,12 +393,31 @@ impl Val {
         self.tobj(vm).unwrap().sqrt(vm)
     }
 
-    pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
-        debug_assert!(!self.is_illegal());
-        match self.valkind() {
-            ValKind::INT => Ok(String_::new(vm, self.as_isize(vm).unwrap().to_string())),
-            ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
+    /// Produce a new `Val` which subtracts `other` from this.
+    pub fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        debug_assert_eq!(ValKind::INT as usize, 0);
+        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
+            if let Some(val) = self.val.checked_sub(other.val) {
+                return Ok(Val { val });
+            }
         }
+        self.tobj(vm).unwrap().sub(vm, other)
+    }
+
+    /// Produce a new `Val` which performs a bitwise xor operation with `other` and this.
+    pub fn xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                return Val::from_isize(vm, lhs ^ rhs);
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() ^ rhs.bigint());
+            }
+            return Err(Box::new(VMError::TypeError {
+                expected: self.dyn_objtype(vm),
+                got: other.dyn_objtype(vm),
+            }));
+        }
+        self.tobj(vm).unwrap().xor(vm, other)
     }
 
     /// Is this `Val` reference equal to `other`? Notice that for integers (but not Doubles)

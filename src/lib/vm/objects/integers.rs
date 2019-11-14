@@ -83,53 +83,6 @@ impl Obj for ArbInt {
         }
     }
 
-    fn bit_xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
-            ArbInt::new(vm, &self.val ^ BigInt::from_isize(rhs).unwrap())
-        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            ArbInt::new(vm, &self.val ^ &rhs.val)
-        } else {
-            Err(Box::new(VMError::TypeError {
-                expected: self.dyn_objtype(),
-                got: other.dyn_objtype(vm),
-            }))
-        }
-    }
-
-    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
-            ArbInt::new(vm, &self.val - rhs)
-        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            ArbInt::new(vm, &self.val - &rhs.val)
-        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            match self.val.to_f64() {
-                Some(i) => Ok(Double::new(vm, i - rhs.double())),
-                None => Err(Box::new(VMError::CantRepresentAsDouble)),
-            }
-        } else {
-            Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }))
-        }
-    }
-
-    fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
-            ArbInt::new(vm, &self.val * rhs)
-        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            ArbInt::new(vm, &self.val * &rhs.val)
-        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            match self.val.to_f64() {
-                Some(i) => Ok(Double::new(vm, i * rhs.double())),
-                None => Err(Box::new(VMError::CantRepresentAsDouble)),
-            }
-        } else {
-            Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }))
-        }
-    }
-
     fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs == 0 {
@@ -150,6 +103,23 @@ impl Obj for ArbInt {
                     Some(i) => ArbInt::new(vm, BigInt::from_f64(i / rhs.double()).unwrap()),
                     None => Err(Box::new(VMError::CantRepresentAsDouble)),
                 }
+            }
+        } else {
+            Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }))
+        }
+    }
+
+    fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val * rhs)
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val * &rhs.val)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            match self.val.to_f64() {
+                Some(i) => Ok(Double::new(vm, i * rhs.double())),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
             }
         } else {
             Err(Box::new(VMError::NotANumber {
@@ -185,6 +155,36 @@ impl Obj for ArbInt {
             } else {
                 ArbInt::new(vm, result)
             }
+        }
+    }
+
+    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val - rhs)
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val - &rhs.val)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            match self.val.to_f64() {
+                Some(i) => Ok(Double::new(vm, i - rhs.double())),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
+            }
+        } else {
+            Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }))
+        }
+    }
+
+    fn xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val ^ BigInt::from_isize(rhs).unwrap())
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val ^ &rhs.val)
+        } else {
+            Err(Box::new(VMError::TypeError {
+                expected: self.dyn_objtype(),
+                got: other.dyn_objtype(vm),
+            }))
         }
     }
 
@@ -341,18 +341,29 @@ impl Obj for Int {
         }
     }
 
-    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
-            match self.val.checked_sub(rhs) {
-                Some(i) => Val::from_isize(vm, i),
-                None => ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() - rhs),
+            if rhs == 0 {
+                Err(Box::new(VMError::DivisionByZero))
+            } else {
+                Val::from_isize(vm, self.val / rhs)
             }
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            ArbInt::new(vm, &self.val - &rhs.val)
+            match BigInt::from_isize(self.val).unwrap().checked_div(&rhs.val) {
+                Some(i) => ArbInt::new(vm, i),
+                None => Err(Box::new(VMError::DivisionByZero)),
+            }
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            match self.val.to_f64() {
-                Some(i) => Ok(Double::new(vm, i - rhs.double())),
-                None => Err(Box::new(VMError::CantRepresentAsDouble)),
+            if rhs.double() == 0f64 {
+                Err(Box::new(VMError::DivisionByZero))
+            } else {
+                // Note that converting an f64 to an isize in Rust can lead to undefined behaviour
+                // https://github.com/rust-lang/rust/issues/10184 -- it's not obvious that we can
+                // do anything about this other than wait for it to be fixed in LLVM and Rust.
+                match self.val.to_f64() {
+                    Some(i) => Val::from_isize(vm, (i / rhs.double()) as isize),
+                    None => Err(Box::new(VMError::CantRepresentAsDouble)),
+                }
             }
         } else {
             Err(Box::new(VMError::NotANumber {
@@ -381,29 +392,18 @@ impl Obj for Int {
         }
     }
 
-    fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
-            if rhs == 0 {
-                Err(Box::new(VMError::DivisionByZero))
-            } else {
-                Val::from_isize(vm, self.val / rhs)
+            match self.val.checked_sub(rhs) {
+                Some(i) => Val::from_isize(vm, i),
+                None => ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() - rhs),
             }
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            match BigInt::from_isize(self.val).unwrap().checked_div(&rhs.val) {
-                Some(i) => ArbInt::new(vm, i),
-                None => Err(Box::new(VMError::DivisionByZero)),
-            }
+            ArbInt::new(vm, &self.val - &rhs.val)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            if rhs.double() == 0f64 {
-                Err(Box::new(VMError::DivisionByZero))
-            } else {
-                // Note that converting an f64 to an isize in Rust can lead to undefined behaviour
-                // https://github.com/rust-lang/rust/issues/10184 -- it's not obvious that we can
-                // do anything about this other than wait for it to be fixed in LLVM and Rust.
-                match self.val.to_f64() {
-                    Some(i) => Val::from_isize(vm, (i / rhs.double()) as isize),
-                    None => Err(Box::new(VMError::CantRepresentAsDouble)),
-                }
+            match self.val.to_f64() {
+                Some(i) => Ok(Double::new(vm, i - rhs.double())),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
             }
         } else {
             Err(Box::new(VMError::NotANumber {

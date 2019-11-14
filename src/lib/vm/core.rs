@@ -424,7 +424,7 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::BitXor => {
-                self.stack_push(stry!(rcv.bit_xor(self, self.stack_pop())));
+                self.stack_push(stry!(rcv.xor(self, self.stack_pop())));
                 SendReturn::Val
             }
             Primitive::Class => {
