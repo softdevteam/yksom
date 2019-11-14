@@ -308,7 +308,7 @@ impl Val {
     }
 
     /// Produce a new `Val` which performs a bitwise xor operation with `other` and this.
-    pub fn bit_xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 return Val::from_isize(vm, lhs ^ rhs);
@@ -320,7 +320,7 @@ impl Val {
                 got: other.dyn_objtype(vm),
             }));
         }
-        self.tobj(vm).unwrap().bit_xor(vm, other)
+        self.tobj(vm).unwrap().xor(vm, other)
     }
 
     /// Produce a new `Val` which subtracts `other` from this.

@@ -83,7 +83,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn bit_xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             ArbInt::new(vm, &self.val ^ BigInt::from_isize(rhs).unwrap())
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {

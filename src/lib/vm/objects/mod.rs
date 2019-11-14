@@ -81,7 +81,7 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
     }
 
     /// Produce a new `Val` which performs a bitwise xor with `other` and this
-    fn bit_xor(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn xor(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
@@ -95,18 +95,13 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
         unimplemented!();
     }
 
-    /// Produce a new `Val` which subtracts `other` from this.
-    fn sub(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
+    /// Produce a new `Val` which divides `other` from this.
+    fn div(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
     fn mul(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
-    }
-
-    /// Produce a new `Val` which divides `other` from this.
-    fn div(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
@@ -117,6 +112,11 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
 
     /// Produces a new `Val` which is the square root of this.
     fn sqrt(&self, _: &VM) -> Result<Val, Box<VMError>> {
+        unimplemented!();
+    }
+
+    /// Produce a new `Val` which subtracts `other` from this.
+    fn sub(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
     }
 
