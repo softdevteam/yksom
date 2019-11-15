@@ -15,10 +15,10 @@ use abgc::Gc;
 use abgc_derive::GcLayout;
 
 use crate::{
-    compiler::{cobjects, instrs::Instr},
+    compiler::instrs::Instr,
     vm::{
         core::{VMError, VM},
-        objects::{Method, Obj, ObjType, StaticObjType, String_},
+        objects::{Method, Obj, ObjType, StaticObjType},
         val::{NotUnboxable, Val},
     },
 };
@@ -65,58 +65,6 @@ impl StaticObjType for Class {
 }
 
 impl Class {
-    pub fn from_ccls(vm: &VM, ccls: cobjects::Class) -> Result<Val, Box<VMError>> {
-        let supercls = match ccls.supercls {
-            Some(ref x) => match x.as_str() {
-                "Block" => Some(vm.block_cls.clone()),
-                "Boolean" => Some(vm.bool_cls.clone()),
-                "nil" => None,
-                _ => unimplemented!(),
-            },
-            None => Some(vm.obj_cls.clone()),
-        };
-
-        let mut inst_vars = Vec::with_capacity(ccls.num_inst_vars);
-        inst_vars.resize(ccls.num_inst_vars, Val::illegal());
-
-        let mut methods = HashMap::with_capacity(ccls.methods.len());
-        for m in ccls.methods.into_iter() {
-            methods.insert(m.name.clone(), Gc::new(m));
-        }
-
-        let blockinfos = ccls
-            .blocks
-            .into_iter()
-            .map(|b| BlockInfo {
-                bytecode_off: b.bytecode_off,
-                bytecode_end: b.bytecode_end,
-                num_params: b.num_params,
-                num_vars: b.num_vars,
-                max_stack: b.max_stack,
-            })
-            .collect();
-
-        let strings = ccls
-            .strings
-            .into_iter()
-            .map(|s| String_::new(vm, s))
-            .collect();
-        Ok(Val::from_obj(
-            vm,
-            Class {
-                name: String_::new(vm, ccls.name),
-                path: ccls.path,
-                supercls,
-                num_inst_vars: ccls.num_inst_vars,
-                methods,
-                blockinfos,
-                instrs: ccls.instrs,
-                sends: ccls.sends,
-                strings,
-            },
-        ))
-    }
-
     pub fn name(&self, _: &VM) -> Result<Val, Box<VMError>> {
         Ok(self.name.clone())
     }

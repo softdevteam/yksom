@@ -7,20 +7,4 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-use std::path::PathBuf;
-
-use crate::compiler::instrs::Instr;
-
-pub use crate::vm::objects::{BlockInfo, Method, MethodBody};
-
-pub struct Class {
-    pub name: String,
-    pub path: PathBuf,
-    pub supercls: Option<String>,
-    pub num_inst_vars: usize,
-    pub methods: Vec<Method>,
-    pub blocks: Vec<BlockInfo>,
-    pub instrs: Vec<Instr>,
-    pub sends: Vec<(String, usize)>,
-    pub strings: Vec<String>,
-}
+pub use crate::vm::objects::{BlockInfo, Class, Method, MethodBody};

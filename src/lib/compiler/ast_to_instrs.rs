@@ -14,14 +14,18 @@ use std::{
     path::Path,
 };
 
+use abgc::Gc;
 use indexmap::{self, map::IndexMap};
 use itertools::Itertools;
 use lrpar::{Lexeme, Lexer};
 
-use super::{
-    ast, cobjects,
-    instrs::{Builtin, Instr, Primitive},
-    StorageT,
+use crate::{
+    compiler::{
+        ast, cobjects,
+        instrs::{Builtin, Instr, Primitive},
+        StorageT,
+    },
+    vm::{objects::String_, VM},
 };
 
 pub struct Compiler<'a> {
@@ -46,6 +50,7 @@ pub struct Compiler<'a> {
 
 impl<'a> Compiler<'a> {
     pub fn compile(
+        vm: &VM,
         lexer: &dyn Lexer<StorageT>,
         path: &Path,
         astcls: &ast::Class,
@@ -62,7 +67,25 @@ impl<'a> Compiler<'a> {
         };
 
         let mut errs = vec![];
-        let supercls = astcls.supername.map(|x| lexer.lexeme_str(&x).to_owned());
+        let name = lexer.lexeme_str(&astcls.name).to_owned();
+        let supercls;
+        if name != "Object" {
+            if let Some(n) = astcls.supername.map(|x| lexer.lexeme_str(&x)) {
+                supercls = match n {
+                    "Block" => Some(vm.block_cls.clone()),
+                    "Boolean" => Some(vm.bool_cls.clone()),
+                    "nil" => None,
+                    _ => unimplemented!(),
+                };
+            } else {
+                supercls = Some(vm.obj_cls.clone());
+            }
+            // Whatever superclass has been chosen, it must have been initialised already or else
+            // bad things will happen.
+            debug_assert!(!supercls.as_ref().unwrap().is_illegal());
+        } else {
+            supercls = None;
+        }
 
         let mut inst_vars = HashMap::with_capacity(astcls.inst_vars.len());
         for lexeme in &astcls.inst_vars {
@@ -71,11 +94,11 @@ impl<'a> Compiler<'a> {
         }
         compiler.vars_stack.push(inst_vars);
 
-        let mut methods = Vec::with_capacity(astcls.methods.len());
+        let mut methods = HashMap::with_capacity(astcls.methods.len());
         for astmeth in &astcls.methods {
             match compiler.c_method(&astmeth) {
                 Ok(m) => {
-                    methods.push(m);
+                    methods.insert(m.name.clone(), Gc::new(m));
                 }
                 Err(mut e) => {
                     errs.extend(e.drain(..));
@@ -103,15 +126,19 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(cobjects::Class {
-            name: lexer.lexeme_str(&astcls.name).to_owned(),
+            name: String_::new(vm, name),
             path: compiler.path.to_path_buf(),
             supercls,
             num_inst_vars: astcls.inst_vars.len(),
             methods,
             instrs: compiler.instrs,
-            blocks: compiler.blocks,
+            blockinfos: compiler.blocks,
             sends: compiler.sends.into_iter().map(|(k, _)| k).collect(),
-            strings: compiler.strings.into_iter().map(|(k, _)| k).collect(),
+            strings: compiler
+                .strings
+                .into_iter()
+                .map(|(k, _)| String_::new(vm, k))
+                .collect(),
         })
     }
 

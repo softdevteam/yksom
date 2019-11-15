@@ -182,17 +182,11 @@ impl VM {
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
     /// builtin classes which do not lead to run-time instances of `Inst`.
     pub fn compile(&self, path: &Path, inst_vars_allowed: bool) -> Val {
-        let ccls = compile(path);
-        if !inst_vars_allowed && ccls.num_inst_vars > 0 {
+        let cls = compile(self, path);
+        if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
-        Class::from_ccls(self, ccls).unwrap_or_else(|e| {
-            panic!(
-                "Fatal compilation error for {}: {:?}",
-                path.to_str().unwrap(),
-                e
-            )
-        })
+        Val::from_obj(self, cls)
     }
 
     fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
