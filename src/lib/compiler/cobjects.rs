@@ -9,7 +9,9 @@
 
 use std::path::PathBuf;
 
-use crate::compiler::instrs::{Instr, Primitive};
+use crate::compiler::instrs::Instr;
+
+pub use crate::vm::objects::{Method, MethodBody};
 
 pub struct Class {
     pub name: String,
@@ -21,24 +23,6 @@ pub struct Class {
     pub instrs: Vec<Instr>,
     pub sends: Vec<(String, usize)>,
     pub strings: Vec<String>,
-}
-
-pub struct Method {
-    pub name: String,
-    pub body: MethodBody,
-}
-
-pub enum MethodBody {
-    /// A built-in primitive.
-    Primitive(Primitive),
-    /// User bytecode.
-    User {
-        /// How many variables does this method define?
-        num_vars: usize,
-        /// The offset of this method's bytecode in its parent class.
-        bytecode_off: usize,
-        max_stack: usize,
-    },
 }
 
 pub struct Block {

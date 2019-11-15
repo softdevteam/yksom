@@ -80,24 +80,8 @@ impl Class {
         inst_vars.resize(ccls.num_inst_vars, Val::illegal());
 
         let mut methods = HashMap::with_capacity(ccls.methods.len());
-        for cmeth in ccls.methods.into_iter() {
-            let body = match cmeth.body {
-                cobjects::MethodBody::Primitive(p) => MethodBody::Primitive(p),
-                cobjects::MethodBody::User {
-                    num_vars,
-                    bytecode_off,
-                    max_stack,
-                } => MethodBody::User {
-                    num_vars,
-                    bytecode_off,
-                    max_stack,
-                },
-            };
-            let meth = Method {
-                name: cmeth.name.clone(),
-                body,
-            };
-            methods.insert(cmeth.name, Gc::new(meth));
+        for m in ccls.methods.into_iter() {
+            methods.insert(m.name.clone(), Gc::new(m));
         }
 
         let blockinfos = ccls
