@@ -21,11 +21,14 @@ use lrpar::{Lexeme, Lexer};
 
 use crate::{
     compiler::{
-        ast, cobjects,
+        ast,
         instrs::{Builtin, Instr, Primitive},
         StorageT,
     },
-    vm::{objects::String_, VM},
+    vm::{
+        objects::{BlockInfo, Class, Method, MethodBody, String_},
+        VM,
+    },
 };
 
 pub struct Compiler<'a> {
@@ -39,7 +42,7 @@ pub struct Compiler<'a> {
     /// are referenced in source code.
     strings: IndexMap<String, usize>,
     /// All the blocks a class contains.
-    blocks: Vec<cobjects::BlockInfo>,
+    blocks: Vec<BlockInfo>,
     /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<&'a str, usize>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
@@ -54,7 +57,7 @@ impl<'a> Compiler<'a> {
         lexer: &dyn Lexer<StorageT>,
         path: &Path,
         astcls: &ast::Class,
-    ) -> Result<cobjects::Class, String> {
+    ) -> Result<Class, String> {
         let mut compiler = Compiler {
             lexer,
             path,
@@ -125,7 +128,7 @@ impl<'a> Compiler<'a> {
             return Err(err_strs);
         }
 
-        Ok(cobjects::Class {
+        Ok(Class {
             name: String_::new(vm, name),
             path: compiler.path.to_path_buf(),
             supercls,
@@ -167,7 +170,7 @@ impl<'a> Compiler<'a> {
     fn c_method(
         &mut self,
         astmeth: &ast::Method,
-    ) -> Result<cobjects::Method, Vec<(Lexeme<StorageT>, String)>> {
+    ) -> Result<Method, Vec<(Lexeme<StorageT>, String)>> {
         let (name, args) = match astmeth.name {
             ast::MethodName::BinaryOp(op, arg) => {
                 let arg_v = match arg {
@@ -189,7 +192,7 @@ impl<'a> Compiler<'a> {
             }
         };
         let body = self.c_body((name.0, &name.1), args, &astmeth.body)?;
-        Ok(cobjects::Method { name: name.1, body })
+        Ok(Method { name: name.1, body })
     }
 
     fn c_body(
@@ -197,7 +200,7 @@ impl<'a> Compiler<'a> {
         name: (Lexeme<StorageT>, &str),
         params: Vec<Lexeme<StorageT>>,
         body: &ast::MethodBody,
-    ) -> Result<cobjects::MethodBody, Vec<(Lexeme<StorageT>, String)>> {
+    ) -> Result<MethodBody, Vec<(Lexeme<StorageT>, String)>> {
         // We check the number of arguments at compile-time so that we don't have to check them
         // continuously at run-time.
         let requires_args = |n: usize| -> Result<(), Vec<(Lexeme<StorageT>, String)>> {
@@ -215,95 +218,93 @@ impl<'a> Compiler<'a> {
             ast::MethodBody::Primitive => match name.1 {
                 "+" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Add))
+                    Ok(MethodBody::Primitive(Primitive::Add))
                 }
                 "-" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Sub))
+                    Ok(MethodBody::Primitive(Primitive::Sub))
                 }
                 "*" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Mul))
+                    Ok(MethodBody::Primitive(Primitive::Mul))
                 }
                 "/" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Div))
+                    Ok(MethodBody::Primitive(Primitive::Div))
                 }
                 "%" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Mod))
+                    Ok(MethodBody::Primitive(Primitive::Mod))
                 }
                 "=" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Equals))
+                    Ok(MethodBody::Primitive(Primitive::Equals))
                 }
                 "==" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::RefEquals))
+                    Ok(MethodBody::Primitive(Primitive::RefEquals))
                 }
                 "~=" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::NotEquals))
+                    Ok(MethodBody::Primitive(Primitive::NotEquals))
                 }
                 "<<" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::Shl))
+                    Ok(MethodBody::Primitive(Primitive::Shl))
                 }
                 "<" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::LessThan))
+                    Ok(MethodBody::Primitive(Primitive::LessThan))
                 }
                 "<=" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::LessThanEquals))
+                    Ok(MethodBody::Primitive(Primitive::LessThanEquals))
                 }
                 ">" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::GreaterThan))
+                    Ok(MethodBody::Primitive(Primitive::GreaterThan))
                 }
                 ">=" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(
-                        Primitive::GreaterThanEquals,
-                    ))
+                    Ok(MethodBody::Primitive(Primitive::GreaterThanEquals))
                 }
                 "&" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::And))
+                    Ok(MethodBody::Primitive(Primitive::And))
                 }
                 "bitXor:" => {
                     requires_args(1)?;
-                    Ok(cobjects::MethodBody::Primitive(Primitive::BitXor))
+                    Ok(MethodBody::Primitive(Primitive::BitXor))
                 }
-                "sqrt" => Ok(cobjects::MethodBody::Primitive(Primitive::Sqrt)),
-                "asString" => Ok(cobjects::MethodBody::Primitive(Primitive::AsString)),
-                "class" => Ok(cobjects::MethodBody::Primitive(Primitive::Class)),
-                "concatenate:" => Ok(cobjects::MethodBody::Primitive(Primitive::Concatenate)),
-                "halt" => Ok(cobjects::MethodBody::Primitive(Primitive::Halt)),
-                "hashcode" => Ok(cobjects::MethodBody::Primitive(Primitive::Hashcode)),
-                "inspect" => Ok(cobjects::MethodBody::Primitive(Primitive::Inspect)),
-                "instVarAt:" => Ok(cobjects::MethodBody::Primitive(Primitive::InstVarAt)),
-                "instVarAt:put:" => Ok(cobjects::MethodBody::Primitive(Primitive::InstVarAtPut)),
-                "instVarNamed:" => Ok(cobjects::MethodBody::Primitive(Primitive::InstVarNamed)),
-                "name" => Ok(cobjects::MethodBody::Primitive(Primitive::Name)),
-                "new" => Ok(cobjects::MethodBody::Primitive(Primitive::New)),
-                "objectSize" => Ok(cobjects::MethodBody::Primitive(Primitive::ObjectSize)),
-                "perform:" => Ok(cobjects::MethodBody::Primitive(Primitive::Perform)),
-                "perform:inSuperclass:" => Ok(cobjects::MethodBody::Primitive(
-                    Primitive::PerformInSuperClass,
-                )),
-                "perform:withArguments:" => Ok(cobjects::MethodBody::Primitive(
-                    Primitive::PerformWithArguments,
-                )),
-                "perform:withArguments:inSuperclass:" => Ok(cobjects::MethodBody::Primitive(
+                "sqrt" => Ok(MethodBody::Primitive(Primitive::Sqrt)),
+                "asString" => Ok(MethodBody::Primitive(Primitive::AsString)),
+                "class" => Ok(MethodBody::Primitive(Primitive::Class)),
+                "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
+                "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
+                "hashcode" => Ok(MethodBody::Primitive(Primitive::Hashcode)),
+                "inspect" => Ok(MethodBody::Primitive(Primitive::Inspect)),
+                "instVarAt:" => Ok(MethodBody::Primitive(Primitive::InstVarAt)),
+                "instVarAt:put:" => Ok(MethodBody::Primitive(Primitive::InstVarAtPut)),
+                "instVarNamed:" => Ok(MethodBody::Primitive(Primitive::InstVarNamed)),
+                "name" => Ok(MethodBody::Primitive(Primitive::Name)),
+                "new" => Ok(MethodBody::Primitive(Primitive::New)),
+                "objectSize" => Ok(MethodBody::Primitive(Primitive::ObjectSize)),
+                "perform:" => Ok(MethodBody::Primitive(Primitive::Perform)),
+                "perform:inSuperclass:" => {
+                    Ok(MethodBody::Primitive(Primitive::PerformInSuperClass))
+                }
+                "perform:withArguments:" => {
+                    Ok(MethodBody::Primitive(Primitive::PerformWithArguments))
+                }
+                "perform:withArguments:inSuperclass:" => Ok(MethodBody::Primitive(
                     Primitive::PerformWithArgumentsInSuperClass,
                 )),
-                "printNewline" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintNewline)),
-                "printString:" => Ok(cobjects::MethodBody::Primitive(Primitive::PrintString)),
-                "restart" => Ok(cobjects::MethodBody::Primitive(Primitive::Restart)),
-                "value" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(0))),
-                "value:" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(1))),
-                "value:with:" => Ok(cobjects::MethodBody::Primitive(Primitive::Value(2))),
+                "printNewline" => Ok(MethodBody::Primitive(Primitive::PrintNewline)),
+                "printString:" => Ok(MethodBody::Primitive(Primitive::PrintString)),
+                "restart" => Ok(MethodBody::Primitive(Primitive::Restart)),
+                "value" => Ok(MethodBody::Primitive(Primitive::Value(0))),
+                "value:" => Ok(MethodBody::Primitive(Primitive::Value(1))),
+                "value:with:" => Ok(MethodBody::Primitive(Primitive::Value(2))),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
             ast::MethodBody::Body {
@@ -312,7 +313,7 @@ impl<'a> Compiler<'a> {
             } => {
                 let bytecode_off = self.instrs.len();
                 let (num_vars, max_stack) = self.c_block(true, &params, vars_lexemes, exprs)?;
-                Ok(cobjects::MethodBody::User {
+                Ok(MethodBody::User {
                     num_vars,
                     bytecode_off,
                     max_stack,
@@ -418,7 +419,7 @@ impl<'a> Compiler<'a> {
             } => {
                 let block_off = self.blocks.len();
                 self.instrs.push(Instr::Block(block_off));
-                self.blocks.push(cobjects::BlockInfo {
+                self.blocks.push(BlockInfo {
                     bytecode_off: self.instrs.len(),
                     bytecode_end: 0,
                     num_params: params.len(),
