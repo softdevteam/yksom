@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use crate::compiler::instrs::Instr;
 
-pub use crate::vm::objects::{Method, MethodBody};
+pub use crate::vm::objects::{BlockInfo, Method, MethodBody};
 
 pub struct Class {
     pub name: String,
@@ -19,16 +19,8 @@ pub struct Class {
     pub supercls: Option<String>,
     pub num_inst_vars: usize,
     pub methods: Vec<Method>,
-    pub blocks: Vec<Block>,
+    pub blocks: Vec<BlockInfo>,
     pub instrs: Vec<Instr>,
     pub sends: Vec<(String, usize)>,
     pub strings: Vec<String>,
-}
-
-pub struct Block {
-    pub bytecode_off: usize,
-    pub bytecode_end: usize,
-    pub num_params: usize,
-    pub num_vars: usize,
-    pub max_stack: usize,
 }

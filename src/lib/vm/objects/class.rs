@@ -18,7 +18,7 @@ use crate::{
     compiler::{cobjects, instrs::Instr},
     vm::{
         core::{VMError, VM},
-        objects::{Method, MethodBody, Obj, ObjType, StaticObjType, String_},
+        objects::{Method, Obj, ObjType, StaticObjType, String_},
         val::{NotUnboxable, Val},
     },
 };

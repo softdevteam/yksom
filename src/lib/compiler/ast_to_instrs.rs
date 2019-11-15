@@ -35,7 +35,7 @@ pub struct Compiler<'a> {
     /// are referenced in source code.
     strings: IndexMap<String, usize>,
     /// All the blocks a class contains.
-    blocks: Vec<cobjects::Block>,
+    blocks: Vec<cobjects::BlockInfo>,
     /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<&'a str, usize>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
@@ -391,7 +391,7 @@ impl<'a> Compiler<'a> {
             } => {
                 let block_off = self.blocks.len();
                 self.instrs.push(Instr::Block(block_off));
-                self.blocks.push(cobjects::Block {
+                self.blocks.push(cobjects::BlockInfo {
                     bytecode_off: self.instrs.len(),
                     bytecode_end: 0,
                     num_params: params.len(),
