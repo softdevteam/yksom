@@ -14,8 +14,10 @@
 //! partly a test bed to experiment with good ways of structuring Rust
 //! interpreters, balancing correctness, performance, and readability.
 //!
-//! yksom is split into a compiler and run-time. The compiler parses SOM programs
-//! and converts them into an internal format that the run-time can then execute.
+//! yksom is split into a compiler and run-time. The compiler parses SOM programs and creates the
+//! run-time structures that the run-time can then execute. As this suggests, the compiler can
+//! operate at run-time, so there is a fairly tight inter-weaving between the compiler and
+//! run-time.
 
 #![feature(alloc_layout_extra)]
 #![feature(allocator_api)]
