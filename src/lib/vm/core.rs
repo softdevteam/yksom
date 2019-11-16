@@ -337,9 +337,9 @@ impl VM {
                     // class we find doesn't match, we update the cache.
                     let (meth_cls_val, meth) = loop {
                         let cache_cell = unsafe { &mut *cache.get() };
-                        if let Some((cls, (meth_cls_val, meth))) = cache_cell {
-                            if cls.bit_eq(&rcv_cls) {
-                                break (meth_cls_val.clone(), Gc::clone(meth));
+                        if let Some((cache_cls, (cache_meth_cls_val, cache_meth))) = cache_cell {
+                            if cache_cls.bit_eq(&rcv_cls) {
+                                break (cache_meth_cls_val.clone(), Gc::clone(cache_meth));
                             }
                         }
                         let (meth_cls_val, meth) =
