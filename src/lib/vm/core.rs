@@ -24,7 +24,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, Class, Double, Inst, MethodBody, ObjType, String_},
+        objects::{Block, BlockInfo, Class, Double, Inst, MethodBody, ObjType, String_},
         val::Val,
     },
 };
@@ -115,6 +115,7 @@ pub struct VM {
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
+    blockinfos: UnsafeCell<Vec<BlockInfo>>,
     stack: UnsafeCell<ArrayVec<[Val; SOM_STACK_LEN]>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
@@ -146,6 +147,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            blockinfos: UnsafeCell::new(Vec::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
@@ -258,15 +260,18 @@ impl VM {
         while let Some(ref instr) = cls.instrs.get(pc) {
             match instr {
                 Instr::Block(blkinfo_off) => {
-                    let blkinfo = cls.blockinfo(*blkinfo_off);
+                    let (num_params, bytecode_end) = {
+                        let blkinfo = &unsafe { &*self.blockinfos.get() }[*blkinfo_off];
+                        (blkinfo.num_params, blkinfo.bytecode_end)
+                    };
                     self.stack_push(Block::new(
                         self,
                         Val::recover(cls),
                         *blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
-                        blkinfo.num_params,
+                        num_params,
                     ));
-                    pc = blkinfo.bytecode_end;
+                    pc = bytecode_end;
                 }
                 Instr::Builtin(b) => {
                     self.stack_push(match b {
@@ -518,8 +523,11 @@ impl VM {
             Primitive::Value(nargs) => {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
                 let blk_cls: &Class = stry!(rcv_blk.blockinfo_cls.downcast(self));
-                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
-                if unsafe { &*self.stack.get() }.remaining_capacity() < blkinfo.max_stack {
+                let (num_vars, bytecode_off, max_stack) = {
+                    let blkinfo = &unsafe { &*self.blockinfos.get() }[rcv_blk.blockinfo_off];
+                    (blkinfo.num_vars, blkinfo.bytecode_off, blkinfo.max_stack)
+                };
+                if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute block.");
                 }
                 let frame = Frame::new(
@@ -527,11 +535,11 @@ impl VM {
                     false,
                     rcv.clone(),
                     Some(Gc::clone(&rcv_blk.parent_closure)),
-                    blkinfo.num_vars,
+                    num_vars,
                     nargs as usize,
                 );
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv.clone(), blk_cls, blkinfo.bytecode_off);
+                let r = self.exec_user(rcv.clone(), blk_cls, bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -593,6 +601,20 @@ impl VM {
     fn stack_truncate(&self, i: usize) {
         debug_assert!(i <= unsafe { &*self.stack.get() }.len());
         unsafe { &mut *self.stack.get() }.truncate(i);
+    }
+
+    /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
+    pub fn push_blockinfo(&self, blkinfo: BlockInfo) -> usize {
+        let bis = unsafe { &mut *self.blockinfos.get() };
+        let i = bis.len();
+        bis.push(blkinfo);
+        i
+    }
+
+    /// Update the `BlockInfo` at index `idx` to `blkinfo`.
+    pub fn set_blockinfo(&self, idx: usize, blkinfo: BlockInfo) {
+        let bis = unsafe { &mut *self.blockinfos.get() };
+        bis[idx] = blkinfo;
     }
 }
 
@@ -729,6 +751,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            blockinfos: UnsafeCell::new(Vec::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         }

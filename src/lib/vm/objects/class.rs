@@ -30,20 +30,9 @@ pub struct Class {
     pub supercls: Option<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,
-    pub blockinfos: Vec<BlockInfo>,
     pub instrs: Vec<Instr>,
     pub sends: Vec<(String, usize)>,
     pub strings: Vec<Val>,
-}
-
-/// Minimal information about a SOM block.
-#[derive(Debug)]
-pub struct BlockInfo {
-    pub bytecode_off: usize,
-    pub bytecode_end: usize,
-    pub num_params: usize,
-    pub num_vars: usize,
-    pub max_stack: usize,
 }
 
 impl Obj for Class {
@@ -77,9 +66,5 @@ impl Class {
                 Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
                 None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),
             })
-    }
-
-    pub fn blockinfo(&self, blockinfo_off: usize) -> &BlockInfo {
-        &self.blockinfos[blockinfo_off]
     }
 }

@@ -41,8 +41,6 @@ pub struct Compiler<'a> {
     /// We map strings to an offset so that we only store them once, no matter how many times they
     /// are referenced in source code.
     strings: IndexMap<String, usize>,
-    /// All the blocks a class contains.
-    blocks: Vec<BlockInfo>,
     /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<&'a str, usize>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
@@ -64,7 +62,6 @@ impl<'a> Compiler<'a> {
             instrs: Vec::new(),
             sends: IndexMap::new(),
             strings: IndexMap::new(),
-            blocks: Vec::new(),
             vars_stack: Vec::new(),
             closure_depth: 0,
         };
@@ -99,7 +96,7 @@ impl<'a> Compiler<'a> {
 
         let mut methods = HashMap::with_capacity(astcls.methods.len());
         for astmeth in &astcls.methods {
-            match compiler.c_method(&astmeth) {
+            match compiler.c_method(vm, &astmeth) {
                 Ok(m) => {
                     methods.insert(m.name.clone(), Gc::new(m));
                 }
@@ -135,7 +132,6 @@ impl<'a> Compiler<'a> {
             num_inst_vars: astcls.inst_vars.len(),
             methods,
             instrs: compiler.instrs,
-            blockinfos: compiler.blocks,
             sends: compiler.sends.into_iter().map(|(k, _)| k).collect(),
             strings: compiler
                 .strings
@@ -169,6 +165,7 @@ impl<'a> Compiler<'a> {
 
     fn c_method(
         &mut self,
+        vm: &VM,
         astmeth: &ast::Method,
     ) -> Result<Method, Vec<(Lexeme<StorageT>, String)>> {
         let (name, args) = match astmeth.name {
@@ -191,12 +188,13 @@ impl<'a> Compiler<'a> {
                 ((pairs[0].0, name), args)
             }
         };
-        let body = self.c_body((name.0, &name.1), args, &astmeth.body)?;
+        let body = self.c_body(vm, (name.0, &name.1), args, &astmeth.body)?;
         Ok(Method { name: name.1, body })
     }
 
     fn c_body(
         &mut self,
+        vm: &VM,
         name: (Lexeme<StorageT>, &str),
         params: Vec<Lexeme<StorageT>>,
         body: &ast::MethodBody,
@@ -312,7 +310,7 @@ impl<'a> Compiler<'a> {
                 exprs,
             } => {
                 let bytecode_off = self.instrs.len();
-                let (num_vars, max_stack) = self.c_block(true, &params, vars_lexemes, exprs)?;
+                let (num_vars, max_stack) = self.c_block(vm, true, &params, vars_lexemes, exprs)?;
                 Ok(MethodBody::User {
                     num_vars,
                     bytecode_off,
@@ -328,6 +326,7 @@ impl<'a> Compiler<'a> {
     /// beforehand).
     fn c_block(
         &mut self,
+        vm: &VM,
         is_method: bool,
         params: &[Lexeme<StorageT>],
         vars_lexemes: &[Lexeme<StorageT>],
@@ -370,7 +369,7 @@ impl<'a> Compiler<'a> {
         for (i, e) in exprs.iter().enumerate() {
             // We deliberately bomb out at the first error in a method on the basis that
             // it's likely to lead to many repetitive errors.
-            let stack_size = self.c_expr(e)?;
+            let stack_size = self.c_expr(vm, e)?;
             max_stack = max(max_stack, stack_size);
             if i != exprs.len() - 1 {
                 self.instrs.push(Instr::Pop);
@@ -390,11 +389,15 @@ impl<'a> Compiler<'a> {
     }
 
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
-    fn c_expr(&mut self, expr: &ast::Expr) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
+    fn c_expr(
+        &mut self,
+        vm: &VM,
+        expr: &ast::Expr,
+    ) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
         match expr {
             ast::Expr::Assign { id, expr } => {
                 let (depth, var_num) = self.find_var(&id)?;
-                let max_stack = self.c_expr(expr)?;
+                let max_stack = self.c_expr(vm, expr)?;
                 if depth == self.vars_stack.len() - 1 {
                     self.instrs.push(Instr::InstVarSet(var_num));
                 } else {
@@ -404,8 +407,8 @@ impl<'a> Compiler<'a> {
                 Ok(max_stack)
             }
             ast::Expr::BinaryMsg { lhs, op, rhs } => {
-                let mut stack_size = self.c_expr(lhs)?;
-                stack_size = max(stack_size, 1 + self.c_expr(rhs)?);
+                let mut stack_size = self.c_expr(vm, lhs)?;
+                stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
                 let send_off = self.send_off((self.lexer.lexeme_str(&op).to_string(), 1));
                 self.instrs
                     .push(Instr::Send(send_off, UnsafeCell::new(None)));
@@ -417,21 +420,28 @@ impl<'a> Compiler<'a> {
                 vars,
                 exprs,
             } => {
-                let block_off = self.blocks.len();
-                self.instrs.push(Instr::Block(block_off));
-                self.blocks.push(BlockInfo {
+                let blkinfo_idx = vm.push_blockinfo(BlockInfo {
                     bytecode_off: self.instrs.len(),
                     bytecode_end: 0,
                     num_params: params.len(),
                     num_vars: 0,
                     max_stack: 0,
                 });
+                self.instrs.push(Instr::Block(blkinfo_idx));
                 self.closure_depth += 1;
-                let (num_vars, max_stack) = self.c_block(false, params, vars, exprs)?;
+                let bytecode_off = self.instrs.len();
+                let (num_vars, max_stack) = self.c_block(vm, false, params, vars, exprs)?;
                 self.closure_depth -= 1;
-                self.blocks[block_off].bytecode_end = self.instrs.len();
-                self.blocks[block_off].num_vars = num_vars;
-                self.blocks[block_off].max_stack = max_stack;
+                vm.set_blockinfo(
+                    blkinfo_idx,
+                    BlockInfo {
+                        bytecode_off,
+                        bytecode_end: self.instrs.len(),
+                        num_params: params.len(),
+                        num_vars,
+                        max_stack,
+                    },
+                );
                 Ok(1)
             }
             ast::Expr::Double { is_negative, val } => {
@@ -462,11 +472,11 @@ impl<'a> Compiler<'a> {
                 }
             }
             ast::Expr::KeywordMsg { receiver, msglist } => {
-                let mut max_stack = self.c_expr(receiver)?;
+                let mut max_stack = self.c_expr(vm, receiver)?;
                 let mut mn = String::new();
                 for (i, (kw, expr)) in msglist.iter().enumerate() {
                     mn.push_str(self.lexer.lexeme_str(&kw));
-                    let expr_stack = self.c_expr(expr)?;
+                    let expr_stack = self.c_expr(vm, expr)?;
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
                 let send_off = self.send_off((mn, msglist.len()));
@@ -476,7 +486,7 @@ impl<'a> Compiler<'a> {
                 Ok(max_stack)
             }
             ast::Expr::UnaryMsg { receiver, ids } => {
-                let max_stack = self.c_expr(receiver)?;
+                let max_stack = self.c_expr(vm, receiver)?;
                 for id in ids {
                     let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
                     self.instrs
@@ -486,7 +496,7 @@ impl<'a> Compiler<'a> {
                 Ok(max_stack)
             }
             ast::Expr::Return(expr) => {
-                let max_stack = self.c_expr(expr)?;
+                let max_stack = self.c_expr(vm, expr)?;
                 if self.closure_depth == 0 {
                     self.instrs.push(Instr::Return);
                 } else {

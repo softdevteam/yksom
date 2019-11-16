@@ -18,6 +18,16 @@ use crate::vm::{
     val::{NotUnboxable, Val},
 };
 
+/// Minimal information about a SOM block.
+#[derive(Debug)]
+pub struct BlockInfo {
+    pub bytecode_off: usize,
+    pub bytecode_end: usize,
+    pub num_params: usize,
+    pub num_vars: usize,
+    pub max_stack: usize,
+}
+
 #[derive(Debug, GcLayout)]
 pub struct Block {
     // Does this Block represent Block, Block2, or Block3?
