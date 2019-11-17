@@ -58,6 +58,7 @@ pub enum Primitive {
     InstVarNamed,
     LessThan,
     LessThanEquals,
+    Mod,
     Mul,
     Name,
     NotEquals,

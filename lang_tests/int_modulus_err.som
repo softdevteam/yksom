@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: NotANumber { got: String_ }
+"
+
+int_modulus_err = (
+    run = (
+        1 % 'a'
+    )
+)

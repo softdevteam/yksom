@@ -330,6 +330,23 @@ impl Val {
         self.tobj(vm).unwrap().div(vm, other)
     }
 
+    /// Produce a new `Val` which performs a mod operation on this with `other`.
+    pub fn modulus(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                return Val::from_isize(vm, lhs % rhs);
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() % rhs.bigint());
+            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                return Ok(Double::new(vm, (lhs as f64) % rhs.double()));
+            }
+            return Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }));
+        }
+        self.tobj(vm).unwrap().modulus(vm, other)
+    }
+
     /// Produce a new `Val` which multiplies `other` to this.
     pub fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);

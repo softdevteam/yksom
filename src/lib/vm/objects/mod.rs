@@ -95,6 +95,11 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
         unimplemented!();
     }
 
+    /// Produce a new `Val` which performs a mod operation on this with `other`.
+    fn modulus(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
+        unimplemented!();
+    }
+
     /// Produce a new `Val` which multiplies `other` to this.
     fn mul(&self, _: &VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();

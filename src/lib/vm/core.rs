@@ -467,6 +467,10 @@ impl VM {
                 self.stack_push(stry!(rcv.less_than_equals(self, self.stack_pop())));
                 SendReturn::Val
             }
+            Primitive::Mod => {
+                self.stack_push(stry!(rcv.modulus(self, self.stack_pop())));
+                SendReturn::Val
+            }
             Primitive::Mul => {
                 self.stack_push(stry!(rcv.mul(self, self.stack_pop())));
                 SendReturn::Val
