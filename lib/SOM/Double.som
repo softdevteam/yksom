@@ -2,6 +2,7 @@ Double = (
     + argument = primitive
     - argument = primitive
     * argument = primitive
+    % argument = primitive    
     =  argument = primitive
     <  argument = primitive
     >  argument = ( ^(self >= argument) and: [ self <> argument ] )

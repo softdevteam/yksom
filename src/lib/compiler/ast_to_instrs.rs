@@ -202,6 +202,10 @@ impl<'a> Compiler<'a> {
                     requires_args(1)?;
                     Ok(cobjects::MethodBody::Primitive(Primitive::Div))
                 }
+                "%" => {
+                    requires_args(1)?;
+                    Ok(cobjects::MethodBody::Primitive(Primitive::Mod))
+                }
                 "=" => {
                     requires_args(1)?;
                     Ok(cobjects::MethodBody::Primitive(Primitive::Equals))

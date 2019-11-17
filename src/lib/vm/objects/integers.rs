@@ -111,6 +111,23 @@ impl Obj for ArbInt {
         }
     }
 
+    fn modulus(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            ArbInt::new(vm, &self.val % rhs)
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            ArbInt::new(vm, &self.val % &rhs.val)
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            match self.val.to_f64() {
+                Some(i) => Ok(Double::new(vm, i % rhs.double())),
+                None => Err(Box::new(VMError::CantRepresentAsDouble)),
+            }
+        } else {
+            Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }))
+        }
+    }
+
     fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             ArbInt::new(vm, &self.val * rhs)
