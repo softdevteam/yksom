@@ -8,7 +8,6 @@
 // terms.
 
 use std::{
-    cell::UnsafeCell,
     cmp::max,
     collections::hash_map::{self, HashMap},
     path::Path,
@@ -34,7 +33,6 @@ use crate::{
 pub struct Compiler<'a> {
     lexer: &'a dyn Lexer<StorageT>,
     path: &'a Path,
-    instrs: Vec<Instr>,
     /// We collect all message sends together so that repeated calls of e.g. "println" take up
     /// constant space, no matter how many calls there are.
     sends: IndexMap<(String, usize), usize>,
@@ -59,7 +57,6 @@ impl<'a> Compiler<'a> {
         let mut compiler = Compiler {
             lexer,
             path,
-            instrs: Vec::new(),
             sends: IndexMap::new(),
             strings: IndexMap::new(),
             vars_stack: Vec::new(),
@@ -131,7 +128,6 @@ impl<'a> Compiler<'a> {
             supercls,
             num_inst_vars: astcls.inst_vars.len(),
             methods,
-            instrs: compiler.instrs,
             sends: compiler.sends.into_iter().map(|(k, _)| k).collect(),
             strings: compiler
                 .strings
@@ -309,7 +305,7 @@ impl<'a> Compiler<'a> {
                 vars: vars_lexemes,
                 exprs,
             } => {
-                let bytecode_off = self.instrs.len();
+                let bytecode_off = vm.instrs_len();
                 let (num_vars, max_stack) = self.c_block(vm, true, &params, vars_lexemes, exprs)?;
                 Ok(MethodBody::User {
                     num_vars,
@@ -372,17 +368,17 @@ impl<'a> Compiler<'a> {
             let stack_size = self.c_expr(vm, e)?;
             max_stack = max(max_stack, stack_size);
             if i != exprs.len() - 1 {
-                self.instrs.push(Instr::Pop);
+                vm.instrs_push(Instr::Pop);
             }
         }
         // Blocks return the value of the last statement, but methods return `self`.
         if is_method {
-            self.instrs.push(Instr::Pop);
+            vm.instrs_push(Instr::Pop);
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
-            self.instrs.push(Instr::VarLookup(0, 0));
+            vm.instrs_push(Instr::VarLookup(0, 0));
             max_stack = max(max_stack, 1);
         }
-        self.instrs.push(Instr::Return);
+        vm.instrs_push(Instr::Return);
         self.vars_stack.pop();
 
         Ok((num_vars, max_stack))
@@ -399,9 +395,9 @@ impl<'a> Compiler<'a> {
                 let (depth, var_num) = self.find_var(&id)?;
                 let max_stack = self.c_expr(vm, expr)?;
                 if depth == self.vars_stack.len() - 1 {
-                    self.instrs.push(Instr::InstVarSet(var_num));
+                    vm.instrs_push(Instr::InstVarSet(var_num));
                 } else {
-                    self.instrs.push(Instr::VarSet(depth, var_num));
+                    vm.instrs_push(Instr::VarSet(depth, var_num));
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -410,8 +406,7 @@ impl<'a> Compiler<'a> {
                 let mut stack_size = self.c_expr(vm, lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
                 let send_off = self.send_off((self.lexer.lexeme_str(&op).to_string(), 1));
-                self.instrs
-                    .push(Instr::Send(send_off, UnsafeCell::new(None)));
+                vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 debug_assert!(stack_size > 0);
                 Ok(stack_size)
             }
@@ -421,22 +416,22 @@ impl<'a> Compiler<'a> {
                 exprs,
             } => {
                 let blkinfo_idx = vm.push_blockinfo(BlockInfo {
-                    bytecode_off: self.instrs.len(),
+                    bytecode_off: vm.instrs_len(),
                     bytecode_end: 0,
                     num_params: params.len(),
                     num_vars: 0,
                     max_stack: 0,
                 });
-                self.instrs.push(Instr::Block(blkinfo_idx));
+                vm.instrs_push(Instr::Block(blkinfo_idx));
                 self.closure_depth += 1;
-                let bytecode_off = self.instrs.len();
+                let bytecode_off = vm.instrs_len();
                 let (num_vars, max_stack) = self.c_block(vm, false, params, vars, exprs)?;
                 self.closure_depth -= 1;
                 vm.set_blockinfo(
                     blkinfo_idx,
                     BlockInfo {
                         bytecode_off,
-                        bytecode_end: self.instrs.len(),
+                        bytecode_end: vm.instrs_len(),
                         num_params: params.len(),
                         num_vars,
                         max_stack,
@@ -452,7 +447,7 @@ impl<'a> Compiler<'a> {
                 };
                 match s.parse::<f64>() {
                     Ok(i) => {
-                        self.instrs.push(Instr::Double(i));
+                        vm.instrs_push(Instr::Double(i));
                         Ok(1)
                     }
                     Err(e) => Err(vec![(*val, format!("{}", e))]),
@@ -465,7 +460,7 @@ impl<'a> Compiler<'a> {
                             // With twos complement, `0-i` will always succeed, but just in case...
                             i = 0isize.checked_sub(i).unwrap();
                         }
-                        self.instrs.push(Instr::Int(i));
+                        vm.instrs_push(Instr::Int(i));
                         Ok(1)
                     }
                     Err(e) => Err(vec![(*val, format!("{}", e))]),
@@ -480,8 +475,7 @@ impl<'a> Compiler<'a> {
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
                 let send_off = self.send_off((mn, msglist.len()));
-                self.instrs
-                    .push(Instr::Send(send_off, UnsafeCell::new(None)));
+                vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
             }
@@ -489,8 +483,7 @@ impl<'a> Compiler<'a> {
                 let max_stack = self.c_expr(vm, receiver)?;
                 for id in ids {
                     let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
-                    self.instrs
-                        .push(Instr::Send(send_off, UnsafeCell::new(None)));
+                    vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -498,9 +491,9 @@ impl<'a> Compiler<'a> {
             ast::Expr::Return(expr) => {
                 let max_stack = self.c_expr(vm, expr)?;
                 if self.closure_depth == 0 {
-                    self.instrs.push(Instr::Return);
+                    vm.instrs_push(Instr::Return);
                 } else {
-                    self.instrs.push(Instr::ClosureReturn(self.closure_depth));
+                    vm.instrs_push(Instr::ClosureReturn(self.closure_depth));
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -511,23 +504,23 @@ impl<'a> Compiler<'a> {
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
                 let string_off = self.string_off(s);
-                self.instrs.push(Instr::String(string_off));
+                vm.instrs_push(Instr::String(string_off));
                 Ok(1)
             }
             ast::Expr::VarLookup(lexeme) => {
                 match self.find_var(&lexeme) {
                     Ok((depth, var_num)) => {
                         if depth == self.vars_stack.len() - 1 {
-                            self.instrs.push(Instr::InstVarLookup(var_num));
+                            vm.instrs_push(Instr::InstVarLookup(var_num));
                         } else {
-                            self.instrs.push(Instr::VarLookup(depth, var_num));
+                            vm.instrs_push(Instr::VarLookup(depth, var_num));
                         }
                     }
                     Err(e) => match self.lexer.lexeme_str(&lexeme) {
-                        "nil" => self.instrs.push(Instr::Builtin(Builtin::Nil)),
-                        "false" => self.instrs.push(Instr::Builtin(Builtin::False)),
-                        "system" => self.instrs.push(Instr::Builtin(Builtin::System)),
-                        "true" => self.instrs.push(Instr::Builtin(Builtin::True)),
+                        "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil)),
+                        "false" => vm.instrs_push(Instr::Builtin(Builtin::False)),
+                        "system" => vm.instrs_push(Instr::Builtin(Builtin::System)),
+                        "true" => vm.instrs_push(Instr::Builtin(Builtin::True)),
                         _ => return Err(e),
                     },
                 }

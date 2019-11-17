@@ -24,7 +24,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, BlockInfo, Class, Double, Inst, MethodBody, ObjType, String_},
+        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, ObjType, String_},
         val::Val,
     },
 };
@@ -116,6 +116,8 @@ pub struct VM {
     pub system: Val,
     pub true_: Val,
     blockinfos: UnsafeCell<Vec<BlockInfo>>,
+    inline_caches: UnsafeCell<Vec<Option<(Val, (Val, Gc<Method>))>>>,
+    instrs: UnsafeCell<Vec<Instr>>,
     stack: UnsafeCell<ArrayVec<[Val; SOM_STACK_LEN]>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
@@ -127,7 +129,7 @@ impl VM {
         // two phases: the "very delicate" phase (with very strict rules on what is possible)
         // followed by the "slightly delicate phase" (with looser, but still fairly strict, rules
         // on what is possible).
-        //
+
         let mut vm = VM {
             classpath,
             block_cls: Val::illegal(),
@@ -148,6 +150,8 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
+            inline_caches: UnsafeCell::new(Vec::new()),
+            instrs: UnsafeCell::new(Vec::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
@@ -257,17 +261,22 @@ impl VM {
     fn exec_user(&self, rcv: Val, cls: &Class, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
         let stack_start = self.stack_len();
-        while let Some(ref instr) = cls.instrs.get(pc) {
+        loop {
+            let instr = {
+                let instrs = unsafe { &*self.instrs.get() };
+                debug_assert!(pc < instrs.len());
+                *unsafe { instrs.get_unchecked(pc) }
+            };
             match instr {
                 Instr::Block(blkinfo_off) => {
                     let (num_params, bytecode_end) = {
-                        let blkinfo = &unsafe { &*self.blockinfos.get() }[*blkinfo_off];
+                        let blkinfo = &unsafe { &*self.blockinfos.get() }[blkinfo_off];
                         (blkinfo.num_params, blkinfo.bytecode_end)
                     };
                     self.stack_push(Block::new(
                         self,
                         Val::recover(cls),
-                        *blkinfo_off,
+                        blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
                         num_params,
                     ));
@@ -290,7 +299,7 @@ impl VM {
                     // determining this: if this frame's (i.e. block's!) parent closure is not
                     // consistent with the frame stack, then the block has escaped.
                     let v = self.stack_pop();
-                    let parent_closure = self.current_frame().closure(*closure_depth);
+                    let parent_closure = self.current_frame().closure(closure_depth);
                     for (frame_depth, pframe) in
                         unsafe { &*self.frames.get() }.iter().rev().enumerate()
                     {
@@ -303,21 +312,21 @@ impl VM {
                     panic!("Return from escaped block");
                 }
                 Instr::Double(i) => {
-                    self.stack_push(Double::new(self, *i));
+                    self.stack_push(Double::new(self, i));
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    self.stack_push(inst.inst_var_lookup(*n));
+                    self.stack_push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    inst.inst_var_set(*n, self.stack_peek());
+                    inst.inst_var_set(n, self.stack_peek());
                     pc += 1;
                 }
                 Instr::Int(i) => {
-                    self.stack_push(stry!(Val::from_isize(self, *i)));
+                    self.stack_push(stry!(Val::from_isize(self, i)));
                     pc += 1;
                 }
                 Instr::Pop => {
@@ -327,27 +336,12 @@ impl VM {
                 Instr::Return => {
                     return SendReturn::Val;
                 }
-                Instr::Send(moff, cache) => {
-                    let (ref name, nargs) = &cls.sends[*moff];
+                Instr::Send(moff, cache_idx) => {
+                    let (ref name, nargs) = &cls.sends[moff];
                     let rcv = self.stack_pop_n(*nargs);
 
-                    let rcv_cls = rcv.get_class(self);
-                    // Implement our simple inline cache which just remembers the last class used
-                    // at this particular message send: if the cache is empty, or the receiver
-                    // class we find doesn't match, we update the cache.
-                    let (meth_cls_val, meth) = loop {
-                        let cache_cell = unsafe { &mut *cache.get() };
-                        if let Some((cache_cls, (cache_meth_cls_val, cache_meth))) = cache_cell {
-                            if cache_cls.bit_eq(&rcv_cls) {
-                                break (cache_meth_cls_val.clone(), Gc::clone(cache_meth));
-                            }
-                        }
-                        let (meth_cls_val, meth) =
-                            stry!(stry!(rcv_cls.downcast::<Class>(self)).get_method(self, &name));
-                        *cache_cell =
-                            Some((rcv_cls.clone(), (meth_cls_val.clone(), Gc::clone(&meth))));
-                        break (meth_cls_val, meth);
-                    };
+                    let (meth_cls_val, meth) =
+                        stry!(self.inline_cache_lookup(cache_idx, rcv.get_class(self), &name));
 
                     self.current_frame().set_sp(self.stack_len() - *nargs);
                     let r = match meth.body {
@@ -388,24 +382,21 @@ impl VM {
                     pc += 1;
                 }
                 Instr::String(string_off) => {
-                    self.stack_push(cls.strings[*string_off].clone());
+                    self.stack_push(cls.strings[string_off].clone());
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
-                    let val = self.current_frame().var_lookup(*d, *n);
+                    let val = self.current_frame().var_lookup(d, n);
                     self.stack_push(val);
                     pc += 1;
                 }
                 Instr::VarSet(d, n) => {
                     let val = self.stack_peek();
-                    self.current_frame().var_set(*d, *n, val);
+                    self.current_frame().var_set(d, n, val);
                     pc += 1;
                 }
             }
         }
-
-        unsafe { &mut *self.frames.get() }.pop();
-        SendReturn::Err(Box::new(VMError::Exit))
     }
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
@@ -616,6 +607,47 @@ impl VM {
         let bis = unsafe { &mut *self.blockinfos.get() };
         bis[idx] = blkinfo;
     }
+
+    /// Add an empty inline cache to the VM, returning its index.
+    pub fn new_inline_cache(&self) -> usize {
+        let ics = unsafe { &mut *self.inline_caches.get() };
+        let len = ics.len();
+        ics.push(None);
+        len
+    }
+
+    /// Lookup the method `name` in the class `rcv_cls`, utilising the inline cache at index `idx`.
+    pub fn inline_cache_lookup(
+        &self,
+        idx: usize,
+        rcv_cls: Val,
+        name: &str,
+    ) -> Result<(Val, Gc<Method>), Box<VMError>> {
+        // Lookup the method in the inline cache.
+        {
+            let cache = &unsafe { &*self.inline_caches.get() }[idx];
+            if let Some((cache_cls, (cache_meth_cls_val, cache_meth))) = cache {
+                if cache_cls.bit_eq(&rcv_cls) {
+                    return Ok((cache_meth_cls_val.clone(), Gc::clone(cache_meth)));
+                }
+            }
+        }
+        // The inline cache is empty or out of date, so store a new value in it.
+        let (meth_cls_val, meth) = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
+        let ics = unsafe { &mut *self.inline_caches.get() };
+        ics[idx] = Some((rcv_cls.clone(), (meth_cls_val.clone(), Gc::clone(&meth))));
+        Ok((meth_cls_val, meth))
+    }
+
+    /// How many instructions are currently present in the VM?
+    pub fn instrs_len(&self) -> usize {
+        unsafe { &*self.instrs.get() }.len()
+    }
+
+    /// Push `instr` to the end of the current vector of instructions.
+    pub fn instrs_push(&self, instr: Instr) {
+        unsafe { &mut *self.instrs.get() }.push(instr);
+    }
 }
 
 #[derive(Debug)]
@@ -752,6 +784,8 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
+            inline_caches: UnsafeCell::new(Vec::new()),
+            instrs: UnsafeCell::new(Vec::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         }

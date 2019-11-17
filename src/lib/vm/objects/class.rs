@@ -14,13 +14,10 @@ use std::{collections::HashMap, path::PathBuf, str};
 use abgc::Gc;
 use abgc_derive::GcLayout;
 
-use crate::{
-    compiler::instrs::Instr,
-    vm::{
-        core::{VMError, VM},
-        objects::{Method, Obj, ObjType, StaticObjType},
-        val::{NotUnboxable, Val},
-    },
+use crate::vm::{
+    core::{VMError, VM},
+    objects::{Method, Obj, ObjType, StaticObjType},
+    val::{NotUnboxable, Val},
 };
 
 #[derive(Debug, GcLayout)]
@@ -30,7 +27,6 @@ pub struct Class {
     pub supercls: Option<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,
-    pub instrs: Vec<Instr>,
     pub sends: Vec<(String, usize)>,
     pub strings: Vec<Val>,
 }
