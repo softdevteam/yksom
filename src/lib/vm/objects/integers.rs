@@ -111,6 +111,42 @@ impl Obj for ArbInt {
         }
     }
 
+    fn double_div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            if rhs == 0 {
+                Err(Box::new(VMError::DivisionByZero))
+            } else if let Some(lhs) = self.val.to_f64() {
+                Ok(Double::new(vm, lhs / (rhs as f64)))
+            } else {
+                Err(Box::new(VMError::CantRepresentAsDouble))
+            }
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            if Zero::is_zero(rhs.bigint()) {
+                Err(Box::new(VMError::DivisionByZero))
+            } else if let Some(lhs) = self.val.to_f64() {
+                if let Some(i) = rhs.bigint().to_f64() {
+                    Ok(Double::new(vm, lhs / i))
+                } else {
+                    Err(Box::new(VMError::CantRepresentAsDouble))
+                }
+            } else {
+                Err(Box::new(VMError::CantRepresentAsDouble))
+            }
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            if rhs.double() == 0f64 {
+                Err(Box::new(VMError::DivisionByZero))
+            } else if let Some(lhs) = self.val.to_f64() {
+                Ok(Double::new(vm, lhs / rhs.double()))
+            } else {
+                Err(Box::new(VMError::CantRepresentAsDouble))
+            }
+        } else {
+            Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }))
+        }
+    }
+
     fn modulus(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             ArbInt::new(vm, &self.val % rhs)

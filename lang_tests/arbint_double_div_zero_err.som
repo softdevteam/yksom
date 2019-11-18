@@ -1,0 +1,9 @@
+"
+VM:
+  status: error
+  stderr: DivisionByZero
+"
+
+arbint_double_div_zero_err = (
+    run = ( (1 << 200) // 0 )
+)

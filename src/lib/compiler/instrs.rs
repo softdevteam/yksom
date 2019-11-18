@@ -41,6 +41,7 @@ pub enum Primitive {
     Class,
     Concatenate,
     Div,
+    DoubleDiv,
     Equals,
     GreaterThan,
     GreaterThanEquals,

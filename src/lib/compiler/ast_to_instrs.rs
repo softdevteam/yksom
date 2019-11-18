@@ -189,6 +189,10 @@ impl<'a> Compiler<'a> {
                     requires_args(1)?;
                     Ok(MethodBody::Primitive(Primitive::Div))
                 }
+                "//" => {
+                    requires_args(1)?;
+                    Ok(MethodBody::Primitive(Primitive::DoubleDiv))
+                }
                 "%" => {
                     requires_args(1)?;
                     Ok(MethodBody::Primitive(Primitive::Mod))

@@ -20,7 +20,7 @@ use std::{
 use abgc::{self, Gc};
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
 use super::{
     core::{VMError, VM},
@@ -328,6 +328,37 @@ impl Val {
             }
         }
         self.tobj(vm).unwrap().div(vm, other)
+    }
+
+    /// Produce a new `Val` which perfoms a Double divide on `other` with this.
+    pub fn double_div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                if rhs == 0 {
+                    return Err(Box::new(VMError::DivisionByZero));
+                } else {
+                    return Ok(Double::new(vm, (lhs as f64) / (rhs as f64)));
+                }
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                if Zero::is_zero(rhs.bigint()) {
+                    return Err(Box::new(VMError::DivisionByZero));
+                } else if let Some(i) = rhs.bigint().to_f64() {
+                    return Ok(Double::new(vm, (lhs as f64) / i));
+                } else {
+                    return Err(Box::new(VMError::CantRepresentAsDouble));
+                }
+            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                if rhs.double() == 0f64 {
+                    return Err(Box::new(VMError::DivisionByZero));
+                } else {
+                    return Ok(Double::new(vm, (lhs as f64) / rhs.double()));
+                }
+            }
+            return Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }));
+        }
+        self.tobj(vm).unwrap().double_div(vm, other)
     }
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
