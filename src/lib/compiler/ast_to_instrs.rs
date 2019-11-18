@@ -33,9 +33,6 @@ use crate::{
 pub struct Compiler<'a> {
     lexer: &'a dyn Lexer<StorageT>,
     path: &'a Path,
-    /// We collect all message sends together so that repeated calls of e.g. "println" take up
-    /// constant space, no matter how many calls there are.
-    sends: IndexMap<(String, usize), usize>,
     /// We map strings to an offset so that we only store them once, no matter how many times they
     /// are referenced in source code.
     strings: IndexMap<String, usize>,
@@ -57,7 +54,6 @@ impl<'a> Compiler<'a> {
         let mut compiler = Compiler {
             lexer,
             path,
-            sends: IndexMap::new(),
             strings: IndexMap::new(),
             vars_stack: Vec::new(),
             closure_depth: 0,
@@ -128,7 +124,6 @@ impl<'a> Compiler<'a> {
             supercls,
             num_inst_vars: astcls.inst_vars.len(),
             methods,
-            sends: compiler.sends.into_iter().map(|(k, _)| k).collect(),
             strings: compiler
                 .strings
                 .into_iter()
@@ -140,17 +135,6 @@ impl<'a> Compiler<'a> {
     fn string_off(&mut self, c: String) -> usize {
         let off = self.strings.len();
         match self.strings.entry(c) {
-            indexmap::map::Entry::Occupied(e) => *e.get(),
-            indexmap::map::Entry::Vacant(e) => {
-                e.insert(off);
-                off
-            }
-        }
-    }
-
-    fn send_off(&mut self, m: (String, usize)) -> usize {
-        let off = self.sends.len();
-        match self.sends.entry(m) {
             indexmap::map::Entry::Occupied(e) => *e.get(),
             indexmap::map::Entry::Vacant(e) => {
                 e.insert(off);
@@ -405,7 +389,7 @@ impl<'a> Compiler<'a> {
             ast::Expr::BinaryMsg { lhs, op, rhs } => {
                 let mut stack_size = self.c_expr(vm, lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
-                let send_off = self.send_off((self.lexer.lexeme_str(&op).to_string(), 1));
+                let send_off = vm.add_send((self.lexer.lexeme_str(&op).to_string(), 1));
                 vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 debug_assert!(stack_size > 0);
                 Ok(stack_size)
@@ -474,7 +458,7 @@ impl<'a> Compiler<'a> {
                     let expr_stack = self.c_expr(vm, expr)?;
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
-                let send_off = self.send_off((mn, msglist.len()));
+                let send_off = vm.add_send((mn, msglist.len()));
                 vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -482,7 +466,7 @@ impl<'a> Compiler<'a> {
             ast::Expr::UnaryMsg { receiver, ids } => {
                 let max_stack = self.c_expr(vm, receiver)?;
                 for id in ids {
-                    let send_off = self.send_off((self.lexer.lexeme_str(&id).to_string(), 0));
+                    let send_off = vm.add_send((self.lexer.lexeme_str(&id).to_string(), 0));
                     vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 }
                 debug_assert!(max_stack > 0);

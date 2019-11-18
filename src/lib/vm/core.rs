@@ -11,6 +11,7 @@
 
 use std::{
     cell::UnsafeCell,
+    collections::HashMap,
     path::{Path, PathBuf},
     process, ptr,
 };
@@ -118,6 +119,10 @@ pub struct VM {
     blockinfos: UnsafeCell<Vec<BlockInfo>>,
     inline_caches: UnsafeCell<Vec<Option<(Val, (Val, Gc<Method>))>>>,
     instrs: UnsafeCell<Vec<Instr>>,
+    sends: UnsafeCell<Vec<(String, usize)>>,
+    /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
+    /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
+    reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
     stack: UnsafeCell<ArrayVec<[Val; SOM_STACK_LEN]>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
@@ -152,6 +157,8 @@ impl VM {
             blockinfos: UnsafeCell::new(Vec::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
+            sends: UnsafeCell::new(Vec::new()),
+            reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
@@ -336,14 +343,23 @@ impl VM {
                 Instr::Return => {
                     return SendReturn::Val;
                 }
-                Instr::Send(moff, cache_idx) => {
-                    let (ref name, nargs) = &cls.sends[moff];
-                    let rcv = self.stack_pop_n(*nargs);
+                Instr::Send(send_idx, cache_idx) => {
+                    let (rcv, nargs, meth_cls_val, meth) = {
+                        debug_assert!(send_idx < unsafe { &*self.sends.get() }.len());
+                        let (ref name, nargs) =
+                            unsafe { (&*self.sends.get()).get_unchecked(send_idx) };
+                        // Note that since we maintain a reference to `name` for the rest of this
+                        // block, we mustn't mutate (directly or indirectly) `self.sends` in any
+                        // way.
+                        let rcv = self.stack_pop_n(*nargs);
+                        let rcv_cls = rcv.get_class(self);
 
-                    let (meth_cls_val, meth) =
-                        stry!(self.inline_cache_lookup(cache_idx, rcv.get_class(self), &name));
+                        let (meth_cls_val, meth) =
+                            stry!(self.inline_cache_lookup(cache_idx, rcv_cls, name));
+                        (rcv, nargs, meth_cls_val, meth)
+                    };
 
-                    self.current_frame().set_sp(self.stack_len() - *nargs);
+                    self.current_frame().set_sp(self.stack_len() - nargs);
                     let r = match meth.body {
                         MethodBody::Primitive(Primitive::Restart) => {
                             self.stack_truncate(stack_start);
@@ -617,6 +633,10 @@ impl VM {
     }
 
     /// Lookup the method `name` in the class `rcv_cls`, utilising the inline cache at index `idx`.
+    ///
+    /// # Guarantees for UnsafeCell
+    ///
+    /// This method guarantees not to mutate `self.sends`.
     pub fn inline_cache_lookup(
         &self,
         idx: usize,
@@ -647,6 +667,23 @@ impl VM {
     /// Push `instr` to the end of the current vector of instructions.
     pub fn instrs_push(&self, instr: Instr) {
         unsafe { &mut *self.instrs.get() }.push(instr);
+    }
+
+    /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
+    /// are also reused.
+    pub fn add_send(&self, send: (String, usize)) -> usize {
+        let reverse_sends = unsafe { &mut *self.reverse_sends.get() };
+        // We want to avoid `clone`ing `send` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_sends.get(&send) {
+            *i
+        } else {
+            let sends = unsafe { &mut *self.sends.get() };
+            let len = sends.len();
+            reverse_sends.insert(send.clone(), len);
+            sends.push(send);
+            len
+        }
     }
 }
 
@@ -786,6 +823,8 @@ impl VM {
             blockinfos: UnsafeCell::new(Vec::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
+            sends: UnsafeCell::new(Vec::new()),
+            reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
