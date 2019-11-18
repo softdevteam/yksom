@@ -34,11 +34,11 @@ use super::{
 #[cfg(target_pointer_width = "64")]
 pub const BITSIZE: usize = 64;
 #[cfg(target_pointer_width = "64")]
-pub const TAG_BITSIZE: usize = 1; // Number of bits
+pub const TAG_BITSIZE: usize = 2; // Number of bits
 #[cfg(target_pointer_width = "64")]
-pub const TAG_BITMASK: usize = 0b1;
+pub const TAG_BITMASK: usize = 0b11;
 #[cfg(target_pointer_width = "64")]
-pub const INT_BITMASK: usize = 0b11;
+pub const INT_BITMASK: usize = 0b111;
 
 #[cfg(target_pointer_width = "64")]
 #[derive(Debug, PartialEq, IntoPrimitive, UnsafeFromPrimitive)]
@@ -46,12 +46,17 @@ pub const INT_BITMASK: usize = 0b11;
 // All of the values here must:
 //   1) Fit inside TAG_BITSIZE bits
 //   2) Safely convert to usize using `as`
+// Anything which can be stored unboxed *must* not have the `NotUnboxable` trait implemented
+// for them. In other words, if an existing type is added to the list of unboxable things, you
+// need to check whether it implemented `NotUnboxable` and, if so, remove that implementation.
 pub enum ValKind {
-    GCBOX = 0b1,
-    // Anything which can be stored unboxed *must* not have the `NotUnboxable` trait implemented
-    // for them. In other words, if an existing type is added to the list of unboxable things, you
-    // need to check whether it implemented `NotUnboxable` and, if so, remove that implementation.
-    INT = 0b0,
+    /// A pointer to a `Gc` element.
+    GCBOX = 0b01,
+    /// A tagged integer.
+    INT = 0b00,
+    /// An illegal value. Any operations on a `Val` of this kind will result in a
+    /// [`panic`](core::panic).
+    ILLEGAL = 0b10,
 }
 
 /// Objects which `impl` this trait guarantee that they can only ever be stored boxed.
@@ -104,15 +109,11 @@ impl Val {
     /// while initialising part of the system.
     pub fn illegal() -> Val {
         Val {
-            val: ValKind::GCBOX as usize,
+            val: ValKind::ILLEGAL as usize,
         }
     }
 
-    /// Is this `Var` illegal i.e. is it an empty placeholder waiting for a "proper" value?
-    pub fn is_illegal(&self) -> bool {
-        self.val == (ValKind::GCBOX as usize)
-    }
-
+    /// What is this `Val`'s [`ValKind`](ValKind).
     pub fn valkind(&self) -> ValKind {
         // Since it should be impossible to create incorrect tags, in release mode, we want to make
         // this a zero-cost function (i.e. we get guarantees from the static type system but
@@ -123,6 +124,7 @@ impl Val {
         match self.val & TAG_BITMASK {
             x if x == ValKind::GCBOX as usize => (),
             x if x == ValKind::INT as usize => (),
+            x if x == ValKind::ILLEGAL as usize => (),
             _ => panic!("Invalid tag {}", self.val & TAG_BITMASK),
         }
 
@@ -149,28 +151,29 @@ impl Val {
                     })
                 })
             }
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
     /// be boxed) or return `None` if the cast is not valid.
     pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<&T> {
-        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::INT => None,
             ValKind::GCBOX => unsafe { self.val_to_tobj() }.downcast(),
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
     pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, Box<VMError>> {
-        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
                 Ok(unsafe { Gc::clone_from_raw(self.val_to_tobj()) })
             }
             ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap()).map(|v| v.tobj(vm))?,
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
@@ -231,6 +234,7 @@ impl Val {
                     )
                 }
             }
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
@@ -249,6 +253,7 @@ impl Val {
                     None
                 }
             }
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
@@ -264,27 +269,27 @@ impl Val {
 impl Val {
     /// What `ObjType` does this `Val` represent?
     pub fn dyn_objtype(&self, vm: &VM) -> ObjType {
-        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::INT => ObjType::Int,
             ValKind::GCBOX => self.tobj(vm).unwrap().dyn_objtype(),
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
     /// What class is this `Val` an instance of?
     pub fn get_class(&self, vm: &VM) -> Val {
-        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::INT => vm.int_cls.clone(),
             ValKind::GCBOX => self.tobj(vm).unwrap().get_class(vm),
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
     pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
-        debug_assert!(!self.is_illegal());
         match self.valkind() {
             ValKind::INT => Ok(String_::new(vm, self.as_isize(vm).unwrap().to_string())),
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 
@@ -443,6 +448,7 @@ impl Val {
         match self.valkind() {
             ValKind::INT => self.equals(vm, other),
             ValKind::GCBOX => self.tobj(vm)?.ref_equals(vm, other),
+            ValKind::ILLEGAL => unreachable!(),
         }
     }
 }
@@ -500,7 +506,6 @@ binop_typeerror!(less_than_equals, <=);
 
 impl Clone for Val {
     fn clone(&self) -> Self {
-        debug_assert!(!self.is_illegal());
         let val = match self.valkind() {
             ValKind::GCBOX => unsafe {
                 transmute::<*const ThinObj, usize>(
@@ -508,6 +513,7 @@ impl Clone for Val {
                 ) | (ValKind::GCBOX as usize)
             },
             ValKind::INT => self.val,
+            ValKind::ILLEGAL => self.val,
         };
         Val { val }
     }
@@ -515,13 +521,12 @@ impl Clone for Val {
 
 impl Drop for Val {
     fn drop(&mut self) {
-        if !self.is_illegal() {
-            match self.valkind() {
-                ValKind::GCBOX => {
-                    drop(unsafe { Gc::<ThinObj>::from_raw(self.val_to_tobj()) });
-                }
-                ValKind::INT => (),
+        match self.valkind() {
+            ValKind::GCBOX => {
+                drop(unsafe { Gc::<ThinObj>::from_raw(self.val_to_tobj()) });
             }
+            ValKind::INT => (),
+            ValKind::ILLEGAL => (),
         }
     }
 }
