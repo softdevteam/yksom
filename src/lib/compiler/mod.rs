@@ -17,9 +17,10 @@ use std::{fs, path::Path, process};
 use lrlex::lrlex_mod;
 use lrpar::lrpar_mod;
 
+use crate::vm::{objects::Class, VM};
+
 mod ast;
 mod ast_to_instrs;
-pub mod cobjects;
 pub mod instrs;
 
 lrlex_mod!(som_l);
@@ -28,7 +29,7 @@ lrpar_mod!(som_y);
 type StorageT = u32;
 
 /// Compile a class. Should only be called by the `VM`.
-pub fn compile(path: &Path) -> cobjects::Class {
+pub fn compile(vm: &VM, path: &Path) -> Class {
     let bytes = fs::read(path).unwrap_or_else(|_| panic!("Can't read {}.", path.to_str().unwrap()));
     let txt = String::from_utf8_lossy(&bytes);
 
@@ -40,11 +41,12 @@ pub fn compile(path: &Path) -> cobjects::Class {
     }
     match astopt {
         Some(Ok(astcls)) => {
-            let cls =
-                ast_to_instrs::Compiler::compile(&lexer, &path, &astcls).unwrap_or_else(|msg| {
+            let cls = ast_to_instrs::Compiler::compile(&vm, &lexer, &path, &astcls).unwrap_or_else(
+                |msg| {
                     eprintln!("{}", msg);
                     process::exit(1);
-                });
+                },
+            );
             if errs.is_empty() {
                 cls
             } else {
