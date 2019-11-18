@@ -14,13 +14,10 @@ use std::{collections::HashMap, path::PathBuf, str};
 use abgc::Gc;
 use abgc_derive::GcLayout;
 
-use crate::{
-    compiler::instrs::Instr,
-    vm::{
-        core::{VMError, VM},
-        objects::{Method, Obj, ObjType, StaticObjType},
-        val::{NotUnboxable, Val},
-    },
+use crate::vm::{
+    core::{VMError, VM},
+    objects::{Method, Obj, ObjType, StaticObjType},
+    val::{NotUnboxable, Val},
 };
 
 #[derive(Debug, GcLayout)]
@@ -30,20 +27,6 @@ pub struct Class {
     pub supercls: Option<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,
-    pub blockinfos: Vec<BlockInfo>,
-    pub instrs: Vec<Instr>,
-    pub sends: Vec<(String, usize)>,
-    pub strings: Vec<Val>,
-}
-
-/// Minimal information about a SOM block.
-#[derive(Debug)]
-pub struct BlockInfo {
-    pub bytecode_off: usize,
-    pub bytecode_end: usize,
-    pub num_params: usize,
-    pub num_vars: usize,
-    pub max_stack: usize,
 }
 
 impl Obj for Class {
@@ -69,17 +52,13 @@ impl Class {
         Ok(self.name.clone())
     }
 
-    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, Gc<Method>), Box<VMError>> {
+    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
         self.methods
             .get(msg)
-            .map(|x| Ok((Val::recover(self), Gc::clone(x))))
+            .map(|x| Ok(Gc::clone(x)))
             .unwrap_or_else(|| match &self.supercls {
                 Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
                 None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),
             })
-    }
-
-    pub fn blockinfo(&self, blockinfo_off: usize) -> &BlockInfo {
-        &self.blockinfos[blockinfo_off]
     }
 }

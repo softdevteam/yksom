@@ -18,11 +18,20 @@ use crate::vm::{
     val::{NotUnboxable, Val},
 };
 
+/// Minimal information about a SOM block.
+#[derive(Debug)]
+pub struct BlockInfo {
+    pub bytecode_off: usize,
+    pub bytecode_end: usize,
+    pub num_params: usize,
+    pub num_vars: usize,
+    pub max_stack: usize,
+}
+
 #[derive(Debug, GcLayout)]
 pub struct Block {
     // Does this Block represent Block, Block2, or Block3?
     pub blockn_cls: Val,
-    pub blockinfo_cls: Val,
     pub blockinfo_off: usize,
     pub parent_closure: Gc<Closure>,
 }
@@ -48,7 +57,6 @@ impl StaticObjType for Block {
 impl Block {
     pub fn new(
         vm: &VM,
-        blockinfo_cls: Val,
         blockinfo_off: usize,
         parent_closure: Gc<Closure>,
         num_params: usize,
@@ -63,7 +71,6 @@ impl Block {
             vm,
             Block {
                 blockn_cls,
-                blockinfo_cls,
                 blockinfo_off,
                 parent_closure,
             },

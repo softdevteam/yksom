@@ -11,6 +11,7 @@
 
 use std::{
     cell::UnsafeCell,
+    collections::HashMap,
     path::{Path, PathBuf},
     process, ptr,
 };
@@ -24,7 +25,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, Class, Double, Inst, MethodBody, ObjType, String_},
+        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, ObjType, String_},
         val::Val,
     },
 };
@@ -115,7 +116,18 @@ pub struct VM {
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
+    blockinfos: UnsafeCell<Vec<BlockInfo>>,
+    inline_caches: UnsafeCell<Vec<Option<(Val, Gc<Method>)>>>,
+    instrs: UnsafeCell<Vec<Instr>>,
+    sends: UnsafeCell<Vec<(String, usize)>>,
+    /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
+    /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
+    reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
     stack: UnsafeCell<ArrayVec<[Val; SOM_STACK_LEN]>>,
+    strings: UnsafeCell<Vec<Val>>,
+    /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
+    /// `usize` where the latter represents the index of the string in `strings`.
+    reverse_strings: UnsafeCell<HashMap<String, usize>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
 
@@ -126,7 +138,7 @@ impl VM {
         // two phases: the "very delicate" phase (with very strict rules on what is possible)
         // followed by the "slightly delicate phase" (with looser, but still fairly strict, rules
         // on what is possible).
-        //
+
         let mut vm = VM {
             classpath,
             block_cls: Val::illegal(),
@@ -146,7 +158,14 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            blockinfos: UnsafeCell::new(Vec::new()),
+            inline_caches: UnsafeCell::new(Vec::new()),
+            instrs: UnsafeCell::new(Vec::new()),
+            sends: UnsafeCell::new(Vec::new()),
+            reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
+            strings: UnsafeCell::new(Vec::new()),
+            reverse_strings: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
 
@@ -219,7 +238,7 @@ impl VM {
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
     pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
         let cls = rcv.get_class(self);
-        let (meth_cls_val, meth) = cls.downcast::<Class>(self)?.get_method(self, msg)?;
+        let meth = cls.downcast::<Class>(self)?.get_method(self, msg)?;
         match meth.body {
             MethodBody::Primitive(_) => {
                 panic!("Primitives can't be called outside of a function frame.");
@@ -232,14 +251,13 @@ impl VM {
                 if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
-                let meth_cls = meth_cls_val.downcast::<Class>(self)?;
                 let nargs = args.len();
                 for a in args {
                     self.stack_push(a);
                 }
                 let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                let r = self.exec_user(rcv, bytecode_off);
                 self.frame_pop();
                 match r {
                     SendReturn::ClosureReturn(_) => unimplemented!(),
@@ -252,21 +270,28 @@ impl VM {
 
     /// Execute a SOM method. Note that the frame for this method must have been created *before*
     /// calling this function.
-    fn exec_user(&self, rcv: Val, cls: &Class, meth_start_pc: usize) -> SendReturn {
+    fn exec_user(&self, rcv: Val, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
         let stack_start = self.stack_len();
-        while let Some(ref instr) = cls.instrs.get(pc) {
+        loop {
+            let instr = {
+                let instrs = unsafe { &*self.instrs.get() };
+                debug_assert!(pc < instrs.len());
+                *unsafe { instrs.get_unchecked(pc) }
+            };
             match instr {
                 Instr::Block(blkinfo_off) => {
-                    let blkinfo = cls.blockinfo(*blkinfo_off);
+                    let (num_params, bytecode_end) = {
+                        let blkinfo = &unsafe { &*self.blockinfos.get() }[blkinfo_off];
+                        (blkinfo.num_params, blkinfo.bytecode_end)
+                    };
                     self.stack_push(Block::new(
                         self,
-                        Val::recover(cls),
-                        *blkinfo_off,
+                        blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
-                        blkinfo.num_params,
+                        num_params,
                     ));
-                    pc = blkinfo.bytecode_end;
+                    pc = bytecode_end;
                 }
                 Instr::Builtin(b) => {
                     self.stack_push(match b {
@@ -285,7 +310,7 @@ impl VM {
                     // determining this: if this frame's (i.e. block's!) parent closure is not
                     // consistent with the frame stack, then the block has escaped.
                     let v = self.stack_pop();
-                    let parent_closure = self.current_frame().closure(*closure_depth);
+                    let parent_closure = self.current_frame().closure(closure_depth);
                     for (frame_depth, pframe) in
                         unsafe { &*self.frames.get() }.iter().rev().enumerate()
                     {
@@ -298,21 +323,21 @@ impl VM {
                     panic!("Return from escaped block");
                 }
                 Instr::Double(i) => {
-                    self.stack_push(Double::new(self, *i));
+                    self.stack_push(Double::new(self, i));
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    self.stack_push(inst.inst_var_lookup(*n));
+                    self.stack_push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    inst.inst_var_set(*n, self.stack_peek());
+                    inst.inst_var_set(n, self.stack_peek());
                     pc += 1;
                 }
                 Instr::Int(i) => {
-                    self.stack_push(stry!(Val::from_isize(self, *i)));
+                    self.stack_push(stry!(Val::from_isize(self, i)));
                     pc += 1;
                 }
                 Instr::Pop => {
@@ -322,29 +347,22 @@ impl VM {
                 Instr::Return => {
                     return SendReturn::Val;
                 }
-                Instr::Send(moff, cache) => {
-                    let (ref name, nargs) = &cls.sends[*moff];
-                    let rcv = self.stack_pop_n(*nargs);
+                Instr::Send(send_idx, cache_idx) => {
+                    let (rcv, nargs, meth) = {
+                        debug_assert!(send_idx < unsafe { &*self.sends.get() }.len());
+                        let (ref name, nargs) =
+                            unsafe { (&*self.sends.get()).get_unchecked(send_idx) };
+                        // Note that since we maintain a reference to `name` for the rest of this
+                        // block, we mustn't mutate (directly or indirectly) `self.sends` in any
+                        // way.
+                        let rcv = self.stack_pop_n(*nargs);
+                        let rcv_cls = rcv.get_class(self);
 
-                    let rcv_cls = rcv.get_class(self);
-                    // Implement our simple inline cache which just remembers the last class used
-                    // at this particular message send: if the cache is empty, or the receiver
-                    // class we find doesn't match, we update the cache.
-                    let (meth_cls_val, meth) = loop {
-                        let cache_cell = unsafe { &mut *cache.get() };
-                        if let Some((cls, (meth_cls_val, meth))) = cache_cell {
-                            if cls.bit_eq(&rcv_cls) {
-                                break (meth_cls_val.clone(), Gc::clone(meth));
-                            }
-                        }
-                        let (meth_cls_val, meth) =
-                            stry!(stry!(rcv_cls.downcast::<Class>(self)).get_method(self, &name));
-                        *cache_cell =
-                            Some((rcv_cls.clone(), (meth_cls_val.clone(), Gc::clone(&meth))));
-                        break (meth_cls_val, meth);
+                        let meth = stry!(self.inline_cache_lookup(cache_idx, rcv_cls, name));
+                        (rcv, nargs, meth)
                     };
 
-                    self.current_frame().set_sp(self.stack_len() - *nargs);
+                    self.current_frame().set_sp(self.stack_len() - nargs);
                     let r = match meth.body {
                         MethodBody::Primitive(Primitive::Restart) => {
                             self.stack_truncate(stack_start);
@@ -360,11 +378,10 @@ impl VM {
                             if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
                                 panic!("Not enough stack space to execute method.");
                             }
-                            let meth_cls = stry!(meth_cls_val.downcast::<Class>(self));
                             let nframe =
                                 Frame::new(self, true, rcv.clone(), None, num_vars, *nargs);
                             unsafe { &mut *self.frames.get() }.push(nframe);
-                            let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                            let r = self.exec_user(rcv, bytecode_off);
                             self.frame_pop();
                             r
                         }
@@ -383,24 +400,23 @@ impl VM {
                     pc += 1;
                 }
                 Instr::String(string_off) => {
-                    self.stack_push(cls.strings[*string_off].clone());
+                    debug_assert!(unsafe { &*self.strings.get() }.len() > string_off);
+                    let s = unsafe { (&*self.strings.get()).get_unchecked(string_off) }.clone();
+                    self.stack_push(s);
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
-                    let val = self.current_frame().var_lookup(*d, *n);
+                    let val = self.current_frame().var_lookup(d, n);
                     self.stack_push(val);
                     pc += 1;
                 }
                 Instr::VarSet(d, n) => {
                     let val = self.stack_peek();
-                    self.current_frame().var_set(*d, *n, val);
+                    self.current_frame().var_set(d, n, val);
                     pc += 1;
                 }
             }
         }
-
-        unsafe { &mut *self.frames.get() }.pop();
-        SendReturn::Err(Box::new(VMError::Exit))
     }
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
@@ -517,9 +533,11 @@ impl VM {
             }
             Primitive::Value(nargs) => {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
-                let blk_cls: &Class = stry!(rcv_blk.blockinfo_cls.downcast(self));
-                let blkinfo = blk_cls.blockinfo(rcv_blk.blockinfo_off);
-                if unsafe { &*self.stack.get() }.remaining_capacity() < blkinfo.max_stack {
+                let (num_vars, bytecode_off, max_stack) = {
+                    let blkinfo = &unsafe { &*self.blockinfos.get() }[rcv_blk.blockinfo_off];
+                    (blkinfo.num_vars, blkinfo.bytecode_off, blkinfo.max_stack)
+                };
+                if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute block.");
                 }
                 let frame = Frame::new(
@@ -527,11 +545,11 @@ impl VM {
                     false,
                     rcv.clone(),
                     Some(Gc::clone(&rcv_blk.parent_closure)),
-                    blkinfo.num_vars,
+                    num_vars,
                     nargs as usize,
                 );
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv.clone(), blk_cls, blkinfo.bytecode_off);
+                let r = self.exec_user(rcv.clone(), bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -593,6 +611,99 @@ impl VM {
     fn stack_truncate(&self, i: usize) {
         debug_assert!(i <= unsafe { &*self.stack.get() }.len());
         unsafe { &mut *self.stack.get() }.truncate(i);
+    }
+
+    /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
+    pub fn push_blockinfo(&self, blkinfo: BlockInfo) -> usize {
+        let bis = unsafe { &mut *self.blockinfos.get() };
+        let i = bis.len();
+        bis.push(blkinfo);
+        i
+    }
+
+    /// Update the `BlockInfo` at index `idx` to `blkinfo`.
+    pub fn set_blockinfo(&self, idx: usize, blkinfo: BlockInfo) {
+        let bis = unsafe { &mut *self.blockinfos.get() };
+        bis[idx] = blkinfo;
+    }
+
+    /// Add an empty inline cache to the VM, returning its index.
+    pub fn new_inline_cache(&self) -> usize {
+        let ics = unsafe { &mut *self.inline_caches.get() };
+        let len = ics.len();
+        ics.push(None);
+        len
+    }
+
+    /// Lookup the method `name` in the class `rcv_cls`, utilising the inline cache at index `idx`.
+    ///
+    /// # Guarantees for UnsafeCell
+    ///
+    /// This method guarantees not to mutate `self.sends`.
+    pub fn inline_cache_lookup(
+        &self,
+        idx: usize,
+        rcv_cls: Val,
+        name: &str,
+    ) -> Result<Gc<Method>, Box<VMError>> {
+        // Lookup the method in the inline cache.
+        {
+            let cache = &unsafe { &*self.inline_caches.get() }[idx];
+            if let Some((cache_cls, cache_meth)) = cache {
+                if cache_cls.bit_eq(&rcv_cls) {
+                    return Ok(Gc::clone(cache_meth));
+                }
+            }
+        }
+        // The inline cache is empty or out of date, so store a new value in it.
+        let meth = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
+        let ics = unsafe { &mut *self.inline_caches.get() };
+        ics[idx] = Some((rcv_cls.clone(), Gc::clone(&meth)));
+        Ok(meth)
+    }
+
+    /// How many instructions are currently present in the VM?
+    pub fn instrs_len(&self) -> usize {
+        unsafe { &*self.instrs.get() }.len()
+    }
+
+    /// Push `instr` to the end of the current vector of instructions.
+    pub fn instrs_push(&self, instr: Instr) {
+        unsafe { &mut *self.instrs.get() }.push(instr);
+    }
+
+    /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
+    /// are also reused.
+    pub fn add_send(&self, send: (String, usize)) -> usize {
+        let reverse_sends = unsafe { &mut *self.reverse_sends.get() };
+        // We want to avoid `clone`ing `send` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_sends.get(&send) {
+            *i
+        } else {
+            let sends = unsafe { &mut *self.sends.get() };
+            let len = sends.len();
+            reverse_sends.insert(send.clone(), len);
+            sends.push(send);
+            len
+        }
+    }
+
+    /// Add the string `s` to the VM, returning its index. Note that strings are reused, so indexes
+    /// are also reused.
+    pub fn add_string(&self, s: String) -> usize {
+        let reverse_strings = unsafe { &mut *self.reverse_strings.get() };
+        // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_strings.get(&s) {
+            *i
+        } else {
+            let strings = unsafe { &mut *self.strings.get() };
+            let len = strings.len();
+            reverse_strings.insert(s.clone(), len);
+            strings.push(String_::new(self, s));
+            len
+        }
     }
 }
 
@@ -729,7 +840,14 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
+            blockinfos: UnsafeCell::new(Vec::new()),
+            inline_caches: UnsafeCell::new(Vec::new()),
+            instrs: UnsafeCell::new(Vec::new()),
+            sends: UnsafeCell::new(Vec::new()),
+            reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
+            strings: UnsafeCell::new(Vec::new()),
+            reverse_strings: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
     }

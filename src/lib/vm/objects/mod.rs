@@ -37,8 +37,8 @@ mod integers;
 mod method;
 mod string_;
 
-pub use block::Block;
-pub use class::{BlockInfo, Class};
+pub use block::{Block, BlockInfo};
+pub use class::Class;
 pub use double::Double;
 pub use instance::Inst;
 pub use integers::{ArbInt, Int};
