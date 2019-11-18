@@ -27,7 +27,6 @@ pub struct Class {
     pub supercls: Option<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,
-    pub strings: Vec<Val>,
 }
 
 impl Obj for Class {

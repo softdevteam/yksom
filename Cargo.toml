@@ -34,7 +34,6 @@ abgc_derive = { git="https://github.com/softdevteam/abgc" }
 arrayvec = "0.5"
 cfgrammar = "0.4"
 getopts = "0.2"
-indexmap = "1.0"
 itertools = "0.8"
 lrlex = "0.4"
 lrpar = "0.4"

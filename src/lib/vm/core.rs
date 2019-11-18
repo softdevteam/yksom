@@ -124,6 +124,10 @@ pub struct VM {
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
     reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
     stack: UnsafeCell<ArrayVec<[Val; SOM_STACK_LEN]>>,
+    strings: UnsafeCell<Vec<Val>>,
+    /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
+    /// `usize` where the latter represents the index of the string in `strings`.
+    reverse_strings: UnsafeCell<HashMap<String, usize>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
 
@@ -160,6 +164,8 @@ impl VM {
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
+            strings: UnsafeCell::new(Vec::new()),
+            reverse_strings: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
 
@@ -398,7 +404,9 @@ impl VM {
                     pc += 1;
                 }
                 Instr::String(string_off) => {
-                    self.stack_push(cls.strings[string_off].clone());
+                    debug_assert!(unsafe { &*self.strings.get() }.len() > string_off);
+                    let s = unsafe { (&*self.strings.get()).get_unchecked(string_off) }.clone();
+                    self.stack_push(s);
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
@@ -685,6 +693,23 @@ impl VM {
             len
         }
     }
+
+    /// Add the string `s` to the VM, returning its index. Note that strings are reused, so indexes
+    /// are also reused.
+    pub fn add_string(&self, s: String) -> usize {
+        let reverse_strings = unsafe { &mut *self.reverse_strings.get() };
+        // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_strings.get(&s) {
+            *i
+        } else {
+            let strings = unsafe { &mut *self.strings.get() };
+            let len = strings.len();
+            reverse_strings.insert(s.clone(), len);
+            strings.push(String_::new(self, s));
+            len
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -826,6 +851,8 @@ impl VM {
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
+            strings: UnsafeCell::new(Vec::new()),
+            reverse_strings: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
     }

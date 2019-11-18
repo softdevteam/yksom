@@ -14,7 +14,6 @@ use std::{
 };
 
 use abgc::Gc;
-use indexmap::{self, map::IndexMap};
 use itertools::Itertools;
 use lrpar::{Lexeme, Lexer};
 
@@ -33,9 +32,6 @@ use crate::{
 pub struct Compiler<'a> {
     lexer: &'a dyn Lexer<StorageT>,
     path: &'a Path,
-    /// We map strings to an offset so that we only store them once, no matter how many times they
-    /// are referenced in source code.
-    strings: IndexMap<String, usize>,
     /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<&'a str, usize>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
@@ -54,7 +50,6 @@ impl<'a> Compiler<'a> {
         let mut compiler = Compiler {
             lexer,
             path,
-            strings: IndexMap::new(),
             vars_stack: Vec::new(),
             closure_depth: 0,
         };
@@ -124,23 +119,7 @@ impl<'a> Compiler<'a> {
             supercls,
             num_inst_vars: astcls.inst_vars.len(),
             methods,
-            strings: compiler
-                .strings
-                .into_iter()
-                .map(|(k, _)| String_::new(vm, k))
-                .collect(),
         })
-    }
-
-    fn string_off(&mut self, c: String) -> usize {
-        let off = self.strings.len();
-        match self.strings.entry(c) {
-            indexmap::map::Entry::Occupied(e) => *e.get(),
-            indexmap::map::Entry::Vacant(e) => {
-                e.insert(off);
-                off
-            }
-        }
     }
 
     fn c_method(
@@ -487,8 +466,7 @@ impl<'a> Compiler<'a> {
                 let s_orig = self.lexer.lexeme_str(&lexeme);
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
-                let string_off = self.string_off(s);
-                vm.instrs_push(Instr::String(string_off));
+                vm.instrs_push(Instr::String(vm.add_string(s)));
                 Ok(1)
             }
             ast::Expr::VarLookup(lexeme) => {
