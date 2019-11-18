@@ -52,10 +52,10 @@ impl Class {
         Ok(self.name.clone())
     }
 
-    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<(Val, Gc<Method>), Box<VMError>> {
+    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
         self.methods
             .get(msg)
-            .map(|x| Ok((Val::recover(self), Gc::clone(x))))
+            .map(|x| Ok(Gc::clone(x)))
             .unwrap_or_else(|| match &self.supercls {
                 Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
                 None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),

@@ -117,7 +117,7 @@ pub struct VM {
     pub system: Val,
     pub true_: Val,
     blockinfos: UnsafeCell<Vec<BlockInfo>>,
-    inline_caches: UnsafeCell<Vec<Option<(Val, (Val, Gc<Method>))>>>,
+    inline_caches: UnsafeCell<Vec<Option<(Val, Gc<Method>)>>>,
     instrs: UnsafeCell<Vec<Instr>>,
     sends: UnsafeCell<Vec<(String, usize)>>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
@@ -238,7 +238,7 @@ impl VM {
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
     pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
         let cls = rcv.get_class(self);
-        let (meth_cls_val, meth) = cls.downcast::<Class>(self)?.get_method(self, msg)?;
+        let meth = cls.downcast::<Class>(self)?.get_method(self, msg)?;
         match meth.body {
             MethodBody::Primitive(_) => {
                 panic!("Primitives can't be called outside of a function frame.");
@@ -251,14 +251,13 @@ impl VM {
                 if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
-                let meth_cls = meth_cls_val.downcast::<Class>(self)?;
                 let nargs = args.len();
                 for a in args {
                     self.stack_push(a);
                 }
                 let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                let r = self.exec_user(rcv, bytecode_off);
                 self.frame_pop();
                 match r {
                     SendReturn::ClosureReturn(_) => unimplemented!(),
@@ -271,7 +270,7 @@ impl VM {
 
     /// Execute a SOM method. Note that the frame for this method must have been created *before*
     /// calling this function.
-    fn exec_user(&self, rcv: Val, cls: &Class, meth_start_pc: usize) -> SendReturn {
+    fn exec_user(&self, rcv: Val, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
         let stack_start = self.stack_len();
         loop {
@@ -288,7 +287,6 @@ impl VM {
                     };
                     self.stack_push(Block::new(
                         self,
-                        Val::recover(cls),
                         blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
                         num_params,
@@ -350,7 +348,7 @@ impl VM {
                     return SendReturn::Val;
                 }
                 Instr::Send(send_idx, cache_idx) => {
-                    let (rcv, nargs, meth_cls_val, meth) = {
+                    let (rcv, nargs, meth) = {
                         debug_assert!(send_idx < unsafe { &*self.sends.get() }.len());
                         let (ref name, nargs) =
                             unsafe { (&*self.sends.get()).get_unchecked(send_idx) };
@@ -360,9 +358,8 @@ impl VM {
                         let rcv = self.stack_pop_n(*nargs);
                         let rcv_cls = rcv.get_class(self);
 
-                        let (meth_cls_val, meth) =
-                            stry!(self.inline_cache_lookup(cache_idx, rcv_cls, name));
-                        (rcv, nargs, meth_cls_val, meth)
+                        let meth = stry!(self.inline_cache_lookup(cache_idx, rcv_cls, name));
+                        (rcv, nargs, meth)
                     };
 
                     self.current_frame().set_sp(self.stack_len() - nargs);
@@ -381,11 +378,10 @@ impl VM {
                             if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
                                 panic!("Not enough stack space to execute method.");
                             }
-                            let meth_cls = stry!(meth_cls_val.downcast::<Class>(self));
                             let nframe =
                                 Frame::new(self, true, rcv.clone(), None, num_vars, *nargs);
                             unsafe { &mut *self.frames.get() }.push(nframe);
-                            let r = self.exec_user(rcv, meth_cls, bytecode_off);
+                            let r = self.exec_user(rcv, bytecode_off);
                             self.frame_pop();
                             r
                         }
@@ -537,7 +533,6 @@ impl VM {
             }
             Primitive::Value(nargs) => {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
-                let blk_cls: &Class = stry!(rcv_blk.blockinfo_cls.downcast(self));
                 let (num_vars, bytecode_off, max_stack) = {
                     let blkinfo = &unsafe { &*self.blockinfos.get() }[rcv_blk.blockinfo_off];
                     (blkinfo.num_vars, blkinfo.bytecode_off, blkinfo.max_stack)
@@ -554,7 +549,7 @@ impl VM {
                     nargs as usize,
                 );
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv.clone(), blk_cls, bytecode_off);
+                let r = self.exec_user(rcv.clone(), bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -650,21 +645,21 @@ impl VM {
         idx: usize,
         rcv_cls: Val,
         name: &str,
-    ) -> Result<(Val, Gc<Method>), Box<VMError>> {
+    ) -> Result<Gc<Method>, Box<VMError>> {
         // Lookup the method in the inline cache.
         {
             let cache = &unsafe { &*self.inline_caches.get() }[idx];
-            if let Some((cache_cls, (cache_meth_cls_val, cache_meth))) = cache {
+            if let Some((cache_cls, cache_meth)) = cache {
                 if cache_cls.bit_eq(&rcv_cls) {
-                    return Ok((cache_meth_cls_val.clone(), Gc::clone(cache_meth)));
+                    return Ok(Gc::clone(cache_meth));
                 }
             }
         }
         // The inline cache is empty or out of date, so store a new value in it.
-        let (meth_cls_val, meth) = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
+        let meth = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
         let ics = unsafe { &mut *self.inline_caches.get() };
-        ics[idx] = Some((rcv_cls.clone(), (meth_cls_val.clone(), Gc::clone(&meth))));
-        Ok((meth_cls_val, meth))
+        ics[idx] = Some((rcv_cls.clone(), Gc::clone(&meth)));
+        Ok(meth)
     }
 
     /// How many instructions are currently present in the VM?
