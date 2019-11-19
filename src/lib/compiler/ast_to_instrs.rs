@@ -25,6 +25,7 @@ use crate::{
     },
     vm::{
         objects::{BlockInfo, Class, Method, MethodBody, String_},
+        val::ValKind,
         VM,
     },
 };
@@ -70,7 +71,10 @@ impl<'a> Compiler<'a> {
             }
             // Whatever superclass has been chosen, it must have been initialised already or else
             // bad things will happen.
-            debug_assert!(!supercls.as_ref().unwrap().is_illegal());
+            debug_assert_ne!(
+                supercls.as_ref().map(|x| x.valkind()),
+                Some(ValKind::ILLEGAL)
+            );
         } else {
             supercls = None;
         }
