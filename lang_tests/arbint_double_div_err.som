@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: NotANumber { got: String_ }
+"
+
+arbint_double_div_err = (
+    run = (
+        (1 << 200) // 'a'
+    )
+)

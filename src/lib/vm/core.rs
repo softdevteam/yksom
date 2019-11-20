@@ -451,6 +451,10 @@ impl VM {
                 self.stack_push(stry!(rcv.div(self, self.stack_pop())));
                 SendReturn::Val
             }
+            Primitive::DoubleDiv => {
+                self.stack_push(stry!(rcv.double_div(self, self.stack_pop())));
+                SendReturn::Val
+            }
             Primitive::Equals => {
                 self.stack_push(stry!(rcv.equals(self, self.stack_pop())));
                 SendReturn::Val

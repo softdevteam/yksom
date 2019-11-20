@@ -1,0 +1,9 @@
+"
+VM:
+  status: error
+  stderr: DivisionByZero
+"
+
+double_double_div_zero_err4 = (
+    run = ( 1.1 // 0 )
+)

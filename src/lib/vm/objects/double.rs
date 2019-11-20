@@ -10,7 +10,7 @@
 #![allow(clippy::new_ret_no_self)]
 
 use abgc_derive::GcLayout;
-use num_traits::ToPrimitive;
+use num_traits::{ToPrimitive, Zero};
 
 use crate::vm::{
     core::{VMError, VM},
@@ -49,6 +49,35 @@ impl Obj for Double {
             match rhs.bigint().to_f64() {
                 Some(i) => Ok(Double::new(vm, self.val + i)),
                 None => Err(Box::new(VMError::CantRepresentAsDouble)),
+            }
+        } else {
+            Err(Box::new(VMError::NotANumber {
+                got: other.dyn_objtype(vm),
+            }))
+        }
+    }
+
+    fn double_div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            if rhs == 0 {
+                Err(Box::new(VMError::DivisionByZero))
+            } else {
+                Ok(Double::new(vm, self.val / (rhs as f64)))
+            }
+        } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+            if rhs.val == 0f64 {
+                Err(Box::new(VMError::DivisionByZero))
+            } else {
+                Ok(Double::new(vm, self.val / rhs.val))
+            }
+        } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+            if Zero::is_zero(rhs.bigint()) {
+                Err(Box::new(VMError::DivisionByZero))
+            } else {
+                match rhs.bigint().to_f64() {
+                    Some(i) => Ok(Double::new(vm, self.val / i)),
+                    None => Err(Box::new(VMError::CantRepresentAsDouble)),
+                }
             }
         } else {
             Err(Box::new(VMError::NotANumber {
