@@ -1,12 +1,3 @@
-// Copyright (c) 2019 King's College London created by the Software Development Team
-// <http://soft-dev.org/>
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0>, or the MIT license <LICENSE-MIT or
-// http://opensource.org/licenses/MIT>, or the UPL-1.0 license <http://opensource.org/licenses/UPL>
-// at your option. This file may not be copied, modified, or distributed except according to those
-// terms.
-
 //! A SOM compiler. This is currently fairly simplistic, particularly in terms of code generation
 //! (though it does at least use [lrpar](https://crates.io/crates/lrpar), so one gets decent error
 //! messages). The interchange format between the compiler and the VM currently uses a Rust `enum`
