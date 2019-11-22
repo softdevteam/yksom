@@ -372,7 +372,7 @@ impl Obj for Int {
                 None => ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() + rhs),
             }
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            ArbInt::new(vm, &self.val + &rhs.val)
+            ArbInt::new(vm, self.val + &rhs.val)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             match self.val.to_f64() {
                 Some(i) => Ok(Double::new(vm, i + rhs.double())),
@@ -423,7 +423,7 @@ impl Obj for Int {
                 None => ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() * rhs),
             }
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            ArbInt::new(vm, &self.val * &rhs.val)
+            ArbInt::new(vm, self.val * &rhs.val)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             match self.val.to_f64() {
                 Some(i) => Ok(Double::new(vm, i * rhs.double())),
@@ -443,7 +443,7 @@ impl Obj for Int {
                 None => ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() - rhs),
             }
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            ArbInt::new(vm, &self.val - &rhs.val)
+            ArbInt::new(vm, self.val - &rhs.val)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             match self.val.to_f64() {
                 Some(i) => Ok(Double::new(vm, i - rhs.double())),
