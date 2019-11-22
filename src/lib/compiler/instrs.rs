@@ -27,6 +27,7 @@ pub enum Instr {
 #[derive(Clone, Copy, Debug)]
 pub enum Builtin {
     False,
+    Integer,
     Nil,
     System,
     True,

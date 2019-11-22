@@ -491,6 +491,7 @@ impl<'a> Compiler<'a> {
                         "false" => vm.instrs_push(Instr::Builtin(Builtin::False)),
                         "system" => vm.instrs_push(Instr::Builtin(Builtin::System)),
                         "true" => vm.instrs_push(Instr::Builtin(Builtin::True)),
+                        "Integer" => vm.instrs_push(Instr::Builtin(Builtin::Integer)),
                         _ => return Err(e),
                     },
                 }

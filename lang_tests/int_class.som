@@ -1,0 +1,12 @@
+"
+VM:
+  status: success
+  stdout:
+    Integer
+"
+
+int_class = (
+    run = (
+        (Integer class) println.
+    )
+)

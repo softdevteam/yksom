@@ -113,6 +113,7 @@ pub struct VM {
     pub system_cls: Val,
     pub true_cls: Val,
     pub false_: Val,
+    pub int_: Val,
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
@@ -155,6 +156,7 @@ impl VM {
             system_cls: Val::illegal(),
             true_cls: Val::illegal(),
             false_: Val::illegal(),
+            int_: Val::illegal(),
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
@@ -192,6 +194,7 @@ impl VM {
         vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
         vm.false_ = Inst::new(&vm, vm.false_cls.clone());
+        vm.int_ = Inst::new(&vm, vm.int_cls.clone());
         vm.system = Inst::new(&vm, vm.system_cls.clone());
         vm.true_ = Inst::new(&vm, vm.true_cls.clone());
 
@@ -299,6 +302,7 @@ impl VM {
                         Builtin::False => self.false_.clone(),
                         Builtin::System => self.system.clone(),
                         Builtin::True => self.true_.clone(),
+                        Builtin::Integer => self.int_.clone(),
                     });
                     pc += 1;
                 }
@@ -841,6 +845,7 @@ impl VM {
             system_cls: Val::illegal(),
             true_cls: Val::illegal(),
             false_: Val::illegal(),
+            int_: Val::illegal(),
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
