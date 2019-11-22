@@ -653,7 +653,7 @@ impl VM {
         // The inline cache is empty or out of date, so store a new value in it.
         let meth = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
         let ics = unsafe { &mut *self.inline_caches.get() };
-        ics[idx] = Some((rcv_cls.clone(), Gc::clone(&meth)));
+        ics[idx] = Some((rcv_cls, Gc::clone(&meth)));
         Ok(meth)
     }
 
