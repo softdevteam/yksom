@@ -13,6 +13,7 @@ use crate::vm::{
 #[derive(Debug, GcLayout)]
 pub struct String_ {
     s: String,
+    is_str: bool,
 }
 
 impl Obj for String_ {
@@ -21,7 +22,12 @@ impl Obj for String_ {
     }
 
     fn get_class(&self, vm: &VM) -> Val {
-        vm.str_cls.clone()
+        // FIXME This is a temporary hack until we sort out bootstrapping of the String_ class
+        if self.is_str {
+            vm.str_cls.clone()
+        } else {
+            vm.sym_cls.clone()
+        }
     }
 }
 
@@ -34,8 +40,8 @@ impl StaticObjType for String_ {
 }
 
 impl String_ {
-    pub fn new(vm: &VM, s: String) -> Val {
-        Val::from_obj(vm, String_ { s })
+    pub fn new(vm: &VM, s: String, is_str: bool) -> Val {
+        Val::from_obj(vm, String_ { s, is_str })
     }
 
     pub fn as_str(&self) -> &str {
@@ -57,6 +63,6 @@ impl String_ {
         let mut new = String::with_capacity(self.s.len() + other_str.s.len());
         new.push_str(&self.s);
         new.push_str(&other_str.s);
-        Ok(String_::new(vm, new))
+        Ok(String_::new(vm, new, true))
     }
 }

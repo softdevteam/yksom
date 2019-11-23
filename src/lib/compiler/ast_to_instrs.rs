@@ -55,6 +55,7 @@ impl<'a> Compiler<'a> {
                     "Block" => Some(vm.block_cls.clone()),
                     "Boolean" => Some(vm.bool_cls.clone()),
                     "nil" => None,
+                    "String" => Some(vm.str_cls.clone()),
                     _ => unimplemented!(),
                 };
             } else {
@@ -109,7 +110,7 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(Class {
-            name: String_::new(vm, name),
+            name: String_::new(vm, name, true),
             path: compiler.path.to_path_buf(),
             supercls,
             num_inst_vars: astcls.inst_vars.len(),

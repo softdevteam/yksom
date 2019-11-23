@@ -1,0 +1,4 @@
+Symbol = String (
+    asString = primitive
+    asSymbol = ( ^self )
+)

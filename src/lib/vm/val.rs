@@ -285,7 +285,7 @@ impl Val {
 
     pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
         match self.valkind() {
-            ValKind::INT => Ok(String_::new(vm, self.as_isize(vm).unwrap().to_string())),
+            ValKind::INT => Ok(String_::new(vm, self.as_isize(vm).unwrap().to_string(), true)),
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
             ValKind::ILLEGAL => unreachable!(),
         }
@@ -652,7 +652,7 @@ mod tests {
         let vm = VM::new_no_bootstrap();
 
         let v = {
-            let v = String_::new(&vm, "s".to_owned());
+            let v = String_::new(&vm, "s".to_owned(), true);
             let v_tobj = v.tobj(&vm).unwrap();
             let v_int: &dyn Obj = v_tobj.deref().deref();
             let v_recovered = Val::recover(v_int);
@@ -667,7 +667,7 @@ mod tests {
     #[test]
     fn test_cast() {
         let vm = VM::new_no_bootstrap();
-        let v = String_::new(&vm, "s".to_owned());
+        let v = String_::new(&vm, "s".to_owned(), true);
         assert!(v.downcast::<String_>(&vm).is_ok());
         assert_eq!(
             *v.downcast::<Class>(&vm).unwrap_err(),
@@ -681,7 +681,7 @@ mod tests {
     #[test]
     fn test_downcast() {
         let vm = VM::new_no_bootstrap();
-        let v = String_::new(&vm, "s".to_owned());
+        let v = String_::new(&vm, "s".to_owned(), true);
         assert!(v.downcast::<String_>(&vm).is_ok());
         assert!(v.downcast::<Class>(&vm).is_err());
         assert!(v.try_downcast::<String_>(&vm).is_some());
