@@ -119,9 +119,11 @@ pub struct VM {
     reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
     stack: UnsafeCell<SOMStack>,
     strings: UnsafeCell<Vec<Val>>,
+    symbols: UnsafeCell<Vec<Val>>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
     reverse_strings: UnsafeCell<HashMap<String, usize>>,
+    reverse_symbols: UnsafeCell<HashMap<String, usize>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
 
@@ -161,6 +163,8 @@ impl VM {
             stack: UnsafeCell::new(SOMStack::new()),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
+            symbols: UnsafeCell::new(Vec::new()),
+            reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
 
@@ -402,6 +406,12 @@ impl VM {
                     unsafe { &mut *self.stack.get() }.push(s);
                     pc += 1;
                 }
+                Instr::Symbol(symbol_off) => {
+                    debug_assert!(unsafe { &*self.symbols.get() }.len() > symbol_off);
+                    let s = unsafe { (&*self.symbols.get()).get_unchecked(symbol_off) }.clone();
+                    unsafe { &mut *self.stack.get() }.push(s);
+                    pc += 1;
+                }
                 Instr::VarLookup(d, n) => {
                     let val = self.current_frame().var_lookup(d, n);
                     unsafe { &mut *self.stack.get() }.push(val);
@@ -430,6 +440,11 @@ impl VM {
             }
             Primitive::AsString => {
                 unsafe { &mut *self.stack.get() }.push(stry!(rcv.to_strval(self)));
+                SendReturn::Val
+            }
+            Primitive::AsSymbol => {
+                unsafe { &mut *self.stack.get() }
+                    .push(stry!(stry!(rcv.downcast::<String_>(self)).to_symbol(self)));
                 SendReturn::Val
             }
             Primitive::BitXor => {
@@ -684,6 +699,23 @@ impl VM {
             len
         }
     }
+
+    /// Add the symbols `s` to the VM, returning its index. Note that symbols (like strings) are reused, so indexes
+    /// are also reused.
+    pub fn add_symbol(&self, s: String) -> usize {
+        let reverse_symbols = unsafe { &mut *self.reverse_symbols.get() };
+        // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_symbols.get(&s) {
+            *i
+        } else {
+            let symbols = unsafe { &mut *self.symbols.get() };
+            let len = symbols.len();
+            reverse_symbols.insert(s.clone(), len);
+            symbols.push(String_::new(self, s, false));
+            len
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -828,6 +860,8 @@ impl VM {
             stack: UnsafeCell::new(SOMStack::new()),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
+            symbols: UnsafeCell::new(Vec::new()),
+            reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
     }

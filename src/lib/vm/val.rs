@@ -285,7 +285,11 @@ impl Val {
 
     pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
         match self.valkind() {
-            ValKind::INT => Ok(String_::new(vm, self.as_isize(vm).unwrap().to_string(), true)),
+            ValKind::INT => Ok(String_::new(
+                vm,
+                self.as_isize(vm).unwrap().to_string(),
+                true,
+            )),
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
             ValKind::ILLEGAL => unreachable!(),
         }

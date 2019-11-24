@@ -2,5 +2,6 @@ String = (
     concatenate: argument = primitive
     + argument = ( ^self concatenate: argument asString )
     asString = (^self)
+    asSymbol = primitive
     print = ( system printString: self )
 )

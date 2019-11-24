@@ -1,0 +1,22 @@
+"
+VM:
+  status: success
+  stdout:
+    #ab
+    true
+    false
+    true
+    String
+    String
+"
+
+symbol = (
+    run = (
+        #ab println.
+        (#ab == #ab) println.
+        ((#a + #b) == #ab) println.
+        (('a' + 'b') asSymbol == #ab) println.
+        (('a' + #ab) class) println.
+        ((#ab + 'a') class) println.
+    )
+)

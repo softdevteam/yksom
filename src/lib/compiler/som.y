@@ -140,7 +140,7 @@ Literal -> Result<Expr, ()>:
     | "-" "INT" { Ok(Expr::Int{ is_negative: true, val: map_err($2)? }) }
     | "DOUBLE" { Ok(Expr::Double{ is_negative: false, val: map_err($1)? }) }
     | "-" "DOUBLE" { Ok(Expr::Double{ is_negative: true, val: map_err($2)? }) }
-    | StringConst { unimplemented!() }
+    | StringConst { $1 }
     | ArrayConst { unimplemented!() }
     ;
 Block -> Result<Expr, ()>:
@@ -157,9 +157,9 @@ Argument -> Result<Option<Lexeme<StorageT>>, ()>:
       "ID" { Ok(Some(map_err($1)?)) }
     | { unimplemented!() }
     ;
-StringConst -> Result<(), ()>:
+StringConst -> Result<Expr, ()>:
       "#" "STRING" { unimplemented!() }
-    | "#" "ID" { unimplemented!() }
+    | "#" "ID" { Ok(Expr::Symbol(map_err($2)?)) }
     | "#" "KEYWORD" { unimplemented!() }
     | "#" BinOp { unimplemented!() }
     ;

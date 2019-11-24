@@ -29,6 +29,19 @@ impl Obj for String_ {
             vm.sym_cls.clone()
         }
     }
+
+    fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+        Ok(String_::new(vm, self.s.to_string(), true))
+    }
+
+    fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+        let other_str: &String_ = other.downcast(vm)?;
+
+        Ok(Val::from_bool(
+            vm,
+            (self.is_str == other_str.is_str) && (self.s == other_str.s),
+        ))
+    }
 }
 
 impl NotUnboxable for String_ {}
@@ -64,5 +77,9 @@ impl String_ {
         new.push_str(&self.s);
         new.push_str(&other_str.s);
         Ok(String_::new(vm, new, true))
+    }
+
+    pub fn to_symbol(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+        Ok(String_::new(vm, self.s.to_string(), false))
     }
 }
