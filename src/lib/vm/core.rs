@@ -4,11 +4,10 @@ use std::{
     cell::UnsafeCell,
     collections::HashMap,
     path::{Path, PathBuf},
-    process, ptr,
+    process,
 };
 
 use abgc::{Gc, GcLayout};
-use arrayvec::ArrayVec;
 
 use crate::{
     compiler::{
@@ -17,13 +16,12 @@ use crate::{
     },
     vm::{
         objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, ObjType, String_},
+        somstack::SOMStack,
         val::Val,
     },
 };
 
 pub const SOM_EXTENSION: &str = "som";
-
-pub const SOM_STACK_LEN: usize = 4096;
 
 #[derive(Debug, PartialEq)]
 pub enum VMError {
@@ -114,7 +112,7 @@ pub struct VM {
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
     reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
-    stack: UnsafeCell<ArrayVec<[Val; SOM_STACK_LEN]>>,
+    stack: SOMStack,
     strings: UnsafeCell<Vec<Val>>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
@@ -154,7 +152,7 @@ impl VM {
             instrs: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
-            stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
+            stack: SOMStack::new(),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
@@ -239,12 +237,12 @@ impl VM {
                 bytecode_off,
                 max_stack,
             } => {
-                if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
+                if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
                 let nargs = args.len();
                 for a in args {
-                    self.stack_push(a);
+                    self.stack.push(a);
                 }
                 let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
                 unsafe { &mut *self.frames.get() }.push(frame);
@@ -253,7 +251,7 @@ impl VM {
                 match r {
                     SendReturn::ClosureReturn(_) => unimplemented!(),
                     SendReturn::Err(e) => Err(Box::new(*e)),
-                    SendReturn::Val => Ok(self.stack_pop()),
+                    SendReturn::Val => Ok(self.stack.pop()),
                 }
             }
         }
@@ -263,7 +261,7 @@ impl VM {
     /// calling this function.
     fn exec_user(&self, rcv: Val, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
-        let stack_start = self.stack_len();
+        let stack_start = self.stack.len();
         loop {
             let instr = {
                 let instrs = unsafe { &*self.instrs.get() };
@@ -276,7 +274,7 @@ impl VM {
                         let blkinfo = &unsafe { &*self.blockinfos.get() }[blkinfo_off];
                         (blkinfo.num_params, blkinfo.bytecode_end)
                     };
-                    self.stack_push(Block::new(
+                    self.stack.push(Block::new(
                         self,
                         blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
@@ -285,7 +283,7 @@ impl VM {
                     pc = bytecode_end;
                 }
                 Instr::Builtin(b) => {
-                    self.stack_push(match b {
+                    self.stack.push(match b {
                         Builtin::Nil => self.nil.clone(),
                         Builtin::False => self.false_.clone(),
                         Builtin::System => self.system.clone(),
@@ -300,39 +298,39 @@ impl VM {
                     // Fortunately, the `closure` pointer in a frame is a perfect proxy for
                     // determining this: if this frame's (i.e. block's!) parent closure is not
                     // consistent with the frame stack, then the block has escaped.
-                    let v = self.stack_pop();
+                    let v = self.stack.pop();
                     let parent_closure = self.current_frame().closure(closure_depth);
                     for (frame_depth, pframe) in
                         unsafe { &*self.frames.get() }.iter().rev().enumerate()
                     {
                         if Gc::ptr_eq(&parent_closure, &pframe.closure) {
-                            self.stack_truncate(pframe.sp());
-                            self.stack_push(v);
+                            self.stack.truncate(pframe.sp());
+                            self.stack.push(v);
                             return SendReturn::ClosureReturn(frame_depth);
                         }
                     }
                     panic!("Return from escaped block");
                 }
                 Instr::Double(i) => {
-                    self.stack_push(Double::new(self, i));
+                    self.stack.push(Double::new(self, i));
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    self.stack_push(inst.inst_var_lookup(n));
+                    self.stack.push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst: &Inst = rcv.downcast(self).unwrap();
-                    inst.inst_var_set(n, self.stack_peek());
+                    inst.inst_var_set(n, self.stack.peek());
                     pc += 1;
                 }
                 Instr::Int(i) => {
-                    self.stack_push(stry!(Val::from_isize(self, i)));
+                    self.stack.push(stry!(Val::from_isize(self, i)));
                     pc += 1;
                 }
                 Instr::Pop => {
-                    self.stack_pop();
+                    self.stack.pop();
                     pc += 1;
                 }
                 Instr::Return => {
@@ -346,17 +344,17 @@ impl VM {
                         // Note that since we maintain a reference to `name` for the rest of this
                         // block, we mustn't mutate (directly or indirectly) `self.sends` in any
                         // way.
-                        let rcv = self.stack_pop_n(*nargs);
+                        let rcv = self.stack.pop_n(*nargs);
                         let rcv_cls = rcv.get_class(self);
 
                         let meth = stry!(self.inline_cache_lookup(cache_idx, rcv_cls, name));
                         (rcv, nargs, meth)
                     };
 
-                    self.current_frame().set_sp(self.stack_len() - nargs);
+                    self.current_frame().set_sp(self.stack.len() - nargs);
                     let r = match meth.body {
                         MethodBody::Primitive(Primitive::Restart) => {
-                            self.stack_truncate(stack_start);
+                            self.stack.truncate(stack_start);
                             pc = meth_start_pc;
                             continue;
                         }
@@ -366,7 +364,7 @@ impl VM {
                             bytecode_off,
                             max_stack,
                         } => {
-                            if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
+                            if self.stack.remaining_capacity() < max_stack {
                                 panic!("Not enough stack space to execute method.");
                             }
                             let nframe =
@@ -393,16 +391,16 @@ impl VM {
                 Instr::String(string_off) => {
                     debug_assert!(unsafe { &*self.strings.get() }.len() > string_off);
                     let s = unsafe { (&*self.strings.get()).get_unchecked(string_off) }.clone();
-                    self.stack_push(s);
+                    self.stack.push(s);
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
                     let val = self.current_frame().var_lookup(d, n);
-                    self.stack_push(val);
+                    self.stack.push(val);
                     pc += 1;
                 }
                 Instr::VarSet(d, n) => {
-                    let val = self.stack_peek();
+                    let val = self.stack.peek();
                     self.current_frame().var_set(d, n, val);
                     pc += 1;
                 }
@@ -413,49 +411,52 @@ impl VM {
     fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
         match prim {
             Primitive::Add => {
-                self.stack_push(stry!(rcv.add(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.add(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::And => {
-                self.stack_push(stry!(rcv.and(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.and(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::AsString => {
-                self.stack_push(stry!(rcv.to_strval(self)));
+                self.stack.push(stry!(rcv.to_strval(self)));
                 SendReturn::Val
             }
             Primitive::BitXor => {
-                self.stack_push(stry!(rcv.xor(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.xor(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Class => {
-                self.stack_push(rcv.get_class(self));
+                self.stack.push(rcv.get_class(self));
                 SendReturn::Val
             }
             Primitive::Concatenate => {
-                self.stack_push(stry!(
-                    stry!(rcv.downcast::<String_>(self)).concatenate(self, self.stack_pop())
+                self.stack.push(stry!(
+                    stry!(rcv.downcast::<String_>(self)).concatenate(self, self.stack.pop())
                 ));
                 SendReturn::Val
             }
             Primitive::Div => {
-                self.stack_push(stry!(rcv.div(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.div(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::DoubleDiv => {
-                self.stack_push(stry!(rcv.double_div(self, self.stack_pop())));
+                self.stack
+                    .push(stry!(rcv.double_div(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Equals => {
-                self.stack_push(stry!(rcv.equals(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.equals(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::GreaterThan => {
-                self.stack_push(stry!(rcv.greater_than(self, self.stack_pop())));
+                self.stack
+                    .push(stry!(rcv.greater_than(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::GreaterThanEquals => {
-                self.stack_push(stry!(rcv.greater_than_equals(self, self.stack_pop())));
+                self.stack
+                    .push(stry!(rcv.greater_than_equals(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Halt => unimplemented!(),
@@ -465,31 +466,35 @@ impl VM {
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
             Primitive::LessThan => {
-                self.stack_push(stry!(rcv.less_than(self, self.stack_pop())));
+                self.stack
+                    .push(stry!(rcv.less_than(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::LessThanEquals => {
-                self.stack_push(stry!(rcv.less_than_equals(self, self.stack_pop())));
+                self.stack
+                    .push(stry!(rcv.less_than_equals(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Mod => {
-                self.stack_push(stry!(rcv.modulus(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.modulus(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Mul => {
-                self.stack_push(stry!(rcv.mul(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.mul(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Name => {
-                self.stack_push(stry!(stry!(rcv.downcast::<Class>(self)).name(self)));
+                self.stack
+                    .push(stry!(stry!(rcv.downcast::<Class>(self)).name(self)));
                 SendReturn::Val
             }
             Primitive::New => {
-                self.stack_push(Inst::new(self, rcv));
+                self.stack.push(Inst::new(self, rcv));
                 SendReturn::Val
             }
             Primitive::NotEquals => {
-                self.stack_push(stry!(rcv.not_equals(self, self.stack_pop())));
+                self.stack
+                    .push(stry!(rcv.not_equals(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::ObjectSize => unimplemented!(),
@@ -498,32 +503,33 @@ impl VM {
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
             Primitive::RefEquals => {
-                self.stack_push(stry!(rcv.ref_equals(self, self.stack_pop())));
+                self.stack
+                    .push(stry!(rcv.ref_equals(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Restart => unreachable!(),
             Primitive::PrintNewline => {
                 println!();
-                self.stack_push(self.system.clone());
+                self.stack.push(self.system.clone());
                 SendReturn::Val
             }
             Primitive::PrintString => {
-                let v = self.stack_pop();
+                let v = self.stack.pop();
                 let str_: &String_ = stry!(v.downcast(self));
                 print!("{}", str_.as_str());
-                self.stack_push(self.system.clone());
+                self.stack.push(self.system.clone());
                 SendReturn::Val
             }
             Primitive::Shl => {
-                self.stack_push(stry!(rcv.shl(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.shl(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Sqrt => {
-                self.stack_push(stry!(rcv.sqrt(self)));
+                self.stack.push(stry!(rcv.sqrt(self)));
                 SendReturn::Val
             }
             Primitive::Sub => {
-                self.stack_push(stry!(rcv.sub(self, self.stack_pop())));
+                self.stack.push(stry!(rcv.sub(self, self.stack.pop())));
                 SendReturn::Val
             }
             Primitive::Value(nargs) => {
@@ -532,7 +538,7 @@ impl VM {
                     let blkinfo = &unsafe { &*self.blockinfos.get() }[rcv_blk.blockinfo_off];
                     (blkinfo.num_vars, blkinfo.bytecode_off, blkinfo.max_stack)
                 };
-                if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
+                if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute block.");
                 }
                 let frame = Frame::new(
@@ -559,53 +565,6 @@ impl VM {
 
     fn frame_pop(&self) {
         unsafe { &mut *self.frames.get() }.pop();
-    }
-
-    fn stack_len(&self) -> usize {
-        unsafe { &*self.stack.get() }.len()
-    }
-
-    /// Returns the top-most value of the stack without removing it. If the stack is empty, calling
-    /// this function will lead to undefined behaviour.
-    fn stack_peek(&self) -> Val {
-        // Since we know that there will be at least one element in the stack, we can use our own
-        // simplified version of pop() which avoids a branch and the wrapping of values in an
-        // Option.
-        let stack = unsafe { &*self.stack.get() };
-        debug_assert!(!stack.is_empty());
-        let i = stack.len() - 1;
-        unsafe { stack.get_unchecked(i) }.clone()
-    }
-
-    /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
-    /// this function will lead to undefined behaviour.
-    fn stack_pop(&self) -> Val {
-        // Since we know that there will be at least one element in the stack, we can use our own
-        // simplified version of pop() which avoids a branch and the wrapping of values in an
-        // Option.
-        unsafe {
-            let stack = &mut *self.stack.get();
-            debug_assert!(!stack.is_empty());
-            let i = stack.len() - 1;
-            let v = ptr::read(stack.get_unchecked(i));
-            stack.set_len(i);
-            v
-        }
-    }
-
-    fn stack_pop_n(&self, n: usize) -> Val {
-        let len = unsafe { &mut *self.stack.get() }.len();
-        unsafe { &mut *self.stack.get() }.remove(len - n - 1)
-    }
-
-    /// Push `v` onto the stack.
-    fn stack_push(&self, v: Val) {
-        unsafe { (&mut *self.stack.get()).push_unchecked(v) };
-    }
-
-    fn stack_truncate(&self, i: usize) {
-        debug_assert!(i <= unsafe { &*self.stack.get() }.len());
-        unsafe { &mut *self.stack.get() }.truncate(i);
     }
 
     /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
@@ -725,14 +684,14 @@ impl Frame {
         if is_method {
             vars[0] = self_val;
             for i in 0..num_args {
-                vars[num_args - i] = vm.stack_pop();
+                vars[num_args - i] = vm.stack.pop();
             }
             for v in vars.iter_mut().skip(num_args + 1).take(num_vars) {
                 *v = vm.nil.clone();
             }
         } else {
             for i in 0..num_args {
-                vars[num_args - i - 1] = vm.stack_pop();
+                vars[num_args - i - 1] = vm.stack.pop();
             }
             for v in vars.iter_mut().skip(num_args).take(num_vars) {
                 *v = vm.nil.clone();
@@ -840,7 +799,7 @@ impl VM {
             instrs: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
-            stack: UnsafeCell::new(ArrayVec::<[_; SOM_STACK_LEN]>::new()),
+            stack: SOMStack::new(),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
@@ -856,8 +815,8 @@ mod tests {
     fn test_frame() {
         let vm = VM::new_no_bootstrap();
         let selfv = Val::from_isize(&vm, 42).unwrap();
-        vm.stack_push(Val::from_isize(&vm, 43).unwrap());
-        vm.stack_push(Val::from_isize(&vm, 44).unwrap());
+        vm.stack.push(Val::from_isize(&vm, 43).unwrap());
+        vm.stack.push(Val::from_isize(&vm, 44).unwrap());
         let f = Frame::new(&vm, true, selfv, None, 3, 2);
         assert_eq!(f.var_lookup(0, 0).as_isize(&vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).as_isize(&vm).unwrap(), 43);

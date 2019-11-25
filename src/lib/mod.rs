@@ -17,7 +17,9 @@
 #![feature(unsize)]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::float_cmp)]
+#![allow(clippy::missing_safety_doc)]
 #![allow(clippy::never_loop)]
+#![allow(clippy::new_without_default)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
