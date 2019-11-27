@@ -6,6 +6,7 @@ use std::{
     convert::TryFrom,
     mem::{size_of, transmute},
     ops::Deref,
+    ptr::NonNull,
 };
 
 use abgc::{self, Gc};
@@ -72,7 +73,9 @@ impl Val {
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
         Val {
-            val: unsafe { transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize) },
+            val: unsafe {
+                transmute::<*const ThinObj, usize>(ptr.as_ptr()) | (ValKind::GCBOX as usize)
+            },
         }
     }
 
@@ -91,7 +94,7 @@ impl Val {
         unsafe {
             let ptr = ThinObj::recover(obj).into_raw();
             Val {
-                val: transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize),
+                val: transmute::<*const ThinObj, usize>(ptr.as_ptr()) | (ValKind::GCBOX as usize),
             }
         }
     }
@@ -161,7 +164,11 @@ impl Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                Ok(unsafe { Gc::clone_from_raw(self.val_to_tobj()) })
+                Ok(unsafe {
+                    Gc::clone_from_raw(NonNull::new_unchecked(
+                        self.val_to_tobj() as *const _ as *mut _
+                    ))
+                })
             }
             ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap()).map(|v| v.tobj(vm))?,
             ValKind::ILLEGAL => unreachable!(),
@@ -531,7 +538,11 @@ impl Clone for Val {
         let val = match self.valkind() {
             ValKind::GCBOX => unsafe {
                 transmute::<*const ThinObj, usize>(
-                    Gc::<ThinObj>::clone_from_raw(self.val_to_tobj()).into_raw(),
+                    Gc::<ThinObj>::clone_from_raw(NonNull::new_unchecked(self.val_to_tobj()
+                        as *const _
+                        as *mut _))
+                    .into_raw()
+                    .as_ptr(),
                 ) | (ValKind::GCBOX as usize)
             },
             ValKind::INT => self.val,
@@ -545,7 +556,11 @@ impl Drop for Val {
     fn drop(&mut self) {
         match self.valkind() {
             ValKind::GCBOX => {
-                drop(unsafe { Gc::<ThinObj>::from_raw(self.val_to_tobj()) });
+                drop(unsafe {
+                    Gc::<ThinObj>::from_raw(NonNull::new_unchecked(
+                        self.val_to_tobj() as *const _ as *mut _
+                    ))
+                });
             }
             ValKind::INT => (),
             ValKind::ILLEGAL => (),
