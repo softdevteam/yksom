@@ -66,5 +66,6 @@ pub enum Expr {
     },
     Return(Box<Expr>),
     String(Lexeme<StorageT>),
+    Symbol(Lexeme<StorageT>),
     VarLookup(Lexeme<StorageT>),
 }

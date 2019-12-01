@@ -103,6 +103,7 @@ pub struct VM {
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
+    pub sym_cls: Val,
     pub system_cls: Val,
     pub true_cls: Val,
     pub false_: Val,
@@ -118,9 +119,11 @@ pub struct VM {
     reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
     stack: UnsafeCell<SOMStack>,
     strings: UnsafeCell<Vec<Val>>,
+    symbols: UnsafeCell<Vec<Val>>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
     reverse_strings: UnsafeCell<HashMap<String, usize>>,
+    reverse_symbols: UnsafeCell<HashMap<String, usize>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
 
@@ -145,6 +148,7 @@ impl VM {
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            sym_cls: Val::illegal(),
             system_cls: Val::illegal(),
             true_cls: Val::illegal(),
             false_: Val::illegal(),
@@ -159,6 +163,8 @@ impl VM {
             stack: UnsafeCell::new(SOMStack::new()),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
+            symbols: UnsafeCell::new(Vec::new()),
+            reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
 
@@ -182,6 +188,7 @@ impl VM {
         vm.false_cls = vm.init_builtin_class("False", false);
         vm.int_cls = vm.init_builtin_class("Integer", false);
         vm.str_cls = vm.init_builtin_class("String", false);
+        vm.sym_cls = vm.init_builtin_class("Symbol", false);
         vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
         vm.false_ = Inst::new(&vm, vm.false_cls.clone());
@@ -399,6 +406,12 @@ impl VM {
                     unsafe { &mut *self.stack.get() }.push(s);
                     pc += 1;
                 }
+                Instr::Symbol(symbol_off) => {
+                    debug_assert!(unsafe { &*self.symbols.get() }.len() > symbol_off);
+                    let s = unsafe { (&*self.symbols.get()).get_unchecked(symbol_off) }.clone();
+                    unsafe { &mut *self.stack.get() }.push(s);
+                    pc += 1;
+                }
                 Instr::VarLookup(d, n) => {
                     let val = self.current_frame().var_lookup(d, n);
                     unsafe { &mut *self.stack.get() }.push(val);
@@ -427,6 +440,11 @@ impl VM {
             }
             Primitive::AsString => {
                 unsafe { &mut *self.stack.get() }.push(stry!(rcv.to_strval(self)));
+                SendReturn::Val
+            }
+            Primitive::AsSymbol => {
+                unsafe { &mut *self.stack.get() }
+                    .push(stry!(stry!(rcv.downcast::<String_>(self)).to_symbol(self)));
                 SendReturn::Val
             }
             Primitive::BitXor => {
@@ -677,7 +695,24 @@ impl VM {
             let strings = unsafe { &mut *self.strings.get() };
             let len = strings.len();
             reverse_strings.insert(s.clone(), len);
-            strings.push(String_::new(self, s));
+            strings.push(String_::new(self, s, true));
+            len
+        }
+    }
+
+    /// Add the symbols `s` to the VM, returning its index. Note that symbols (like strings) are reused, so indexes
+    /// are also reused.
+    pub fn add_symbol(&self, s: String) -> usize {
+        let reverse_symbols = unsafe { &mut *self.reverse_symbols.get() };
+        // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_symbols.get(&s) {
+            *i
+        } else {
+            let symbols = unsafe { &mut *self.symbols.get() };
+            let len = symbols.len();
+            reverse_symbols.insert(s.clone(), len);
+            symbols.push(String_::new(self, s, false));
             len
         }
     }
@@ -810,6 +845,7 @@ impl VM {
             obj_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
+            sym_cls: Val::illegal(),
             system_cls: Val::illegal(),
             true_cls: Val::illegal(),
             false_: Val::illegal(),
@@ -824,6 +860,8 @@ impl VM {
             stack: UnsafeCell::new(SOMStack::new()),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
+            symbols: UnsafeCell::new(Vec::new()),
+            reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
     }

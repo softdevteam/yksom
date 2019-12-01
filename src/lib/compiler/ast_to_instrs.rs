@@ -55,6 +55,7 @@ impl<'a> Compiler<'a> {
                     "Block" => Some(vm.block_cls.clone()),
                     "Boolean" => Some(vm.bool_cls.clone()),
                     "nil" => None,
+                    "String" => Some(vm.str_cls.clone()),
                     _ => unimplemented!(),
                 };
             } else {
@@ -109,7 +110,7 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(Class {
-            name: String_::new(vm, name),
+            name: String_::new(vm, name, true),
             path: compiler.path.to_path_buf(),
             supercls,
             num_inst_vars: astcls.inst_vars.len(),
@@ -234,6 +235,7 @@ impl<'a> Compiler<'a> {
                 }
                 "sqrt" => Ok(MethodBody::Primitive(Primitive::Sqrt)),
                 "asString" => Ok(MethodBody::Primitive(Primitive::AsString)),
+                "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
@@ -466,6 +468,12 @@ impl<'a> Compiler<'a> {
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
                 vm.instrs_push(Instr::String(vm.add_string(s)));
+                Ok(1)
+            }
+            ast::Expr::Symbol(lexeme) => {
+                // XXX are there string escaping rules we need to take account of?
+                let s = self.lexer.lexeme_str(&lexeme);
+                vm.instrs_push(Instr::Symbol(vm.add_symbol(s.to_owned())));
                 Ok(1)
             }
             ast::Expr::VarLookup(lexeme) => {

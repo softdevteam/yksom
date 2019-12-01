@@ -11,6 +11,7 @@ pub enum Instr {
     Return,
     Send(usize, usize),
     String(usize),
+    Symbol(usize),
     VarLookup(usize, usize),
     VarSet(usize, usize),
 }
@@ -28,6 +29,7 @@ pub enum Primitive {
     Add,
     And,
     AsString,
+    AsSymbol,
     BitXor,
     Class,
     Concatenate,
