@@ -172,6 +172,8 @@ ArrayList -> Result<(), ()>:
 
 %%
 
+use lrpar::Lexeme;
+
 type StorageT = u32;
 
 fn map_err<StorageT>(r: Result<Lexeme<StorageT>, Lexeme<StorageT>>)
