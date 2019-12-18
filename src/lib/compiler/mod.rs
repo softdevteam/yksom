@@ -14,8 +14,8 @@ mod ast;
 mod ast_to_instrs;
 pub mod instrs;
 
-lrlex_mod!(som_l);
-lrpar_mod!(som_y);
+lrlex_mod!("lib/compiler/som.l");
+lrpar_mod!("lib/compiler/som.y");
 
 type StorageT = u32;
 
