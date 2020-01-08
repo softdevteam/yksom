@@ -25,8 +25,8 @@ pub fn compile(vm: &VM, path: &Path) -> Class {
     let txt = String::from_utf8_lossy(&bytes);
 
     let lexerdef = som_l::lexerdef();
-    let mut lexer = lexerdef.lexer(&txt);
-    let (astopt, errs) = som_y::parse(&mut lexer);
+    let lexer = lexerdef.lexer(&txt);
+    let (astopt, errs) = som_y::parse(&lexer);
     for e in &errs {
         eprintln!("{}", e.pp(&lexer, &som_y::token_epp));
     }
