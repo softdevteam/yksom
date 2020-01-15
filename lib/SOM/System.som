@@ -1,4 +1,6 @@
 System = (
-    printString: string = primitive
-    printNewline        = primitive
+    global: name            = primitive
+    global: name put: value = primitive
+    printString: string     = primitive
+    printNewline            = primitive
 )

@@ -2,6 +2,7 @@
 pub enum Instr {
     Block(usize),
     Builtin(Builtin),
+    Global(usize),
     ClosureReturn(usize),
     Double(f64),
     InstVarLookup(usize),
@@ -36,6 +37,8 @@ pub enum Primitive {
     Div,
     DoubleDiv,
     Equals,
+    Global,
+    GlobalPut,
     GreaterThan,
     GreaterThanEquals,
     Halt,

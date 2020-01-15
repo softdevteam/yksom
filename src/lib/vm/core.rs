@@ -44,6 +44,8 @@ pub enum VMError {
         expected: ObjType,
         got: ObjType,
     },
+    /// Tried to access a global before it being initialised.
+    InvalidSymbol,
     /// Tried to do a shl or shr with a value below zero.
     NegativeShift,
     /// A specialised version of TypeError, because SOM has more than one number type (and casts
@@ -111,6 +113,7 @@ pub struct VM {
     pub system: Val,
     pub true_: Val,
     blockinfos: UnsafeCell<Vec<BlockInfo>>,
+    globals: UnsafeCell<HashMap<usize, Val>>,
     inline_caches: UnsafeCell<Vec<Option<(Val, Gc<Method>)>>>,
     instrs: UnsafeCell<Vec<Instr>>,
     sends: UnsafeCell<Vec<(String, usize)>>,
@@ -156,6 +159,7 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
+            globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
@@ -167,7 +171,6 @@ impl VM {
             reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
-
         // The very delicate phase.
         //
         // Nothing in this phase must store references to the nil object or any classes earlier
@@ -191,6 +194,10 @@ impl VM {
         vm.sym_cls = vm.init_builtin_class("Symbol", false);
         vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
+        unsafe { &mut *vm.globals.get() }.insert(
+            vm.add_symbol("system".to_string()),
+            Inst::new(&vm, vm.system_cls.clone()),
+        );
         vm.false_ = Inst::new(&vm, vm.false_cls.clone());
         vm.system = Inst::new(&vm, vm.system_cls.clone());
         vm.true_ = Inst::new(&vm, vm.true_cls.clone());
@@ -226,7 +233,14 @@ impl VM {
         let path = self
             .find_class(name)
             .unwrap_or_else(|_| panic!("Can't find builtin class '{}'", name));
-        self.compile(&path, inst_vars_allowed)
+
+        let val = self.compile(&path, inst_vars_allowed);
+        let idx = self.add_symbol(name.to_string());
+        unsafe { &mut *self.globals.get() }
+            .entry(idx)
+            .or_insert(val.clone());
+
+        val
     }
 
     /// Inform the user of the error string `error` and then exit.
@@ -324,6 +338,15 @@ impl VM {
                 }
                 Instr::Double(i) => {
                     unsafe { &mut *self.stack.get() }.push(Double::new(self, i));
+                    pc += 1;
+                }
+                Instr::Global(symbol_off) => {
+                    debug_assert!(unsafe { &*self.symbols.get() }.len() > symbol_off);
+                    if let Some(global) = unsafe { &mut *self.globals.get() }.get(&symbol_off) {
+                        unsafe { &mut *self.stack.get() }.push(global.clone());
+                    } else {
+                        return SendReturn::Err(Box::new(VMError::InvalidSymbol));
+                    }
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
@@ -476,6 +499,31 @@ impl VM {
                 unsafe { &mut *self.stack.get() }.push(stry!(
                     rcv.equals(self, unsafe { &mut *self.stack.get() }.pop())
                 ));
+                SendReturn::Val
+            }
+            Primitive::Global => {
+                let name = unsafe { &mut *self.stack.get() }.pop();
+                let as_string: &String_ = stry!(name.downcast(self));
+                let s = as_string.as_str();
+
+                if let Some(i) = unsafe { &mut *self.reverse_symbols.get() }.get(s) {
+                    if let Some(val) = unsafe { &mut *self.globals.get() }.get(&i) {
+                        unsafe { &mut *self.stack.get() }.push(val.clone());
+                        return SendReturn::Val;
+                    }
+                }
+                SendReturn::Err(Box::new(VMError::InvalidSymbol))
+            }
+            Primitive::GlobalPut => {
+                let value = unsafe { &mut *self.stack.get() }.pop();
+                let name = unsafe { &mut *self.stack.get() }.pop();
+                let as_string: &String_ = stry!(name.downcast(self));
+                let s = as_string.as_str();
+
+                if let Some(i) = unsafe { &mut *self.reverse_symbols.get() }.get(s) {
+                    unsafe { &mut *self.globals.get() }.insert(*i, value.clone());
+                    unsafe { &mut *self.stack.get() }.push(value);
+                }
                 SendReturn::Val
             }
             Primitive::GreaterThan => {
@@ -853,6 +901,7 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
+            globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
