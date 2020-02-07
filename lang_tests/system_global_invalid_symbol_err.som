@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: InvalidSymbol
+"
+
+system_global_invalid_symbol_err = (
+    run = (
+        system global: #ab.
+    )
+)

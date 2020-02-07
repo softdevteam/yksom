@@ -2,11 +2,11 @@
 VM:
   status: error
   stderr:
-    ...line 11, column 11:
-      ...
-    Unknown variable 'x'
+   InvalidSymbol 
 "
 
 instance_vars2 = (
-    x = (^x)
+  run = (
+    x = 1
+  )
 )

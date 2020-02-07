@@ -238,6 +238,8 @@ impl<'a> Compiler<'a> {
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
+                "global:" => Ok(MethodBody::Primitive(Primitive::Global)),
+                "global:put:" => Ok(MethodBody::Primitive(Primitive::GlobalPut)),
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
                 "hashcode" => Ok(MethodBody::Primitive(Primitive::Hashcode)),
                 "inspect" => Ok(MethodBody::Primitive(Primitive::Inspect)),
@@ -485,13 +487,20 @@ impl<'a> Compiler<'a> {
                             vm.instrs_push(Instr::VarLookup(depth, var_num));
                         }
                     }
-                    Err(e) => match self.lexer.lexeme_str(&lexeme) {
-                        "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil)),
-                        "false" => vm.instrs_push(Instr::Builtin(Builtin::False)),
-                        "system" => vm.instrs_push(Instr::Builtin(Builtin::System)),
-                        "true" => vm.instrs_push(Instr::Builtin(Builtin::True)),
-                        _ => return Err(e),
-                    },
+                    Err(_) => {
+                        let lex_string = self.lexer.lexeme_str(&lexeme);
+
+                        match lex_string {
+                            "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil)),
+                            "false" => vm.instrs_push(Instr::Builtin(Builtin::False)),
+                            "true" => vm.instrs_push(Instr::Builtin(Builtin::True)),
+                            _ => {
+                                vm.instrs_push(Instr::Global(
+                                    vm.add_symbol(lex_string.to_string()),
+                                ));
+                            }
+                        }
+                    }
                 }
                 Ok(1)
             }
