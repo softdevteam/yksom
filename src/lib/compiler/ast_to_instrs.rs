@@ -262,6 +262,7 @@ impl<'a> Compiler<'a> {
                 "printNewline" => Ok(MethodBody::Primitive(Primitive::PrintNewline)),
                 "printString:" => Ok(MethodBody::Primitive(Primitive::PrintString)),
                 "restart" => Ok(MethodBody::Primitive(Primitive::Restart)),
+                "superclass" => Ok(MethodBody::Primitive(Primitive::Superclass)),
                 "value" => Ok(MethodBody::Primitive(Primitive::Value(0))),
                 "value:" => Ok(MethodBody::Primitive(Primitive::Value(1))),
                 "value:with:" => Ok(MethodBody::Primitive(Primitive::Value(2))),

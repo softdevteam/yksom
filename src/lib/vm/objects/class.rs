@@ -52,4 +52,11 @@ impl Class {
                 None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),
             })
     }
+
+    pub fn superclass(&self, vm: &VM) -> Val {
+        if let Some(superclass) = &self.supercls {
+            return superclass.clone();
+        }
+        vm.nil.clone()
+    }
 }

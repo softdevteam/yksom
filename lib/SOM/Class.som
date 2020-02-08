@@ -4,4 +4,6 @@ Class = (
     name     = primitive
 
     asString = ( ^self name )
+
+    superclass = primitive
 )
