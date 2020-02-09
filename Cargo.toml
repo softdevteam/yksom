@@ -18,9 +18,9 @@ path = "lang_tests/run.rs"
 harness = false
 
 [build-dependencies]
-cfgrammar = "0.5"
-lrlex = "0.5"
-lrpar = "0.5"
+cfgrammar = "0.6"
+lrlex = "0.6"
+lrpar = "0.6"
 rerun_except = "0.1"
 
 [dev-dependencies]
@@ -32,11 +32,11 @@ regex = "1.1"
 abgc = { git="https://github.com/softdevteam/abgc" }
 abgc_derive = { git="https://github.com/softdevteam/abgc" }
 arrayvec = "0.5"
-cfgrammar = "0.5"
+cfgrammar = "0.6"
 getopts = "0.2"
 itertools = "0.8"
-lrlex = "0.5"
-lrpar = "0.5"
+lrlex = "0.6"
+lrpar = "0.6"
 natrob = { git="https://github.com/softdevteam/natrob", features=["abgc"] }
 num-bigint = "0.2"
 num-integer = "0.1"
