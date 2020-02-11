@@ -47,10 +47,10 @@ impl<'a> Compiler<'a> {
         };
 
         let mut errs = vec![];
-        let name = lexer.lexeme_str(&astcls.name).to_owned();
+        let name = lexer.span_str(astcls.name.span()).to_owned();
         let supercls;
         if name != "Object" {
-            if let Some(n) = astcls.supername.map(|x| lexer.lexeme_str(&x)) {
+            if let Some(n) = astcls.supername.map(|x| lexer.span_str(x.span())) {
                 supercls = match n {
                     "Block" => Some(vm.block_cls.clone()),
                     "Boolean" => Some(vm.bool_cls.clone()),
@@ -74,7 +74,7 @@ impl<'a> Compiler<'a> {
         let mut inst_vars = HashMap::with_capacity(astcls.inst_vars.len());
         for lexeme in &astcls.inst_vars {
             let vars_len = inst_vars.len();
-            inst_vars.insert(lexer.lexeme_str(&lexeme), vars_len);
+            inst_vars.insert(lexer.span_str(lexeme.span()), vars_len);
         }
         compiler.vars_stack.push(inst_vars);
 
@@ -94,8 +94,8 @@ impl<'a> Compiler<'a> {
             let err_strs = errs
                 .iter()
                 .map(|(lexeme, msg)| {
-                    let (line_off, col) = compiler.lexer.line_col(lexeme.start());
-                    let line = compiler.lexer.surrounding_line_str(lexeme.start());
+                    let ((line_off, col), _) = compiler.lexer.line_col(lexeme.span());
+                    let line = compiler.lexer.span_lines_str(lexeme.span()).split("\n").nth(0).unwrap();
                     format!(
                         "File '{}', line {}, column {}:\n  {}\n{}",
                         compiler.path.to_str().unwrap(),
@@ -129,15 +129,15 @@ impl<'a> Compiler<'a> {
                     Some(l) => vec![l],
                     None => vec![],
                 };
-                ((op, self.lexer.lexeme_str(&op).to_string()), arg_v)
+                ((op, self.lexer.span_str(op.span()).to_string()), arg_v)
             }
             ast::MethodName::Id(lexeme) => {
-                ((lexeme, self.lexer.lexeme_str(&lexeme).to_string()), vec![])
+                ((lexeme, self.lexer.span_str(lexeme.span()).to_string()), vec![])
             }
             ast::MethodName::Keywords(ref pairs) => {
                 let name = pairs
                     .iter()
-                    .map(|x| self.lexer.lexeme_str(&x.0))
+                    .map(|x| self.lexer.span_str(x.0.span()))
                     .collect::<String>();
                 let args = pairs.iter().map(|x| x.1).collect::<Vec<_>>();
                 ((pairs[0].0, name), args)
@@ -300,9 +300,9 @@ impl<'a> Compiler<'a> {
             vars.insert("self", 0);
         }
 
-        let mut process_var = |lexeme| {
+        let mut process_var = |lexeme: Lexeme<_>| {
             let vars_len = vars.len();
-            let var_str = self.lexer.lexeme_str(&lexeme);
+            let var_str = self.lexer.span_str(lexeme.span());
             match vars.entry(var_str) {
                 hash_map::Entry::Occupied(_) => Err(vec![(
                     lexeme,
@@ -371,7 +371,7 @@ impl<'a> Compiler<'a> {
             ast::Expr::BinaryMsg { lhs, op, rhs } => {
                 let mut stack_size = self.c_expr(vm, lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
-                let send_off = vm.add_send((self.lexer.lexeme_str(&op).to_string(), 1));
+                let send_off = vm.add_send((self.lexer.span_str(op.span()).to_string(), 1));
                 vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 debug_assert!(stack_size > 0);
                 Ok(stack_size)
@@ -407,9 +407,9 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::Double { is_negative, val } => {
                 let s = if *is_negative {
-                    format!("-{}", self.lexer.lexeme_str(&val))
+                    format!("-{}", self.lexer.span_str(val.span()))
                 } else {
-                    self.lexer.lexeme_str(&val).to_owned()
+                    self.lexer.span_str(val.span()).to_owned()
                 };
                 match s.parse::<f64>() {
                     Ok(i) => {
@@ -420,7 +420,7 @@ impl<'a> Compiler<'a> {
                 }
             }
             ast::Expr::Int { is_negative, val } => {
-                match self.lexer.lexeme_str(&val).parse::<isize>() {
+                match self.lexer.span_str(val.span()).parse::<isize>() {
                     Ok(mut i) => {
                         if *is_negative {
                             // With twos complement, `0-i` will always succeed, but just in case...
@@ -436,7 +436,7 @@ impl<'a> Compiler<'a> {
                 let mut max_stack = self.c_expr(vm, receiver)?;
                 let mut mn = String::new();
                 for (i, (kw, expr)) in msglist.iter().enumerate() {
-                    mn.push_str(self.lexer.lexeme_str(&kw));
+                    mn.push_str(self.lexer.span_str(kw.span()));
                     let expr_stack = self.c_expr(vm, expr)?;
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
@@ -448,7 +448,7 @@ impl<'a> Compiler<'a> {
             ast::Expr::UnaryMsg { receiver, ids } => {
                 let max_stack = self.c_expr(vm, receiver)?;
                 for id in ids {
-                    let send_off = vm.add_send((self.lexer.lexeme_str(&id).to_string(), 0));
+                    let send_off = vm.add_send((self.lexer.span_str(id.span()).to_string(), 0));
                     vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 }
                 debug_assert!(max_stack > 0);
@@ -466,7 +466,7 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::String(lexeme) => {
                 // XXX are there string escaping rules we need to take account of?
-                let s_orig = self.lexer.lexeme_str(&lexeme);
+                let s_orig = self.lexer.span_str(lexeme.span());
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
                 vm.instrs_push(Instr::String(vm.add_string(s)));
@@ -474,7 +474,7 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::Symbol(lexeme) => {
                 // XXX are there string escaping rules we need to take account of?
-                let s = self.lexer.lexeme_str(&lexeme);
+                let s = self.lexer.span_str(lexeme.span());
                 vm.instrs_push(Instr::Symbol(vm.add_symbol(s.to_owned())));
                 Ok(1)
             }
@@ -488,8 +488,7 @@ impl<'a> Compiler<'a> {
                         }
                     }
                     Err(_) => {
-                        let lex_string = self.lexer.lexeme_str(&lexeme);
-
+                        let lex_string = self.lexer.span_str(lexeme.span());
                         match lex_string {
                             "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil)),
                             "false" => vm.instrs_push(Instr::Builtin(Builtin::False)),
@@ -514,7 +513,7 @@ impl<'a> Compiler<'a> {
         &self,
         lexeme: &Lexeme<StorageT>,
     ) -> Result<(usize, usize), Vec<(Lexeme<StorageT>, String)>> {
-        let name = self.lexer.lexeme_str(lexeme);
+        let name = self.lexer.span_str(lexeme.span());
         for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
             if let Some(n) = vars.get(name) {
                 return Ok((self.vars_stack.len() - depth - 1, *n));
