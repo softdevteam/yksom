@@ -66,6 +66,7 @@ pub enum Primitive {
     Shl,
     Sqrt,
     Sub,
+    Superclass,
     /// Is this `value` (0), `value:` (1), or `value:with:` (2)?
     Value(u8),
 }

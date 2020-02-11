@@ -620,6 +620,11 @@ impl VM {
                     .push(stry!(rcv.sub(self, unsafe { &mut *self.stack.get() }.pop())));
                 SendReturn::Val
             }
+            Primitive::Superclass => {
+                let cls: &Class = stry!(rcv.downcast(self));
+                unsafe { &mut *self.stack.get() }.push(cls.superclass(self));
+                SendReturn::Val
+            }
             Primitive::Value(nargs) => {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
                 let (num_vars, bytecode_off, max_stack) = {
