@@ -102,6 +102,7 @@ pub struct VM {
     pub double_cls: Val,
     pub false_cls: Val,
     pub int_cls: Val,
+    pub meta_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
@@ -148,6 +149,7 @@ impl VM {
             double_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
+            meta_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
@@ -177,6 +179,7 @@ impl VM {
         // than it in the phase.
         vm.obj_cls = vm.init_builtin_class("Object", false);
         vm.cls_cls = vm.init_builtin_class("Class", false);
+        vm.meta_cls = vm.init_builtin_class("Metaclass", false);
         vm.nil_cls = vm.init_builtin_class("Nil", true);
         vm.nil = Inst::new(&vm, vm.nil_cls.clone());
 
@@ -896,6 +899,7 @@ impl VM {
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
             obj_cls: Val::illegal(),
+            meta_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
             sym_cls: Val::illegal(),

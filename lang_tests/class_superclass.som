@@ -6,6 +6,8 @@ VM:
     nil
     String
     nil
+    Class
+    Class
 "
 
 class_superclass = (
@@ -14,5 +16,7 @@ class_superclass = (
         Object superclass println.
         Symbol superclass println.
         Class superclass superclass println.
+        Metaclass superclass println.
+        Integer class class superclass println.
     )
 )

@@ -1,0 +1,20 @@
+"
+VM:
+  status: success
+  stdout:
+    Integer
+    Integer class
+    Metaclass
+    Metaclass class
+    Metaclass
+"
+
+class_and_metaclass = (
+    run = (
+        Integer println.
+        Integer class println.
+        Integer class class println.
+        Integer class class class println.
+        Integer class class class class println.
+    )
+) 

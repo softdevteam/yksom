@@ -54,6 +54,7 @@ impl<'a> Compiler<'a> {
                 supercls = match n {
                     "Block" => Some(vm.block_cls.clone()),
                     "Boolean" => Some(vm.bool_cls.clone()),
+                    "Class" => Some(vm.cls_cls.clone()),
                     "nil" => None,
                     "String" => Some(vm.str_cls.clone()),
                     _ => unimplemented!(),
@@ -95,7 +96,12 @@ impl<'a> Compiler<'a> {
                 .iter()
                 .map(|(lexeme, msg)| {
                     let ((line_off, col), _) = compiler.lexer.line_col(lexeme.span());
-                    let line = compiler.lexer.span_lines_str(lexeme.span()).split("\n").nth(0).unwrap();
+                    let line = compiler
+                        .lexer
+                        .span_lines_str(lexeme.span())
+                        .split("\n")
+                        .nth(0)
+                        .unwrap();
                     format!(
                         "File '{}', line {}, column {}:\n  {}\n{}",
                         compiler.path.to_str().unwrap(),
@@ -110,6 +116,7 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(Class {
+            metaclass: false,
             name: String_::new(vm, name, true),
             path: compiler.path.to_path_buf(),
             supercls,
@@ -131,9 +138,10 @@ impl<'a> Compiler<'a> {
                 };
                 ((op, self.lexer.span_str(op.span()).to_string()), arg_v)
             }
-            ast::MethodName::Id(lexeme) => {
-                ((lexeme, self.lexer.span_str(lexeme.span()).to_string()), vec![])
-            }
+            ast::MethodName::Id(lexeme) => (
+                (lexeme, self.lexer.span_str(lexeme.span()).to_string()),
+                vec![],
+            ),
             ast::MethodName::Keywords(ref pairs) => {
                 let name = pairs
                     .iter()

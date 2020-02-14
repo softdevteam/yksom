@@ -7,12 +7,13 @@ use abgc_derive::GcLayout;
 
 use crate::vm::{
     core::{VMError, VM},
-    objects::{Method, Obj, ObjType, StaticObjType},
+    objects::{Method, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val},
 };
 
 #[derive(Debug, GcLayout)]
 pub struct Class {
+    pub metaclass: bool,
     pub name: Val,
     pub path: PathBuf,
     pub supercls: Option<Val>,
@@ -26,7 +27,23 @@ impl Obj for Class {
     }
 
     fn get_class(&self, vm: &VM) -> Val {
-        vm.cls_cls.clone()
+        let name: &String_ = self.name.downcast(vm).unwrap();
+        let s = name.as_str();
+
+        if !self.metaclass {
+            return Val::from_obj(
+                vm,
+                Class {
+                    metaclass: true,
+                    name: String_::new(vm, s.to_string() + " class", true),
+                    path: self.path.clone(),
+                    supercls: Some(vm.cls_cls.clone()),
+                    num_inst_vars: 0,
+                    methods: HashMap::with_capacity(0),
+                },
+            );
+        }
+        vm.meta_cls.clone()
     }
 }
 
