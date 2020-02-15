@@ -7,6 +7,9 @@ VM:
     Metaclass
     Metaclass class
     Metaclass
+    Integer class
+    Metaclass
+    true
 "
 
 class_and_metaclass = (
@@ -16,5 +19,8 @@ class_and_metaclass = (
         Integer class class println.
         Integer class class class println.
         Integer class class class class println.
+        1 class class println.
+        1 class class class println.
+        (1 class <> (1 class class)) println.
     )
 ) 

@@ -8,6 +8,7 @@ VM:
     nil
     Class
     Class
+    Class
 "
 
 class_superclass = (
@@ -18,5 +19,6 @@ class_superclass = (
         Class superclass superclass println.
         Metaclass superclass println.
         Integer class class superclass println.
+        1 class class class superclass println.
     )
 )
