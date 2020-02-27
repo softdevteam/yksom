@@ -17,7 +17,7 @@ pub struct Method {
     pub body: MethodBody,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MethodBody {
     /// A built-in primitive.
     Primitive(Primitive),
@@ -46,5 +46,11 @@ impl NotUnboxable for Method {}
 impl StaticObjType for Method {
     fn static_objtype() -> ObjType {
         ObjType::Method
+    }
+}
+
+impl Clone for Method {
+    fn clone(&self) -> Self {
+        Method { name: self.name.clone(), body: self.body }
     }
 }

@@ -38,8 +38,8 @@ impl Obj for Class {
                     name: String_::new(vm, s.to_string() + " class", true),
                     path: self.path.clone(),
                     supercls: Some(vm.cls_cls.clone()),
-                    num_inst_vars: 0,
-                    methods: HashMap::with_capacity(0),
+                    num_inst_vars: self.num_inst_vars,
+                    methods: HashMap::clone(&self.methods),
                 },
             );
         }
