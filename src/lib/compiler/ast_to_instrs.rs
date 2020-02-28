@@ -32,6 +32,8 @@ pub struct Compiler<'a> {
     closure_depth: usize,
 }
 
+type CompileResult<T> = Result<T, Vec<(Span, String)>>;
+
 impl<'a> Compiler<'a> {
     pub fn compile(
         vm: &VM,
@@ -123,7 +125,7 @@ impl<'a> Compiler<'a> {
         })
     }
 
-    fn c_method(&mut self, vm: &VM, astmeth: &ast::Method) -> Result<Method, Vec<(Span, String)>> {
+    fn c_method(&mut self, vm: &VM, astmeth: &ast::Method) -> CompileResult<Method> {
         let (name, args) = match astmeth.name {
             ast::MethodName::BinaryOp(op, arg) => {
                 let arg_v = match arg {
@@ -152,10 +154,10 @@ impl<'a> Compiler<'a> {
         name: (Span, &str),
         params: Vec<Span>,
         body: &ast::MethodBody,
-    ) -> Result<MethodBody, Vec<(Span, String)>> {
+    ) -> CompileResult<MethodBody> {
         // We check the number of arguments at compile-time so that we don't have to check them
         // continuously at run-time.
-        let requires_args = |n: usize| -> Result<(), Vec<(Span, String)>> {
+        let requires_args = |n: usize| -> CompileResult<()> {
             if params.len() != n {
                 Err(vec![(
                     name.0,
@@ -290,7 +292,7 @@ impl<'a> Compiler<'a> {
         params: &[Span],
         vars_spans: &[Span],
         exprs: &[ast::Expr],
-    ) -> Result<(usize, usize), Vec<(Span, String)>> {
+    ) -> CompileResult<(usize, usize)> {
         let mut vars = HashMap::new();
         if is_method {
             // The VM assumes that the first variable of a method is "self".
@@ -348,7 +350,7 @@ impl<'a> Compiler<'a> {
     }
 
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
-    fn c_expr(&mut self, vm: &VM, expr: &ast::Expr) -> Result<usize, Vec<(Span, String)>> {
+    fn c_expr(&mut self, vm: &VM, expr: &ast::Expr) -> CompileResult<usize> {
         match expr {
             ast::Expr::Assign { id, expr } => {
                 let (depth, var_num) = self.find_var(*id)?;
@@ -502,7 +504,7 @@ impl<'a> Compiler<'a> {
     /// Find the variable at `span` in the variable stack returning a tuple `Some((depth,
     /// var_num))` or `Err` if the variable isn't found. `depth` is the number of closures away
     /// from the "current" one that the variable is found.
-    fn find_var(&self, span: Span) -> Result<(usize, usize), Vec<(Span, String)>> {
+    fn find_var(&self, span: Span) -> CompileResult<(usize, usize)> {
         let name = self.lexer.span_str(span);
         for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
             if let Some(n) = vars.get(name) {
