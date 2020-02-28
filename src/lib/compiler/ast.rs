@@ -1,12 +1,10 @@
-use lrpar::Lexeme;
-
-type StorageT = u32;
+use lrpar::Span;
 
 #[derive(Debug)]
 pub struct Class {
-    pub name: Lexeme<StorageT>,
-    pub supername: Option<Lexeme<StorageT>>,
-    pub inst_vars: Vec<Lexeme<StorageT>>,
+    pub name: Span,
+    pub supername: Option<Span>,
+    pub inst_vars: Vec<Span>,
     pub methods: Vec<Method>,
 }
 
@@ -18,54 +16,51 @@ pub struct Method {
 
 #[derive(Debug)]
 pub enum MethodName {
-    BinaryOp(Lexeme<StorageT>, Option<Lexeme<StorageT>>),
-    Id(Lexeme<StorageT>),
-    Keywords(Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>),
+    BinaryOp(Span, Option<Span>),
+    Id(Span),
+    Keywords(Vec<(Span, Span)>),
 }
 
 #[derive(Debug)]
 pub enum MethodBody {
     Primitive,
-    Body {
-        vars: Vec<Lexeme<StorageT>>,
-        exprs: Vec<Expr>,
-    },
+    Body { vars: Vec<Span>, exprs: Vec<Expr> },
 }
 
 #[derive(Debug)]
 pub enum Expr {
     Assign {
-        id: Lexeme<StorageT>,
+        id: Span,
         expr: Box<Expr>,
     },
     BinaryMsg {
         lhs: Box<Expr>,
-        op: Lexeme<StorageT>,
+        op: Span,
         rhs: Box<Expr>,
     },
     Block {
-        params: Vec<Lexeme<StorageT>>,
-        vars: Vec<Lexeme<StorageT>>,
+        params: Vec<Span>,
+        vars: Vec<Span>,
         exprs: Vec<Expr>,
     },
     Double {
         is_negative: bool,
-        val: Lexeme<StorageT>,
+        val: Span,
     },
     Int {
         is_negative: bool,
-        val: Lexeme<StorageT>,
+        val: Span,
     },
     KeywordMsg {
         receiver: Box<Expr>,
-        msglist: Vec<(Lexeme<StorageT>, Expr)>,
+        msglist: Vec<(Span, Expr)>,
     },
     UnaryMsg {
         receiver: Box<Expr>,
-        ids: Vec<Lexeme<StorageT>>,
+        ids: Vec<Span>,
     },
     Return(Box<Expr>),
-    String(Lexeme<StorageT>),
-    Symbol(Lexeme<StorageT>),
-    VarLookup(Lexeme<StorageT>),
+    String(Span),
+    Symbol(Span),
+    VarLookup(Span),
 }

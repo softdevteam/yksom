@@ -6,7 +6,7 @@ use std::{
 
 use abgc::Gc;
 use itertools::Itertools;
-use lrpar::{Lexeme, Lexer};
+use lrpar::{Lexer, Span};
 
 use crate::{
     compiler::{
@@ -47,10 +47,10 @@ impl<'a> Compiler<'a> {
         };
 
         let mut errs = vec![];
-        let name = lexer.span_str(astcls.name.span()).to_owned();
+        let name = lexer.span_str(astcls.name).to_owned();
         let supercls;
         if name != "Object" {
-            if let Some(n) = astcls.supername.map(|x| lexer.span_str(x.span())) {
+            if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
                 supercls = match n {
                     "Block" => Some(vm.block_cls.clone()),
                     "Boolean" => Some(vm.bool_cls.clone()),
@@ -72,9 +72,9 @@ impl<'a> Compiler<'a> {
         }
 
         let mut inst_vars = HashMap::with_capacity(astcls.inst_vars.len());
-        for lexeme in &astcls.inst_vars {
+        for var in &astcls.inst_vars {
             let vars_len = inst_vars.len();
-            inst_vars.insert(lexer.span_str(lexeme.span()), vars_len);
+            inst_vars.insert(lexer.span_str(*var), vars_len);
         }
         compiler.vars_stack.push(inst_vars);
 
@@ -92,12 +92,12 @@ impl<'a> Compiler<'a> {
 
         if !errs.is_empty() {
             let err_strs = errs
-                .iter()
-                .map(|(lexeme, msg)| {
-                    let ((line_off, col), _) = compiler.lexer.line_col(lexeme.span());
+                .into_iter()
+                .map(|(span, msg)| {
+                    let ((line_off, col), _) = compiler.lexer.line_col(span);
                     let line = compiler
                         .lexer
-                        .span_lines_str(lexeme.span())
+                        .span_lines_str(span)
                         .split("\n")
                         .nth(0)
                         .unwrap();
@@ -123,27 +123,20 @@ impl<'a> Compiler<'a> {
         })
     }
 
-    fn c_method(
-        &mut self,
-        vm: &VM,
-        astmeth: &ast::Method,
-    ) -> Result<Method, Vec<(Lexeme<StorageT>, String)>> {
+    fn c_method(&mut self, vm: &VM, astmeth: &ast::Method) -> Result<Method, Vec<(Span, String)>> {
         let (name, args) = match astmeth.name {
             ast::MethodName::BinaryOp(op, arg) => {
                 let arg_v = match arg {
                     Some(l) => vec![l],
                     None => vec![],
                 };
-                ((op, self.lexer.span_str(op.span()).to_string()), arg_v)
+                ((op, self.lexer.span_str(op).to_string()), arg_v)
             }
-            ast::MethodName::Id(lexeme) => (
-                (lexeme, self.lexer.span_str(lexeme.span()).to_string()),
-                vec![],
-            ),
+            ast::MethodName::Id(span) => ((span, self.lexer.span_str(span).to_string()), vec![]),
             ast::MethodName::Keywords(ref pairs) => {
                 let name = pairs
                     .iter()
-                    .map(|x| self.lexer.span_str(x.0.span()))
+                    .map(|x| self.lexer.span_str(x.0))
                     .collect::<String>();
                 let args = pairs.iter().map(|x| x.1).collect::<Vec<_>>();
                 ((pairs[0].0, name), args)
@@ -156,13 +149,13 @@ impl<'a> Compiler<'a> {
     fn c_body(
         &mut self,
         vm: &VM,
-        name: (Lexeme<StorageT>, &str),
-        params: Vec<Lexeme<StorageT>>,
+        name: (Span, &str),
+        params: Vec<Span>,
         body: &ast::MethodBody,
-    ) -> Result<MethodBody, Vec<(Lexeme<StorageT>, String)>> {
+    ) -> Result<MethodBody, Vec<(Span, String)>> {
         // We check the number of arguments at compile-time so that we don't have to check them
         // continuously at run-time.
-        let requires_args = |n: usize| -> Result<(), Vec<(Lexeme<StorageT>, String)>> {
+        let requires_args = |n: usize| -> Result<(), Vec<(Span, String)>> {
             if params.len() != n {
                 Err(vec![(
                     name.0,
@@ -274,12 +267,9 @@ impl<'a> Compiler<'a> {
                 "value:with:" => Ok(MethodBody::Primitive(Primitive::Value(2))),
                 _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
             },
-            ast::MethodBody::Body {
-                vars: vars_lexemes,
-                exprs,
-            } => {
+            ast::MethodBody::Body { vars, exprs } => {
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack) = self.c_block(vm, true, &params, vars_lexemes, exprs)?;
+                let (num_vars, max_stack) = self.c_block(vm, true, &params, vars, exprs)?;
                 Ok(MethodBody::User {
                     num_vars,
                     bytecode_off,
@@ -297,22 +287,22 @@ impl<'a> Compiler<'a> {
         &mut self,
         vm: &VM,
         is_method: bool,
-        params: &[Lexeme<StorageT>],
-        vars_lexemes: &[Lexeme<StorageT>],
+        params: &[Span],
+        vars_spans: &[Span],
         exprs: &[ast::Expr],
-    ) -> Result<(usize, usize), Vec<(Lexeme<StorageT>, String)>> {
+    ) -> Result<(usize, usize), Vec<(Span, String)>> {
         let mut vars = HashMap::new();
         if is_method {
             // The VM assumes that the first variable of a method is "self".
             vars.insert("self", 0);
         }
 
-        let mut process_var = |lexeme: Lexeme<_>| {
+        let mut process_var = |var_sp: Span| {
             let vars_len = vars.len();
-            let var_str = self.lexer.span_str(lexeme.span());
+            let var_str = self.lexer.span_str(var_sp);
             match vars.entry(var_str) {
                 hash_map::Entry::Occupied(_) => Err(vec![(
-                    lexeme,
+                    var_sp,
                     format!("Variable '{}' shadows another of the same name", var_str),
                 )]),
                 hash_map::Entry::Vacant(e) => {
@@ -324,12 +314,12 @@ impl<'a> Compiler<'a> {
 
         // The VM assumes that a blocks's arguments are stored in variables
         // 0..n and a method's arguments in 1..n+1.
-        for lexeme in params.iter() {
-            process_var(*lexeme)?;
+        for param in params.iter() {
+            process_var(*param)?;
         }
 
-        for lexeme in vars_lexemes {
-            process_var(*lexeme)?;
+        for var in vars_spans {
+            process_var(*var)?;
         }
 
         let num_vars = vars.len();
@@ -358,14 +348,10 @@ impl<'a> Compiler<'a> {
     }
 
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
-    fn c_expr(
-        &mut self,
-        vm: &VM,
-        expr: &ast::Expr,
-    ) -> Result<usize, Vec<(Lexeme<StorageT>, String)>> {
+    fn c_expr(&mut self, vm: &VM, expr: &ast::Expr) -> Result<usize, Vec<(Span, String)>> {
         match expr {
             ast::Expr::Assign { id, expr } => {
-                let (depth, var_num) = self.find_var(&id)?;
+                let (depth, var_num) = self.find_var(*id)?;
                 let max_stack = self.c_expr(vm, expr)?;
                 if depth == self.vars_stack.len() - 1 {
                     vm.instrs_push(Instr::InstVarSet(var_num));
@@ -378,7 +364,7 @@ impl<'a> Compiler<'a> {
             ast::Expr::BinaryMsg { lhs, op, rhs } => {
                 let mut stack_size = self.c_expr(vm, lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
-                let send_off = vm.add_send((self.lexer.span_str(op.span()).to_string(), 1));
+                let send_off = vm.add_send((self.lexer.span_str(*op).to_string(), 1));
                 vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 debug_assert!(stack_size > 0);
                 Ok(stack_size)
@@ -398,7 +384,7 @@ impl<'a> Compiler<'a> {
                 vm.instrs_push(Instr::Block(blkinfo_idx));
                 self.closure_depth += 1;
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack) = self.c_block(vm, false, params, vars, exprs)?;
+                let (num_vars, max_stack) = self.c_block(vm, false, &params, vars, exprs)?;
                 self.closure_depth -= 1;
                 vm.set_blockinfo(
                     blkinfo_idx,
@@ -414,9 +400,9 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::Double { is_negative, val } => {
                 let s = if *is_negative {
-                    format!("-{}", self.lexer.span_str(val.span()))
+                    format!("-{}", self.lexer.span_str(*val))
                 } else {
-                    self.lexer.span_str(val.span()).to_owned()
+                    self.lexer.span_str(*val).to_owned()
                 };
                 match s.parse::<f64>() {
                     Ok(i) => {
@@ -427,7 +413,7 @@ impl<'a> Compiler<'a> {
                 }
             }
             ast::Expr::Int { is_negative, val } => {
-                match self.lexer.span_str(val.span()).parse::<isize>() {
+                match self.lexer.span_str(*val).parse::<isize>() {
                     Ok(mut i) => {
                         if *is_negative {
                             // With twos complement, `0-i` will always succeed, but just in case...
@@ -443,7 +429,7 @@ impl<'a> Compiler<'a> {
                 let mut max_stack = self.c_expr(vm, receiver)?;
                 let mut mn = String::new();
                 for (i, (kw, expr)) in msglist.iter().enumerate() {
-                    mn.push_str(self.lexer.span_str(kw.span()));
+                    mn.push_str(self.lexer.span_str(*kw));
                     let expr_stack = self.c_expr(vm, expr)?;
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
@@ -455,7 +441,7 @@ impl<'a> Compiler<'a> {
             ast::Expr::UnaryMsg { receiver, ids } => {
                 let max_stack = self.c_expr(vm, receiver)?;
                 for id in ids {
-                    let send_off = vm.add_send((self.lexer.span_str(id.span()).to_string(), 0));
+                    let send_off = vm.add_send((self.lexer.span_str(*id).to_string(), 0));
                     vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
                 }
                 debug_assert!(max_stack > 0);
@@ -471,22 +457,22 @@ impl<'a> Compiler<'a> {
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
             }
-            ast::Expr::String(lexeme) => {
+            ast::Expr::String(span) => {
                 // XXX are there string escaping rules we need to take account of?
-                let s_orig = self.lexer.span_str(lexeme.span());
+                let s_orig = self.lexer.span_str(*span);
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
                 vm.instrs_push(Instr::String(vm.add_string(s)));
                 Ok(1)
             }
-            ast::Expr::Symbol(lexeme) => {
+            ast::Expr::Symbol(span) => {
                 // XXX are there string escaping rules we need to take account of?
-                let s = self.lexer.span_str(lexeme.span());
+                let s = self.lexer.span_str(*span);
                 vm.instrs_push(Instr::Symbol(vm.add_symbol(s.to_owned())));
                 Ok(1)
             }
-            ast::Expr::VarLookup(lexeme) => {
-                match self.find_var(&lexeme) {
+            ast::Expr::VarLookup(span) => {
+                match self.find_var(*span) {
                     Ok((depth, var_num)) => {
                         if depth == self.vars_stack.len() - 1 {
                             vm.instrs_push(Instr::InstVarLookup(var_num));
@@ -495,7 +481,7 @@ impl<'a> Compiler<'a> {
                         }
                     }
                     Err(_) => {
-                        let lex_string = self.lexer.span_str(lexeme.span());
+                        let lex_string = self.lexer.span_str(*span);
                         match lex_string {
                             "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil)),
                             "false" => vm.instrs_push(Instr::Builtin(Builtin::False)),
@@ -513,19 +499,16 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    /// Find the variable `name` in the variable stack returning a tuple `Some((depth, var_num))`
-    /// or `Err` if the variable isn't found. `depth` is the number of closures away from the
-    /// "current" one that the variable is found.
-    fn find_var(
-        &self,
-        lexeme: &Lexeme<StorageT>,
-    ) -> Result<(usize, usize), Vec<(Lexeme<StorageT>, String)>> {
-        let name = self.lexer.span_str(lexeme.span());
+    /// Find the variable at `span` in the variable stack returning a tuple `Some((depth,
+    /// var_num))` or `Err` if the variable isn't found. `depth` is the number of closures away
+    /// from the "current" one that the variable is found.
+    fn find_var(&self, span: Span) -> Result<(usize, usize), Vec<(Span, String)>> {
+        let name = self.lexer.span_str(span);
         for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
             if let Some(n) = vars.get(name) {
                 return Ok((self.vars_stack.len() - depth - 1, *n));
             }
         }
-        Err(vec![(*lexeme, format!("Unknown variable '{}'", name))])
+        Err(vec![(span, format!("Unknown variable '{}'", name))])
     }
 }
