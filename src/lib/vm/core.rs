@@ -8,6 +8,7 @@ use std::{
 };
 
 use abgc::{Gc, GcLayout};
+use lrpar::Span;
 
 use crate::{
     compiler::{
@@ -113,9 +114,13 @@ pub struct VM {
     pub system: Val,
     pub true_: Val,
     blockinfos: UnsafeCell<Vec<BlockInfo>>,
+    classes: UnsafeCell<Vec<Val>>,
     globals: UnsafeCell<HashMap<usize, Val>>,
     inline_caches: UnsafeCell<Vec<Option<(Val, Gc<Method>)>>>,
+    /// `instrs` and `instr_span`s are always the same length: they are separated only because we
+    /// rarely access `instr_spans`.
     instrs: UnsafeCell<Vec<Instr>>,
+    instr_spans: UnsafeCell<Vec<Span>>,
     sends: UnsafeCell<Vec<(String, usize)>>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
@@ -159,9 +164,11 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
+            classes: UnsafeCell::new(Vec::new()),
             globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
+            instr_spans: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(SOMStack::new()),
@@ -212,7 +219,9 @@ impl VM {
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
-        Val::from_obj(self, cls)
+        let cls = Val::from_obj(self, cls);
+        unsafe { &mut *self.classes.get() }.push(cls.clone());
+        cls
     }
 
     fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
@@ -715,9 +724,11 @@ impl VM {
         unsafe { &*self.instrs.get() }.len()
     }
 
-    /// Push `instr` to the end of the current vector of instructions.
-    pub fn instrs_push(&self, instr: Instr) {
+    /// Push `instr` to the end of the current vector of instructions, associating `span` with it
+    /// for the purposes of backtraces.
+    pub fn instrs_push(&self, instr: Instr, span: Span) {
         unsafe { &mut *self.instrs.get() }.push(instr);
+        unsafe { &mut *self.instr_spans.get() }.push(span);
     }
 
     /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
@@ -907,9 +918,11 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
+            classes: UnsafeCell::new(Vec::new()),
             globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
+            instr_spans: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: UnsafeCell::new(SOMStack::new()),

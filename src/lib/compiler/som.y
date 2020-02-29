@@ -23,7 +23,7 @@ ClassMethods -> Result<(), ()>:
     ;
 Method -> Result<Method, ()>:
       MethodName "=" MethodBody
-      { Ok(Method{ name: $1?, body: $3? }) }
+      { Ok(Method{ span: $span, name: $1?, body: $3? }) }
     ;
 NameDefs -> Result<Vec<Span>, ()>:
       "|" IdListOpt "|" { Ok($2?) }
@@ -67,11 +67,15 @@ MethodBody -> Result<MethodBody, ()>:
 BlockExprs -> Result<Vec<Expr>, ()>:
       Exprs DotOpt "^" Expr DotOpt {
           let mut exprs = $1?;
-          exprs.push(Expr::Return(Box::new($4?)));
+          let expr = $4?;
+          exprs.push(Expr::Return{span: span_merge($3, expr.span()), expr: Box::new(expr) });
           Ok(exprs)
       }
     | Exprs DotOpt { $1 }
-    | "^" Expr DotOpt { Ok(vec![Expr::Return(Box::new($2?))]) }
+    | "^" Expr DotOpt {
+          let expr = $2?;
+          Ok(vec![Expr::Return{span: span_merge($1, expr.span()), expr: Box::new(expr)}])
+      }
     | { Ok(vec![]) }
     ;
 DotOpt -> Result<(), ()>:
@@ -87,7 +91,7 @@ Expr -> Result<Expr, ()>:
     | KeywordMsg { $1 }
     ;
 Assign -> Result<Expr, ()>:
-      "ID" ":=" Expr { Ok(Expr::Assign{id: map_err($1)?.span(), expr: Box::new($3?)}) };
+      "ID" ":=" Expr { Ok(Expr::Assign{span: $span, id: map_err($1)?.span(), expr: Box::new($3?)}) };
 Unit -> Result<Expr, ()>:
       "ID" { Ok(Expr::VarLookup(map_err($1)?.span())) }
     | Literal { $1 }
@@ -95,7 +99,7 @@ Unit -> Result<Expr, ()>:
     | "(" Expr ")" { $2 }
     ;
 KeywordMsg -> Result<Expr, ()>:
-      BinaryMsg KeywordMsgList { Ok(Expr::KeywordMsg{receiver: Box::new($1?), msglist: $2?}) }
+      BinaryMsg KeywordMsgList { Ok(Expr::KeywordMsg{ span: $span, receiver: Box::new($1?), msglist: $2? }) }
     | BinaryMsg { $1 }
     ;
 KeywordMsgList -> Result<Vec<(Span, Expr)>, ()>:
@@ -103,11 +107,11 @@ KeywordMsgList -> Result<Vec<(Span, Expr)>, ()>:
     | "KEYWORD" BinaryMsg { Ok(vec![(map_err($1)?.span(), $2?)]) }
     ;
 BinaryMsg -> Result<Expr, ()>:
-      BinaryMsg BinOp UnaryMsg { Ok(Expr::BinaryMsg{ lhs: Box::new($1?), op: $2?, rhs: Box::new($3?) }) }
+      BinaryMsg BinOp UnaryMsg { Ok(Expr::BinaryMsg{ span: $span, lhs: Box::new($1?), op: $2?, rhs: Box::new($3?) }) }
     | UnaryMsg { $1 }
     ;
 UnaryMsg -> Result<Expr, ()>:
-      Unit IdListOpt { Ok(Expr::UnaryMsg{ receiver: Box::new($1?), ids: $2? }) };
+      Unit IdListOpt { Ok(Expr::UnaryMsg{ span: $span, receiver: Box::new($1?), ids: $2? }) };
 IdListOpt -> Result<Vec<Span>, ()>:
       IdList { $1 }
     | { Ok(vec![]) }
@@ -136,15 +140,15 @@ BinOp -> Result<Span, ()>:
     ;
 Literal -> Result<Expr, ()>:
       "STRING" { Ok(Expr::String(map_err($1)?.span())) }
-    | "INT" { Ok(Expr::Int{ is_negative: false, val: map_err($1)?.span() }) }
-    | "-" "INT" { Ok(Expr::Int{ is_negative: true, val: map_err($2)?.span() }) }
-    | "DOUBLE" { Ok(Expr::Double{ is_negative: false, val: map_err($1)?.span() }) }
-    | "-" "DOUBLE" { Ok(Expr::Double{ is_negative: true, val: map_err($2)?.span() }) }
+    | "INT" { Ok(Expr::Int{ span: $span, is_negative: false, val: map_err($1)?.span() }) }
+    | "-" "INT" { Ok(Expr::Int{ span: $span, is_negative: true, val: map_err($2)?.span() }) }
+    | "DOUBLE" { Ok(Expr::Double{ span: $span, is_negative: false, val: map_err($1)?.span() }) }
+    | "-" "DOUBLE" { Ok(Expr::Double{ span: $span, is_negative: true, val: map_err($2)?.span() }) }
     | StringConst { $1 }
     | ArrayConst { unimplemented!() }
     ;
 Block -> Result<Expr, ()>:
-      "[" BlockParamsOpt NameDefs BlockExprs "]" { Ok(Expr::Block{ params: $2?, vars: $3?, exprs: $4? }) };
+      "[" BlockParamsOpt NameDefs BlockExprs "]" { Ok(Expr::Block{ span: $span, params: $2?, vars: $3?, exprs: $4? }) };
 BlockParamsOpt -> Result<Vec<Span>, ()>:
       BlockParams "|" { $1 }
     | { Ok(vec![]) }
@@ -194,6 +198,13 @@ fn flattenr_span(lhs: Result<Vec<Span>, ()>, rhs: Result<Lexeme<StorageT>, Lexem
     let mut flt = lhs?;
     flt.push(rhs.map_err(|_| ())?.span());
     Ok(flt)
+}
+
+fn span_merge(lhs: Result<Lexeme<StorageT>, Lexeme<StorageT>>, rhs: Span) -> Span {
+    let lhs_span = match lhs {
+        Ok(l) | Err(l) => l.span()
+    };
+    Span::new(lhs_span.start(), rhs.end())
 }
 
 use crate::compiler::ast::*;

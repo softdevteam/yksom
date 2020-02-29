@@ -15,6 +15,8 @@ use crate::vm::{
 pub struct Class {
     pub name: Val,
     pub path: PathBuf,
+    /// Offset to this class's instructions in VM::instrs.
+    pub instrs_off: usize,
     pub supercls: Option<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,

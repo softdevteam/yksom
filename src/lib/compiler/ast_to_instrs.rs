@@ -47,6 +47,7 @@ impl<'a> Compiler<'a> {
             vars_stack: Vec::new(),
             closure_depth: 0,
         };
+        let instrs_off = vm.instrs_len();
 
         let mut errs = vec![];
         let name = lexer.span_str(astcls.name).to_owned();
@@ -119,6 +120,7 @@ impl<'a> Compiler<'a> {
         Ok(Class {
             name: String_::new(vm, name, true),
             path: compiler.path.to_path_buf(),
+            instrs_off,
             supercls,
             num_inst_vars: astcls.inst_vars.len(),
             methods,
@@ -144,13 +146,14 @@ impl<'a> Compiler<'a> {
                 ((pairs[0].0, name), args)
             }
         };
-        let body = self.c_body(vm, (name.0, &name.1), args, &astmeth.body)?;
+        let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
         Ok(Method { name: name.1, body })
     }
 
     fn c_body(
         &mut self,
         vm: &VM,
+        span: Span,
         name: (Span, &str),
         params: Vec<Span>,
         body: &ast::MethodBody,
@@ -268,7 +271,7 @@ impl<'a> Compiler<'a> {
             },
             ast::MethodBody::Body { vars, exprs } => {
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack) = self.c_block(vm, true, &params, vars, exprs)?;
+                let (num_vars, max_stack) = self.c_block(vm, true, span, &params, vars, exprs)?;
                 Ok(MethodBody::User {
                     num_vars,
                     bytecode_off,
@@ -286,6 +289,7 @@ impl<'a> Compiler<'a> {
         &mut self,
         vm: &VM,
         is_method: bool,
+        span: Span,
         params: &[Span],
         vars_spans: &[Span],
         exprs: &[ast::Expr],
@@ -330,17 +334,19 @@ impl<'a> Compiler<'a> {
             let stack_size = self.c_expr(vm, e)?;
             max_stack = max(max_stack, stack_size);
             if i != exprs.len() - 1 {
-                vm.instrs_push(Instr::Pop);
+                vm.instrs_push(Instr::Pop, e.span());
             }
         }
         // Blocks return the value of the last statement, but methods return `self`.
         if is_method {
-            vm.instrs_push(Instr::Pop);
+            vm.instrs_push(Instr::Pop, span);
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
-            vm.instrs_push(Instr::VarLookup(0, 0));
+            vm.instrs_push(Instr::VarLookup(0, 0), span);
             max_stack = max(max_stack, 1);
+            vm.instrs_push(Instr::Return, span);
+        } else {
+            vm.instrs_push(Instr::Return, exprs.iter().last().unwrap().span());
         }
-        vm.instrs_push(Instr::Return);
         self.vars_stack.pop();
 
         Ok((num_vars, max_stack))
@@ -349,26 +355,27 @@ impl<'a> Compiler<'a> {
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
     fn c_expr(&mut self, vm: &VM, expr: &ast::Expr) -> CompileResult<usize> {
         match expr {
-            ast::Expr::Assign { id, expr } => {
+            ast::Expr::Assign { span, id, expr } => {
                 let (depth, var_num) = self.find_var(*id)?;
                 let max_stack = self.c_expr(vm, expr)?;
                 if depth == self.vars_stack.len() - 1 {
-                    vm.instrs_push(Instr::InstVarSet(var_num));
+                    vm.instrs_push(Instr::InstVarSet(var_num), *span);
                 } else {
-                    vm.instrs_push(Instr::VarSet(depth, var_num));
+                    vm.instrs_push(Instr::VarSet(depth, var_num), *span);
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
             }
-            ast::Expr::BinaryMsg { lhs, op, rhs } => {
+            ast::Expr::BinaryMsg { span, lhs, op, rhs } => {
                 let mut stack_size = self.c_expr(vm, lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
                 let send_off = vm.add_send((self.lexer.span_str(*op).to_string(), 1));
-                vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
+                vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()), *span);
                 debug_assert!(stack_size > 0);
                 Ok(stack_size)
             }
             ast::Expr::Block {
+                span,
                 params,
                 vars,
                 exprs,
@@ -380,10 +387,10 @@ impl<'a> Compiler<'a> {
                     num_vars: 0,
                     max_stack: 0,
                 });
-                vm.instrs_push(Instr::Block(blkinfo_idx));
+                vm.instrs_push(Instr::Block(blkinfo_idx), *span);
                 self.closure_depth += 1;
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack) = self.c_block(vm, false, &params, vars, exprs)?;
+                let (num_vars, max_stack) = self.c_block(vm, false, *span, &params, vars, exprs)?;
                 self.closure_depth -= 1;
                 vm.set_blockinfo(
                     blkinfo_idx,
@@ -397,7 +404,11 @@ impl<'a> Compiler<'a> {
                 );
                 Ok(1)
             }
-            ast::Expr::Double { is_negative, val } => {
+            ast::Expr::Double {
+                span,
+                is_negative,
+                val,
+            } => {
                 let s = if *is_negative {
                     format!("-{}", self.lexer.span_str(*val))
                 } else {
@@ -405,26 +416,34 @@ impl<'a> Compiler<'a> {
                 };
                 match s.parse::<f64>() {
                     Ok(i) => {
-                        vm.instrs_push(Instr::Double(i));
+                        vm.instrs_push(Instr::Double(i), *span);
                         Ok(1)
                     }
                     Err(e) => Err(vec![(*val, format!("{}", e))]),
                 }
             }
-            ast::Expr::Int { is_negative, val } => {
+            ast::Expr::Int {
+                span,
+                is_negative,
+                val,
+            } => {
                 match self.lexer.span_str(*val).parse::<isize>() {
                     Ok(mut i) => {
                         if *is_negative {
                             // With twos complement, `0-i` will always succeed, but just in case...
                             i = 0isize.checked_sub(i).unwrap();
                         }
-                        vm.instrs_push(Instr::Int(i));
+                        vm.instrs_push(Instr::Int(i), *span);
                         Ok(1)
                     }
                     Err(e) => Err(vec![(*val, format!("{}", e))]),
                 }
             }
-            ast::Expr::KeywordMsg { receiver, msglist } => {
+            ast::Expr::KeywordMsg {
+                span,
+                receiver,
+                msglist,
+            } => {
                 let mut max_stack = self.c_expr(vm, receiver)?;
                 let mut mn = String::new();
                 for (i, (kw, expr)) in msglist.iter().enumerate() {
@@ -433,25 +452,29 @@ impl<'a> Compiler<'a> {
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
                 let send_off = vm.add_send((mn, msglist.len()));
-                vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
+                vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()), *span);
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
             }
-            ast::Expr::UnaryMsg { receiver, ids } => {
+            ast::Expr::UnaryMsg {
+                span,
+                receiver,
+                ids,
+            } => {
                 let max_stack = self.c_expr(vm, receiver)?;
                 for id in ids {
                     let send_off = vm.add_send((self.lexer.span_str(*id).to_string(), 0));
-                    vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()));
+                    vm.instrs_push(Instr::Send(send_off, vm.new_inline_cache()), *span);
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
             }
-            ast::Expr::Return(expr) => {
+            ast::Expr::Return { span, expr } => {
                 let max_stack = self.c_expr(vm, expr)?;
                 if self.closure_depth == 0 {
-                    vm.instrs_push(Instr::Return);
+                    vm.instrs_push(Instr::Return, *span);
                 } else {
-                    vm.instrs_push(Instr::ClosureReturn(self.closure_depth));
+                    vm.instrs_push(Instr::ClosureReturn(self.closure_depth), *span);
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -461,34 +484,35 @@ impl<'a> Compiler<'a> {
                 let s_orig = self.lexer.span_str(*span);
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
-                vm.instrs_push(Instr::String(vm.add_string(s)));
+                vm.instrs_push(Instr::String(vm.add_string(s)), *span);
                 Ok(1)
             }
             ast::Expr::Symbol(span) => {
                 // XXX are there string escaping rules we need to take account of?
                 let s = self.lexer.span_str(*span);
-                vm.instrs_push(Instr::Symbol(vm.add_symbol(s.to_owned())));
+                vm.instrs_push(Instr::Symbol(vm.add_symbol(s.to_owned())), *span);
                 Ok(1)
             }
             ast::Expr::VarLookup(span) => {
                 match self.find_var(*span) {
                     Ok((depth, var_num)) => {
                         if depth == self.vars_stack.len() - 1 {
-                            vm.instrs_push(Instr::InstVarLookup(var_num));
+                            vm.instrs_push(Instr::InstVarLookup(var_num), *span);
                         } else {
-                            vm.instrs_push(Instr::VarLookup(depth, var_num));
+                            vm.instrs_push(Instr::VarLookup(depth, var_num), *span);
                         }
                     }
                     Err(_) => {
                         let lex_string = self.lexer.span_str(*span);
                         match lex_string {
-                            "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil)),
-                            "false" => vm.instrs_push(Instr::Builtin(Builtin::False)),
-                            "true" => vm.instrs_push(Instr::Builtin(Builtin::True)),
+                            "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil), *span),
+                            "false" => vm.instrs_push(Instr::Builtin(Builtin::False), *span),
+                            "true" => vm.instrs_push(Instr::Builtin(Builtin::True), *span),
                             _ => {
-                                vm.instrs_push(Instr::Global(
-                                    vm.add_symbol(lex_string.to_string()),
-                                ));
+                                vm.instrs_push(
+                                    Instr::Global(vm.add_symbol(lex_string.to_string())),
+                                    *span,
+                                );
                             }
                         }
                     }
