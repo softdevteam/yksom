@@ -230,10 +230,7 @@ impl<'a> Compiler<'a> {
                     requires_args(1)?;
                     Ok(MethodBody::Primitive(Primitive::And))
                 }
-                "bitXor:" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::BitXor))
-                }
+                "bitXor:" => Ok(MethodBody::Primitive(Primitive::BitXor)),
                 "sqrt" => Ok(MethodBody::Primitive(Primitive::Sqrt)),
                 "asString" => Ok(MethodBody::Primitive(Primitive::AsString)),
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
