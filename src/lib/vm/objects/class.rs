@@ -30,6 +30,11 @@ impl Obj for Class {
         let name: &String_ = self.name.downcast(vm).unwrap();
         let s = name.as_str();
 
+        let mut methods_clone = HashMap::with_capacity(self.methods.len());
+        for (k, v) in self.methods.iter() {
+            methods_clone.insert(k.clone(), Gc::clone(v));
+        }
+
         if !self.metaclass {
             return Val::from_obj(
                 vm,
@@ -39,7 +44,7 @@ impl Obj for Class {
                     path: self.path.clone(),
                     supercls: Some(vm.cls_cls.clone()),
                     num_inst_vars: self.num_inst_vars,
-                    methods: HashMap::clone(&self.methods),
+                    methods: methods_clone,
                 },
             );
         }
