@@ -13,4 +13,4 @@ pub mod objects;
 pub mod somstack;
 pub mod val;
 
-pub use crate::vm::core::{VMError, VM};
+pub use crate::vm::core::{VMError, VMErrorKind, VM};

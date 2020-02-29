@@ -6,7 +6,7 @@ use abgc::Gc;
 use abgc_derive::GcLayout;
 
 use crate::vm::{
-    core::{VMError, VM},
+    core::{VMError, VMErrorKind, VM},
     objects::{Method, Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
 };
@@ -51,7 +51,7 @@ impl Class {
             .map(|x| Ok(Gc::clone(x)))
             .unwrap_or_else(|| match &self.supercls {
                 Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
-                None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),
+                None => Err(VMError::new(vm, VMErrorKind::UnknownMethod(msg.to_owned()))),
             })
     }
 

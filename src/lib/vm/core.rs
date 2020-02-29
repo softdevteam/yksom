@@ -25,7 +25,18 @@ use crate::{
 pub const SOM_EXTENSION: &str = "som";
 
 #[derive(Debug, PartialEq)]
-pub enum VMError {
+pub struct VMError {
+    pub kind: VMErrorKind,
+}
+
+impl VMError {
+    pub fn new(_: &VM, kind: VMErrorKind) -> Box<Self> {
+        Box::new(VMError { kind })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum VMErrorKind {
     /// A value which can't be represented in an `isize`.
     CantRepresentAsBigInt,
     /// A value which can't be represented in an `f64`.
@@ -355,7 +366,7 @@ impl VM {
                     if let Some(global) = unsafe { &mut *self.globals.get() }.get(&symbol_off) {
                         unsafe { &mut *self.stack.get() }.push(global.clone());
                     } else {
-                        return SendReturn::Err(Box::new(VMError::InvalidSymbol));
+                        return SendReturn::Err(VMError::new(self, VMErrorKind::InvalidSymbol));
                     }
                     pc += 1;
                 }
@@ -522,7 +533,7 @@ impl VM {
                         return SendReturn::Val;
                     }
                 }
-                SendReturn::Err(Box::new(VMError::InvalidSymbol))
+                SendReturn::Err(VMError::new(self, VMErrorKind::InvalidSymbol))
             }
             Primitive::GlobalPut => {
                 let value = unsafe { &mut *self.stack.get() }.pop();

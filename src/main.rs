@@ -9,7 +9,7 @@ use std::{
 
 use getopts::Options;
 
-use yksom::vm::{objects::Inst, VMError, VM};
+use yksom::vm::{objects::Inst, VMError, VMErrorKind, VM};
 
 fn usage(prog: &str) -> ! {
     let path = Path::new(prog);
@@ -37,9 +37,13 @@ fn main() {
     let cls = vm.compile(&Path::new(&matches.free[0]).canonicalize().unwrap(), true);
     let app = Inst::new(&vm, cls);
     match vm.send(app, "run", vec![]) {
-        Ok(_) | Err(box VMError::Exit) => (),
+        Ok(_)
+        | Err(box VMError {
+            kind: VMErrorKind::Exit,
+            ..
+        }) => (),
         Err(e) => {
-            eprintln!("{:?}", e);
+            eprintln!("{:?}", e.kind);
             process::exit(1);
         }
     }
