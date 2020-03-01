@@ -21,7 +21,10 @@ pub struct BlockInfo {
 
 #[derive(Debug, GcLayout)]
 pub struct Block {
-    // Does this Block represent Block, Block2, or Block3?
+    /// This `Block`'s `self` val. XXX This should probably be part of the corresponding closure's
+    /// variables.
+    pub inst: Val,
+    /// Does this Block represent Block, Block2, or Block3?
     pub blockn_cls: Val,
     pub blockinfo_off: usize,
     pub parent_closure: Gc<Closure>,
@@ -48,6 +51,7 @@ impl StaticObjType for Block {
 impl Block {
     pub fn new(
         vm: &VM,
+        inst: Val,
         blockinfo_off: usize,
         parent_closure: Gc<Closure>,
         num_params: usize,
@@ -61,6 +65,7 @@ impl Block {
         Val::from_obj(
             vm,
             Block {
+                inst,
                 blockn_cls,
                 blockinfo_off,
                 parent_closure,

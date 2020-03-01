@@ -301,6 +301,7 @@ impl VM {
                     };
                     unsafe { &mut *self.stack.get() }.push(Block::new(
                         self,
+                        rcv.clone(),
                         blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
                         num_params,
@@ -643,7 +644,7 @@ impl VM {
                     nargs as usize,
                 );
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv.clone(), bytecode_off);
+                let r = self.exec_user(rcv_blk.inst.clone(), bytecode_off);
                 self.frame_pop();
                 r
             }
