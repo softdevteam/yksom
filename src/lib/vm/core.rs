@@ -15,7 +15,9 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, ObjType, String_, Int},
+        objects::{
+            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, ObjType, String_,
+        },
         somstack::SOMStack,
         val::Val,
     },
@@ -507,9 +509,10 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::FromString => {
-                unsafe { &mut *self.stack.get() }.push(stry!(
-                    Int::from_str(self, unsafe { &mut *self.stack.get() }.pop())
-                ));
+                unsafe { &mut *self.stack.get() }.push(stry!(Int::from_str(
+                    self,
+                    unsafe { &mut *self.stack.get() }.pop()
+                )));
                 SendReturn::Val
             }
             Primitive::Global => {

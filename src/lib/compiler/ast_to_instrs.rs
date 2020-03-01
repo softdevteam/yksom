@@ -141,14 +141,17 @@ impl<'a> Compiler<'a> {
         }
 
         Ok(Class {
-            class: Some(Val::from_obj(vm, Class {
-                class: None,
-                name: String_::new(vm, name.to_string() + " class", true),
-                path: compiler.path.to_path_buf(),
-                supercls: supercls_cls,
-                num_inst_vars: astcls.class_methods.0.len(),
-                methods: class_methods,
-            })),
+            class: Some(Val::from_obj(
+                vm,
+                Class {
+                    class: None,
+                    name: String_::new(vm, name.to_string() + " class", true),
+                    path: compiler.path.to_path_buf(),
+                    supercls: supercls_cls,
+                    num_inst_vars: astcls.class_methods.0.len(),
+                    methods: class_methods,
+                },
+            )),
             name: String_::new(vm, name, true),
             path: compiler.path.to_path_buf(),
             supercls,

@@ -7,7 +7,7 @@ use abgc_derive::GcLayout;
 
 use crate::vm::{
     core::{VMError, VM},
-    objects::{Method, Obj, ObjType, StaticObjType, String_},
+    objects::{Method, Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
 };
 

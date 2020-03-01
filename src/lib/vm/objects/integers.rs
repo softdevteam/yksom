@@ -11,10 +11,7 @@
 
 #![allow(clippy::new_ret_no_self)]
 
-use std::{
-    convert::TryFrom,
-    str::FromStr,
-};
+use std::{convert::TryFrom, str::FromStr};
 
 use abgc_derive::GcLayout;
 use num_bigint::BigInt;

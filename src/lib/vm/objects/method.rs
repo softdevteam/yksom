@@ -51,6 +51,9 @@ impl StaticObjType for Method {
 
 impl Clone for Method {
     fn clone(&self) -> Self {
-        Method { name: self.name.clone(), body: self.body }
+        Method {
+            name: self.name.clone(),
+            body: self.body,
+        }
     }
 }

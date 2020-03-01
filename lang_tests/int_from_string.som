@@ -3,10 +3,12 @@ VM:
   status: success
   stdout:
     1
+    Integer
 "
 
-int32 = (
+int_from_string = (
     run = (
         (Integer fromString: '1') println.
+        (Integer fromString: '1') class println.
     )
 )
