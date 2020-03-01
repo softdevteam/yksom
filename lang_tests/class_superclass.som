@@ -9,6 +9,7 @@ VM:
     Class
     Class
     Class
+    Class
 "
 
 class_superclass = (
@@ -20,5 +21,6 @@ class_superclass = (
         Metaclass superclass println.
         Integer class class superclass println.
         1 class class class superclass println.
+        Object class superclass println.
     )
 )

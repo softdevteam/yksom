@@ -1,0 +1,12 @@
+"
+VM:
+  status: success
+  stdout:
+    1
+"
+
+int32 = (
+    run = (
+        (Integer fromString: '1') println.
+    )
+)

@@ -15,7 +15,7 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, ObjType, String_},
+        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, ObjType, String_, Int},
         somstack::SOMStack,
         val::Val,
     },
@@ -57,6 +57,8 @@ pub enum VMError {
     PrimitiveError,
     /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
     ShiftTooBig,
+    /// The given string cannot be parsed to produce a number.
+    ParseError,
     /// A dynamic type error.
     TypeError {
         expected: ObjType,
@@ -501,6 +503,12 @@ impl VM {
             Primitive::Equals => {
                 unsafe { &mut *self.stack.get() }.push(stry!(
                     rcv.equals(self, unsafe { &mut *self.stack.get() }.pop())
+                ));
+                SendReturn::Val
+            }
+            Primitive::FromString => {
+                unsafe { &mut *self.stack.get() }.push(stry!(
+                    Int::from_str(self, unsafe { &mut *self.stack.get() }.pop())
                 ));
                 SendReturn::Val
             }

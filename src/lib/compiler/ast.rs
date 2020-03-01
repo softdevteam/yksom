@@ -8,6 +8,7 @@ pub struct Class {
     pub supername: Option<Lexeme<StorageT>>,
     pub inst_vars: Vec<Lexeme<StorageT>>,
     pub methods: Vec<Method>,
+    pub class_methods: (Vec<Lexeme<StorageT>>, Vec<Method>)
 }
 
 #[derive(Debug)]

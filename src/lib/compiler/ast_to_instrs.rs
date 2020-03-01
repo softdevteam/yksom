@@ -16,7 +16,7 @@ use crate::{
     },
     vm::{
         objects::{BlockInfo, Class, Method, MethodBody, String_},
-        val::ValKind,
+        val::{Val, ValKind},
         VM,
     },
 };
@@ -91,6 +91,25 @@ impl<'a> Compiler<'a> {
             }
         }
 
+        let mut class_vars = HashMap::with_capacity(astcls.class_methods.0.len());
+        for lexeme in &astcls.class_methods.0 {
+            let vars_len = class_vars.len();
+            class_vars.insert(lexer.span_str(lexeme.span()), vars_len);
+        }
+        compiler.vars_stack.push(class_vars);
+
+        let mut class_methods = HashMap::with_capacity(astcls.class_methods.1.len());
+        for astmeth in &astcls.class_methods.1 {
+            match compiler.c_method(vm, &astmeth) {
+                Ok(m) => {
+                    class_methods.insert(m.name.clone(), Gc::new(m));
+                }
+                Err(mut e) => {
+                    errs.extend(e.drain(..));
+                }
+            }
+        }
+
         if !errs.is_empty() {
             let err_strs = errs
                 .iter()
@@ -115,8 +134,21 @@ impl<'a> Compiler<'a> {
             return Err(err_strs);
         }
 
+        let mut supercls_cls = None;
+        if let Some(superclass) = &supercls {
+            let scls: &Class = superclass.downcast(vm).unwrap();
+            supercls_cls = Some(scls.class.as_ref().unwrap().clone())
+        }
+
         Ok(Class {
-            metaclass: false,
+            class: Some(Val::from_obj(vm, Class {
+                class: None,
+                name: String_::new(vm, name.to_string() + " class", true),
+                path: compiler.path.to_path_buf(),
+                supercls: supercls_cls,
+                num_inst_vars: astcls.class_methods.0.len(),
+                methods: class_methods,
+            })),
             name: String_::new(vm, name, true),
             path: compiler.path.to_path_buf(),
             supercls,
@@ -246,6 +278,7 @@ impl<'a> Compiler<'a> {
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
+                "fromString:" => Ok(MethodBody::Primitive(Primitive::FromString)),
                 "global:" => Ok(MethodBody::Primitive(Primitive::Global)),
                 "global:put:" => Ok(MethodBody::Primitive(Primitive::GlobalPut)),
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),

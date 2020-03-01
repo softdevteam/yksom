@@ -11,7 +11,10 @@
 
 #![allow(clippy::new_ret_no_self)]
 
-use std::convert::TryFrom;
+use std::{
+    convert::TryFrom,
+    str::FromStr,
+};
 
 use abgc_derive::GcLayout;
 use num_bigint::BigInt;
@@ -344,6 +347,15 @@ impl ArbInt {
     pub fn bigint(&self) -> &BigInt {
         &self.val
     }
+
+    pub fn from_str(vm: &VM, val: Val) -> Result<Val, Box<VMError>> {
+        let string: &String_ = val.downcast(vm).unwrap();
+
+        match BigInt::from_str(string.as_str()) {
+            Ok(b) => ArbInt::new(vm, b),
+            Err(_) => Err(Box::new(VMError::ParseError)),
+        }
+    }
 }
 
 #[derive(Debug, GcLayout)]
@@ -479,6 +491,15 @@ impl Int {
             Some(self.val as usize)
         } else {
             None
+        }
+    }
+
+    pub fn from_str(vm: &VM, val: Val) -> Result<Val, Box<VMError>> {
+        let string: &String_ = val.downcast(vm).unwrap();
+
+        match isize::from_str(string.as_str()) {
+            Ok(i) => Val::from_isize(vm, i),
+            Err(_) => ArbInt::from_str(vm, val),
         }
     }
 }

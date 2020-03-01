@@ -26,4 +26,7 @@ Integer = (
         i := self.
         [ i <= limit ] whileTrue: [ block value: i. i := i + step ]
     )
+
+    -----
+    fromString: aString = primitive
 )

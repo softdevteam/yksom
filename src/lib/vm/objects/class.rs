@@ -13,7 +13,7 @@ use crate::vm::{
 
 #[derive(Debug, GcLayout)]
 pub struct Class {
-    pub metaclass: bool,
+    pub class: Option<Val>,
     pub name: Val,
     pub path: PathBuf,
     pub supercls: Option<Val>,
@@ -27,28 +27,10 @@ impl Obj for Class {
     }
 
     fn get_class(&self, vm: &VM) -> Val {
-        let name: &String_ = self.name.downcast(vm).unwrap();
-        let s = name.as_str();
-
-        let mut methods_clone = HashMap::with_capacity(self.methods.len());
-        for (k, v) in self.methods.iter() {
-            methods_clone.insert(k.clone(), Gc::clone(v));
+        match &self.class {
+            Some(cls) => cls.clone(),
+            None => vm.meta_cls.clone(),
         }
-
-        if !self.metaclass {
-            return Val::from_obj(
-                vm,
-                Class {
-                    metaclass: true,
-                    name: String_::new(vm, s.to_string() + " class", true),
-                    path: self.path.clone(),
-                    supercls: Some(vm.cls_cls.clone()),
-                    num_inst_vars: self.num_inst_vars,
-                    methods: methods_clone,
-                },
-            );
-        }
-        vm.meta_cls.clone()
     }
 }
 
@@ -66,6 +48,10 @@ impl Class {
     }
 
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
+        if self.class == None && self.supercls == None {
+            let cls: &Class = vm.cls_cls.downcast(vm).unwrap();
+            return cls.get_method(vm, msg);
+        }
         self.methods
             .get(msg)
             .map(|x| Ok(Gc::clone(x)))
@@ -78,6 +64,9 @@ impl Class {
     pub fn superclass(&self, vm: &VM) -> Val {
         if let Some(superclass) = &self.supercls {
             return superclass.clone();
+        }
+        if self.class == None {
+            return vm.cls_cls.clone();
         }
         vm.nil.clone()
     }

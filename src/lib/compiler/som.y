@@ -3,7 +3,7 @@
 %%
 ClassDef -> Result<Class, ()>:
       "ID" "=" SuperClass "(" NameDefs MethodsOpt ClassMethods ")"
-      { Ok(Class{ name: map_err($1)?, supername: $3?, inst_vars: $5?, methods: $6? }) }
+      { Ok(Class{ name: map_err($1)?, supername: $3?, inst_vars: $5?, methods: $6?, class_methods: $7? }) }
     ;
 SuperClass -> Result<Option<Lexeme<StorageT>>, ()>:
       "ID" { Ok(Some(map_err($1)?)) }
@@ -17,9 +17,9 @@ Methods -> Result<Vec<Method>, ()>:
       Method { Ok(vec![$1?]) }
     | Methods Method { flattenr($1, $2) }
     ;
-ClassMethods -> Result<(), ()>:
-          "SEPARATOR" NameDefs MethodsOpt { unimplemented!() }
-    | { Ok(()) }
+ClassMethods -> Result<(Vec<Lexeme<StorageT>>, Vec<Method>), ()>:
+          "SEPARATOR" NameDefs MethodsOpt { Ok(($2?, $3?)) }
+    | { Ok((vec![], vec![])) }
     ;
 Method -> Result<Method, ()>:
       MethodName "=" MethodBody
