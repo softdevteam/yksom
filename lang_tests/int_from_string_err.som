@@ -1,0 +1,11 @@
+"
+VM:
+  status: error
+  stderr: ParseError
+"
+
+int_from_string_err = (
+    run = (
+        Integer fromString: 'a'.
+    )
+)
