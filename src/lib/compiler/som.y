@@ -3,10 +3,10 @@
 %%
 ClassDef -> Result<Class, ()>:
       "ID" "=" SuperClass "(" NameDefs MethodsOpt ClassMethods ")"
-      { Ok(Class{ name: map_err($1)?, supername: $3?, inst_vars: $5?, methods: $6? }) }
+      { Ok(Class{ name: map_err($1)?.span(), supername: $3?, inst_vars: $5?, methods: $6? }) }
     ;
-SuperClass -> Result<Option<Lexeme<StorageT>>, ()>:
-      "ID" { Ok(Some(map_err($1)?)) }
+SuperClass -> Result<Option<Span>, ()>:
+      "ID" { Ok(Some(map_err($1)?.span())) }
     | { Ok(None) }
     ;
 MethodsOpt -> Result<Vec<Method>, ()>:
@@ -25,40 +25,40 @@ Method -> Result<Method, ()>:
       MethodName "=" MethodBody
       { Ok(Method{ name: $1?, body: $3? }) }
     ;
-NameDefs -> Result<Vec<Lexeme<StorageT>>, ()>:
+NameDefs -> Result<Vec<Span>, ()>:
       "|" IdListOpt "|" { Ok($2?) }
     | { Ok(vec![]) }
     ;
 MethodName -> Result<MethodName, ()>:
-      "ID" { Ok(MethodName::Id(map_err($1)?)) }
+      "ID" { Ok(MethodName::Id(map_err($1)?.span())) }
     | MethodNameKeywords { Ok(MethodName::Keywords($1?)) }
     | MethodNameBin { $1 }
     ;
-MethodNameKeywords -> Result<Vec<(Lexeme<StorageT>, Lexeme<StorageT>)>, ()>:
-      "KEYWORD" "ID" { Ok(vec![(map_err($1)?, map_err($2)?)]) }
-    | MethodNameKeywords "KEYWORD" "ID" { flattenr($1, Ok((map_err($2)?, map_err($3)?))) }
+MethodNameKeywords -> Result<Vec<(Span, Span)>, ()>:
+      "KEYWORD" "ID" { Ok(vec![(map_err($1)?.span(), map_err($2)?.span())]) }
+    | MethodNameKeywords "KEYWORD" "ID" { flattenr($1, Ok((map_err($2)?.span(), map_err($3)?.span()))) }
     ;
 MethodNameBin -> Result<MethodName, ()>:
       MethodNameBinOp Argument { Ok(MethodName::BinaryOp($1?, $2?)) };
 // We'd like to just use BinOp here, rather than introducing MethodNameBinOp,
 // but then the "|" symbol conflicts with NameDefs. In other words, you can't
 // have "|" as a method name in SOM.
-MethodNameBinOp -> Result<Lexeme<StorageT>, ()>:
-      "BINOPSEQ" { Ok(map_err($1)?) }
-    | "~" { Ok(map_err($1)?) }
-    | "&" { Ok(map_err($1)?) }
-    | "*" { Ok(map_err($1)?) }
-    | "/" { Ok(map_err($1)?) }
-    | "\\" { Ok(map_err($1)?) }
-    | "+" { Ok(map_err($1)?) }
-    | "-" { Ok(map_err($1)?) }
-    | "=" { Ok(map_err($1)?) }
-    | "<<" { Ok(map_err($1)?) }
-    | ">" { Ok(map_err($1)?) }
-    | "<" { Ok(map_err($1)?) }
-    | "," { Ok(map_err($1)?) }
-    | "@" { Ok(map_err($1)?) }
-    | "%" { Ok(map_err($1)?) }
+MethodNameBinOp -> Result<Span, ()>:
+      "BINOPSEQ" { Ok(map_err($1)?.span()) }
+    | "~" { Ok(map_err($1)?.span()) }
+    | "&" { Ok(map_err($1)?.span()) }
+    | "*" { Ok(map_err($1)?.span()) }
+    | "/" { Ok(map_err($1)?.span()) }
+    | "\\" { Ok(map_err($1)?.span()) }
+    | "+" { Ok(map_err($1)?.span()) }
+    | "-" { Ok(map_err($1)?.span()) }
+    | "=" { Ok(map_err($1)?.span()) }
+    | "<<" { Ok(map_err($1)?.span()) }
+    | ">" { Ok(map_err($1)?.span()) }
+    | "<" { Ok(map_err($1)?.span()) }
+    | "," { Ok(map_err($1)?.span()) }
+    | "@" { Ok(map_err($1)?.span()) }
+    | "%" { Ok(map_err($1)?.span()) }
     ;
 MethodBody -> Result<MethodBody, ()>:
       "PRIMITIVE" { Ok(MethodBody::Primitive) }
@@ -87,9 +87,9 @@ Expr -> Result<Expr, ()>:
     | KeywordMsg { $1 }
     ;
 Assign -> Result<Expr, ()>:
-      "ID" ":=" Expr { Ok(Expr::Assign{id: map_err($1)?, expr: Box::new($3?)}) };
+      "ID" ":=" Expr { Ok(Expr::Assign{id: map_err($1)?.span(), expr: Box::new($3?)}) };
 Unit -> Result<Expr, ()>:
-      "ID" { Ok(Expr::VarLookup(map_err($1)?)) }
+      "ID" { Ok(Expr::VarLookup(map_err($1)?.span())) }
     | Literal { $1 }
     | Block { $1 }
     | "(" Expr ")" { $2 }
@@ -98,9 +98,9 @@ KeywordMsg -> Result<Expr, ()>:
       BinaryMsg KeywordMsgList { Ok(Expr::KeywordMsg{receiver: Box::new($1?), msglist: $2?}) }
     | BinaryMsg { $1 }
     ;
-KeywordMsgList -> Result<Vec<(Lexeme<StorageT>, Expr)>, ()>:
-      KeywordMsgList "KEYWORD" BinaryMsg { flattenr($1, Ok((map_err($2)?, $3?))) }
-    | "KEYWORD" BinaryMsg { Ok(vec![(map_err($1)?, $2?)]) }
+KeywordMsgList -> Result<Vec<(Span, Expr)>, ()>:
+      KeywordMsgList "KEYWORD" BinaryMsg { flattenr($1, Ok((map_err($2)?.span(), $3?))) }
+    | "KEYWORD" BinaryMsg { Ok(vec![(map_err($1)?.span(), $2?)]) }
     ;
 BinaryMsg -> Result<Expr, ()>:
       BinaryMsg BinOp UnaryMsg { Ok(Expr::BinaryMsg{ lhs: Box::new($1?), op: $2?, rhs: Box::new($3?) }) }
@@ -108,58 +108,58 @@ BinaryMsg -> Result<Expr, ()>:
     ;
 UnaryMsg -> Result<Expr, ()>:
       Unit IdListOpt { Ok(Expr::UnaryMsg{ receiver: Box::new($1?), ids: $2? }) };
-IdListOpt -> Result<Vec<Lexeme<StorageT>>, ()>:
+IdListOpt -> Result<Vec<Span>, ()>:
       IdList { $1 }
     | { Ok(vec![]) }
     ;
-IdList -> Result<Vec<Lexeme<StorageT>>, ()>:
-      "ID" { Ok(vec![map_err($1)?]) }
-    | IdList "ID" { flattenr($1, map_err($2)) }
+IdList -> Result<Vec<Span>, ()>:
+      "ID" { Ok(vec![map_err($1)?.span()]) }
+    | IdList "ID" { flattenr_span($1, $2) }
     ;
-BinOp -> Result<Lexeme<StorageT>, ()>:
-      "BINOPSEQ" { Ok(map_err($1)?) }
-    | "~" { Ok(map_err($1)?) }
-    | "&" { Ok(map_err($1)?) }
-    | "|" { Ok(map_err($1)?) }
-    | "*" { Ok(map_err($1)?) }
-    | "/" { Ok(map_err($1)?) }
-    | "\\" { Ok(map_err($1)?) }
-    | "+" { Ok(map_err($1)?) }
-    | "-" { Ok(map_err($1)?) }
-    | "=" { Ok(map_err($1)?) }
-    | "<<" { Ok(map_err($1)?) }
-    | ">" { Ok(map_err($1)?) }
-    | "<" { Ok(map_err($1)?) }
-    | "," { Ok(map_err($1)?) }
-    | "@" { Ok(map_err($1)?) }
-    | "%" { Ok(map_err($1)?) }
+BinOp -> Result<Span, ()>:
+      "BINOPSEQ" { Ok(map_err($1)?.span()) }
+    | "~" { Ok(map_err($1)?.span()) }
+    | "&" { Ok(map_err($1)?.span()) }
+    | "|" { Ok(map_err($1)?.span()) }
+    | "*" { Ok(map_err($1)?.span()) }
+    | "/" { Ok(map_err($1)?.span()) }
+    | "\\" { Ok(map_err($1)?.span()) }
+    | "+" { Ok(map_err($1)?.span()) }
+    | "-" { Ok(map_err($1)?.span()) }
+    | "=" { Ok(map_err($1)?.span()) }
+    | "<<" { Ok(map_err($1)?.span()) }
+    | ">" { Ok(map_err($1)?.span()) }
+    | "<" { Ok(map_err($1)?.span()) }
+    | "," { Ok(map_err($1)?.span()) }
+    | "@" { Ok(map_err($1)?.span()) }
+    | "%" { Ok(map_err($1)?.span()) }
     ;
 Literal -> Result<Expr, ()>:
-      "STRING" { Ok(Expr::String(map_err($1)?)) }
-    | "INT" { Ok(Expr::Int{ is_negative: false, val: map_err($1)? }) }
-    | "-" "INT" { Ok(Expr::Int{ is_negative: true, val: map_err($2)? }) }
-    | "DOUBLE" { Ok(Expr::Double{ is_negative: false, val: map_err($1)? }) }
-    | "-" "DOUBLE" { Ok(Expr::Double{ is_negative: true, val: map_err($2)? }) }
+      "STRING" { Ok(Expr::String(map_err($1)?.span())) }
+    | "INT" { Ok(Expr::Int{ is_negative: false, val: map_err($1)?.span() }) }
+    | "-" "INT" { Ok(Expr::Int{ is_negative: true, val: map_err($2)?.span() }) }
+    | "DOUBLE" { Ok(Expr::Double{ is_negative: false, val: map_err($1)?.span() }) }
+    | "-" "DOUBLE" { Ok(Expr::Double{ is_negative: true, val: map_err($2)?.span() }) }
     | StringConst { $1 }
     | ArrayConst { unimplemented!() }
     ;
 Block -> Result<Expr, ()>:
       "[" BlockParamsOpt NameDefs BlockExprs "]" { Ok(Expr::Block{ params: $2?, vars: $3?, exprs: $4? }) };
-BlockParamsOpt -> Result<Vec<Lexeme<StorageT>>, ()>:
+BlockParamsOpt -> Result<Vec<Span>, ()>:
       BlockParams "|" { $1 }
     | { Ok(vec![]) }
     ;
-BlockParams -> Result<Vec<Lexeme<StorageT>>, ()>:
-      ":" "ID" { Ok(vec![map_err($2)?]) }
-    | BlockParams ":" "ID" { flattenr($1, map_err($3)) }
+BlockParams -> Result<Vec<Span>, ()>:
+      ":" "ID" { Ok(vec![map_err($2)?.span()]) }
+    | BlockParams ":" "ID" { flattenr_span($1, $3) }
     ;
-Argument -> Result<Option<Lexeme<StorageT>>, ()>:
-      "ID" { Ok(Some(map_err($1)?)) }
+Argument -> Result<Option<Span>, ()>:
+      "ID" { Ok(Some(map_err($1)?.span())) }
     | { unimplemented!() }
     ;
 StringConst -> Result<Expr, ()>:
       "#" "STRING" { unimplemented!() }
-    | "#" "ID" { Ok(Expr::Symbol(map_err($2)?)) }
+    | "#" "ID" { Ok(Expr::Symbol(map_err($2)?.span())) }
     | "#" "KEYWORD" { unimplemented!() }
     | "#" BinOp { unimplemented!() }
     ;
@@ -172,7 +172,7 @@ ArrayList -> Result<(), ()>:
 
 %%
 
-use lrpar::Lexeme;
+use lrpar::{Lexeme, Span};
 
 type StorageT = u32;
 
@@ -186,6 +186,13 @@ fn map_err<StorageT>(r: Result<Lexeme<StorageT>, Lexeme<StorageT>>)
 fn flattenr<T>(lhs: Result<Vec<T>, ()>, rhs: Result<T, ()>) -> Result<Vec<T>, ()> {
     let mut flt = lhs?;
     flt.push(rhs?);
+    Ok(flt)
+}
+
+/// Flatten `rhs` into `lhs`.
+fn flattenr_span(lhs: Result<Vec<Span>, ()>, rhs: Result<Lexeme<StorageT>, Lexeme<StorageT>>) -> Result<Vec<Span>, ()> {
+    let mut flt = lhs?;
+    flt.push(rhs.map_err(|_| ())?.span());
     Ok(flt)
 }
 
