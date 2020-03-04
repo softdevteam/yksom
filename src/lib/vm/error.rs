@@ -1,7 +1,8 @@
-use std::fs::read_to_string;
+use std::{fs::read_to_string, io::stderr};
 
 use abgc::Gc;
 use lrpar::Span;
+use termion::{is_tty, style};
 
 use crate::vm::{
     core::VM,
@@ -31,18 +32,70 @@ impl VMError {
             if let Ok(d) = read_to_string(&cls.path) {
                 let newlines = self.newlines(&d);
                 let (start_line, start_col) = self.line_col(&newlines, span.start());
-                let (end_line, _) = self.line_col(&newlines, span.end());
+                let (end_line, end_col) = self.line_col(&newlines, span.end());
                 eprintln!(
                     "  File {}, line {}, column {}:",
                     cls_path, start_line, start_col
                 );
-                for i in start_line - 1..=end_line - 1 {
-                    let line = if i == newlines.len() {
-                        &d[newlines[i - 1]..]
+                let line = &d[newlines[start_line - 2]..newlines[start_line - 1]].trim_end();
+                if is_tty(&stderr()) {
+                    if start_line == end_line {
+                        eprintln!(
+                            "{}{}{}{}{}{}",
+                            &line[..start_col],
+                            style::Bold,
+                            style::Underline,
+                            &line[start_col..end_col],
+                            style::Reset,
+                            &line[end_col..]
+                        );
                     } else {
-                        &d[newlines[i - 1]..newlines[i]]
-                    };
-                    eprintln!("  {}", line.trim_end());
+                        eprintln!(
+                            "{}{}{}{}{}",
+                            &line[..start_col],
+                            style::Bold,
+                            style::Underline,
+                            &line[start_col..],
+                            style::Reset
+                        );
+                        for i in start_line..=end_line - 2 {
+                            let line = if i == newlines.len() {
+                                &d[newlines[i - 1]..]
+                            } else {
+                                &d[newlines[i - 1]..newlines[i]]
+                            }
+                            .trim_end();
+                            let spaces = line.chars().take_while(|c| *c == ' ').count();
+                            eprintln!(
+                                "  {}{}{}{}{}",
+                                " ".repeat(spaces),
+                                style::Bold,
+                                style::Underline,
+                                &line[spaces..],
+                                style::Reset
+                            );
+                        }
+                        let line = &d[newlines[end_line - 2]..newlines[end_line - 1]].trim_end();
+                        let spaces = line.chars().take_while(|c| *c == ' ').count();
+                        eprintln!(
+                            "  {}{}{}{}{}{}",
+                            " ".repeat(spaces),
+                            style::Bold,
+                            style::Underline,
+                            &line[spaces..end_col],
+                            style::Reset,
+                            &line[end_col..]
+                        );
+                    }
+                } else {
+                    for i in start_line - 1..=end_line - 1 {
+                        let line = if i == newlines.len() {
+                            &d[newlines[i - 1]..]
+                        } else {
+                            &d[newlines[i - 1]..newlines[i]]
+                        };
+                        eprintln!("  {}", line.trim_end());
+                    }
                 }
             } else {
                 eprintln!("File {}:", cls_path);

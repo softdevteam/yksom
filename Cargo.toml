@@ -43,6 +43,7 @@ num-integer = "0.1"
 num_enum = "0.3"
 num-traits = "0.2"
 ryu = "1.0"
+termion = "1.5"
 
 # The main reason for customising the profile.* sections is to force unwind=abort.
 [profile.release]
