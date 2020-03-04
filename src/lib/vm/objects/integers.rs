@@ -18,7 +18,8 @@ use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
 use crate::vm::{
-    core::{VMError, VMErrorKind, VM},
+    core::VM,
+    error::{VMError, VMErrorKind},
     objects::{Double, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val},
 };

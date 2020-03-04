@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: NotANumber { got: String_ }
+  stderr:
+    ...
+    Expected a numeric type but got type 'String_'.
 "
 
 int16 = (

@@ -16,67 +16,14 @@ use crate::{
         instrs::{Builtin, Instr, Primitive},
     },
     vm::{
-        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, ObjType, String_},
+        error::{VMError, VMErrorKind},
+        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, String_},
         somstack::SOMStack,
         val::Val,
     },
 };
 
 pub const SOM_EXTENSION: &str = "som";
-
-#[derive(Debug, PartialEq)]
-pub struct VMError {
-    pub kind: VMErrorKind,
-}
-
-impl VMError {
-    pub fn new(_: &VM, kind: VMErrorKind) -> Box<Self> {
-        Box::new(VMError { kind })
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum VMErrorKind {
-    /// A value which can't be represented in an `isize`.
-    CantRepresentAsBigInt,
-    /// A value which can't be represented in an `f64`.
-    CantRepresentAsDouble,
-    /// A value which can't be represented in an `isize`.
-    CantRepresentAsIsize,
-    /// A value which can't be represented in an `usize`.
-    CantRepresentAsUsize,
-    DivisionByZero,
-    /// A value which is mathematically undefined.
-    DomainError,
-    /// The VM is trying to exit.
-    Exit,
-    /// Tried to perform a `Val::downcast` operation on a non-boxed `Val`. Note that `expected`
-    /// and `got` can reference the same `ObjType`.
-    GcBoxTypeError {
-        expected: ObjType,
-        got: ObjType,
-    },
-    /// Tried to access a global before it being initialised.
-    InvalidSymbol,
-    /// Tried to do a shl or shr with a value below zero.
-    NegativeShift,
-    /// A specialised version of TypeError, because SOM has more than one number type (and casts
-    /// between them as necessary) so the `expected` field of `TypeError` doesn't quite work.
-    NotANumber {
-        got: ObjType,
-    },
-    /// Something went wrong when trying to execute a primitive.
-    PrimitiveError,
-    /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
-    ShiftTooBig,
-    /// A dynamic type error.
-    TypeError {
-        expected: ObjType,
-        got: ObjType,
-    },
-    /// An unknown method.
-    UnknownMethod(String),
-}
 
 #[derive(Debug)]
 /// The (internal) result of a SOM send.
@@ -226,13 +173,13 @@ impl VM {
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
     /// builtin classes which do not lead to run-time instances of `Inst`.
     pub fn compile(&self, path: &Path, inst_vars_allowed: bool) -> Val {
-        let cls = compile(self, path);
+        let cls_val = compile(self, path);
+        let cls: &Class = cls_val.downcast(self).unwrap();
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
-        let cls = Val::from_obj(self, cls);
-        unsafe { &mut *self.classes.get() }.push(cls.clone());
-        cls
+        unsafe { &mut *self.classes.get() }.push(cls_val.clone());
+        cls_val
     }
 
     fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
@@ -291,7 +238,7 @@ impl VM {
                 }
                 let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv, bytecode_off);
+                let r = self.exec_user(rcv, Gc::clone(&meth), bytecode_off);
                 self.frame_pop();
                 match r {
                     SendReturn::ClosureReturn(_) => unimplemented!(),
@@ -304,7 +251,7 @@ impl VM {
 
     /// Execute a SOM method. Note that the frame for this method must have been created *before*
     /// calling this function.
-    fn exec_user(&self, rcv: Val, meth_start_pc: usize) -> SendReturn {
+    fn exec_user(&self, rcv: Val, method: Gc<Method>, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
         let stack_start = unsafe { &*self.stack.get() }.len();
         loop {
@@ -321,6 +268,7 @@ impl VM {
                     };
                     unsafe { &mut *self.stack.get() }.push(Block::new(
                         self,
+                        Gc::clone(&method),
                         rcv.clone(),
                         blkinfo_off,
                         Gc::clone(&self.current_frame().closure),
@@ -392,7 +340,7 @@ impl VM {
                     return SendReturn::Val;
                 }
                 Instr::Send(send_idx, cache_idx) => {
-                    let (rcv, nargs, meth) = {
+                    let (send_rcv, nargs, meth) = {
                         debug_assert!(send_idx < unsafe { &*self.sends.get() }.len());
                         let (ref name, nargs) =
                             unsafe { (&*self.sends.get()).get_unchecked(send_idx) };
@@ -414,7 +362,7 @@ impl VM {
                             pc = meth_start_pc;
                             continue;
                         }
-                        MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
+                        MethodBody::Primitive(p) => self.exec_primitive(p, send_rcv),
                         MethodBody::User {
                             num_vars,
                             bytecode_off,
@@ -424,9 +372,9 @@ impl VM {
                                 panic!("Not enough stack space to execute method.");
                             }
                             let nframe =
-                                Frame::new(self, true, rcv.clone(), None, num_vars, *nargs);
+                                Frame::new(self, true, send_rcv.clone(), None, num_vars, *nargs);
                             unsafe { &mut *self.frames.get() }.push(nframe);
-                            let r = self.exec_user(rcv, bytecode_off);
+                            let r = self.exec_user(send_rcv, Gc::clone(&meth), bytecode_off);
                             self.frame_pop();
                             r
                         }
@@ -437,7 +385,11 @@ impl VM {
                                 return SendReturn::ClosureReturn(d - 1);
                             }
                         }
-                        SendReturn::Err(e) => {
+                        SendReturn::Err(mut e) => {
+                            e.backtrace.push((
+                                Gc::clone(&method),
+                                unsafe { &*self.instr_spans.get() }[pc],
+                            ));
                             return SendReturn::Err(e);
                         }
                         SendReturn::Val => (),
@@ -664,7 +616,11 @@ impl VM {
                     nargs as usize,
                 );
                 unsafe { &mut *self.frames.get() }.push(frame);
-                let r = self.exec_user(rcv_blk.inst.clone(), bytecode_off);
+                let r = self.exec_user(
+                    rcv_blk.inst.clone(),
+                    Gc::clone(&rcv_blk.method),
+                    bytecode_off,
+                );
                 self.frame_pop();
                 r
             }
@@ -679,6 +635,10 @@ impl VM {
 
     fn frame_pop(&self) {
         unsafe { &mut *self.frames.get() }.pop();
+    }
+
+    pub fn frames_len(&self) -> usize {
+        unsafe { &mut *self.frames.get() }.len()
     }
 
     /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
@@ -738,6 +698,10 @@ impl VM {
     /// Push `instr` to the end of the current vector of instructions, associating `span` with it
     /// for the purposes of backtraces.
     pub fn instrs_push(&self, instr: Instr, span: Span) {
+        debug_assert_eq!(
+            unsafe { &mut *self.instrs.get() }.len(),
+            unsafe { &mut *self.instr_spans.get() }.len()
+        );
         unsafe { &mut *self.instrs.get() }.push(instr);
         unsafe { &mut *self.instr_spans.get() }.push(span);
     }

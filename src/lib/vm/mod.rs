@@ -9,8 +9,12 @@
 //! [`Val::try_downcast`](vm::val::Val::try_downcast)) it to a concrete implementation of `Obj`.
 
 pub mod core;
+pub mod error;
 pub mod objects;
 pub mod somstack;
 pub mod val;
 
-pub use crate::vm::core::{VMError, VMErrorKind, VM};
+pub use crate::vm::{
+    core::VM,
+    error::{VMError, VMErrorKind},
+};

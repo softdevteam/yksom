@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: CantRepresentAsDouble
+  stderr:
+    ...
+    Can't represent as double.
 "
 
 double3 = (

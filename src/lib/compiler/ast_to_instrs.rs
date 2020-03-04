@@ -16,7 +16,7 @@ use crate::{
     },
     vm::{
         objects::{BlockInfo, Class, Method, MethodBody, String_},
-        val::ValKind,
+        val::{Val, ValKind},
         VM,
     },
 };
@@ -40,7 +40,7 @@ impl<'a> Compiler<'a> {
         lexer: &dyn Lexer<StorageT>,
         path: &Path,
         astcls: &ast::Class,
-    ) -> Result<Class, String> {
+    ) -> Result<Val, String> {
         let mut compiler = Compiler {
             lexer,
             path,
@@ -117,14 +117,22 @@ impl<'a> Compiler<'a> {
             return Err(err_strs);
         }
 
-        Ok(Class {
-            name: String_::new(vm, name, true),
-            path: compiler.path.to_path_buf(),
-            instrs_off,
-            supercls,
-            num_inst_vars: astcls.inst_vars.len(),
-            methods,
-        })
+        let cls_val = Val::from_obj(
+            vm,
+            Class {
+                name: String_::new(vm, name, true),
+                path: compiler.path.to_path_buf(),
+                instrs_off,
+                supercls,
+                num_inst_vars: astcls.inst_vars.len(),
+                methods,
+            },
+        );
+        let cls: &Class = cls_val.downcast(vm).unwrap();
+        for m in cls.methods.values() {
+            m.set_class(vm, cls_val.clone());
+        }
+        Ok(cls_val)
     }
 
     fn c_method(&mut self, vm: &VM, astmeth: &ast::Method) -> CompileResult<Method> {
@@ -147,7 +155,7 @@ impl<'a> Compiler<'a> {
             }
         };
         let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
-        Ok(Method { name: name.1, body })
+        Ok(Method::new(vm, name.1, body))
     }
 
     fn c_body(

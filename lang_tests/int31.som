@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: TypeError { expected: Int, got: String_ }
+  stderr:
+    ...
+    Expected object of type 'Int' but got type 'String_'.
 "
 
 int31 = (

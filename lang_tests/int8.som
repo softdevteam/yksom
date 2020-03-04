@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: DivisionByZero
+  stderr:
+    ...
+    Division by zero.
 "
 
 int8 = (

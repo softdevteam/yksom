@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: InvalidSymbol
+  stderr:
+    ...
+    Invalid symbol.
 "
 
 system_global_invalid_symbol_err = (

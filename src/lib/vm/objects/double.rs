@@ -4,7 +4,8 @@ use abgc_derive::GcLayout;
 use num_traits::{ToPrimitive, Zero};
 
 use crate::vm::{
-    core::{VMError, VMErrorKind, VM},
+    core::VM,
+    error::{VMError, VMErrorKind},
     objects::{ArbInt, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val},
 };

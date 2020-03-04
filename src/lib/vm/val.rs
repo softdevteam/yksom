@@ -15,7 +15,8 @@ use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
 use super::{
-    core::{VMError, VMErrorKind, VM},
+    core::VM,
+    error::{VMError, VMErrorKind},
     objects::{ArbInt, Double, Int, Obj, ObjType, StaticObjType, String_, ThinObj},
 };
 
@@ -61,7 +62,7 @@ pub trait NotUnboxable {}
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
-    val: usize,
+    pub val: usize,
 }
 
 impl Val {

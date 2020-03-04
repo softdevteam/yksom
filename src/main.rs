@@ -43,7 +43,7 @@ fn main() {
             ..
         }) => (),
         Err(e) => {
-            eprintln!("{:?}", e.kind);
+            e.console_print(&vm);
             process::exit(1);
         }
     }

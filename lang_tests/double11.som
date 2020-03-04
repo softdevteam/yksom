@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: TypeError { expected: Int, got: Double }
+  stderr:
+    ...
+    Expected object of type 'Int' but got type 'Double'.
 "
 
 double11 = (
