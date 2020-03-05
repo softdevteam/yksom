@@ -15,7 +15,8 @@ use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
 use super::{
-    core::{VMError, VM},
+    core::VM,
+    error::{VMError, VMErrorKind},
     objects::{ArbInt, Double, Int, Obj, ObjType, StaticObjType, String_, ThinObj},
 };
 
@@ -61,7 +62,7 @@ pub trait NotUnboxable {}
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
-    val: usize,
+    pub val: usize,
 }
 
 impl Val {
@@ -129,20 +130,26 @@ impl Val {
     /// be boxed) or return a `VMError` if the cast is invalid.
     pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(
         &self,
-        _: &VM,
+        vm: &VM,
     ) -> Result<&T, Box<VMError>> {
         match self.valkind() {
-            ValKind::INT => Err(Box::new(VMError::TypeError {
-                expected: T::static_objtype(),
-                got: Int::static_objtype(),
-            })),
+            ValKind::INT => Err(VMError::new(
+                vm,
+                VMErrorKind::TypeError {
+                    expected: T::static_objtype(),
+                    got: Int::static_objtype(),
+                },
+            )),
             ValKind::GCBOX => {
                 let tobj = unsafe { self.val_to_tobj() };
                 tobj.downcast().ok_or_else(|| {
-                    Box::new(VMError::TypeError {
-                        expected: T::static_objtype(),
-                        got: tobj.deref().dyn_objtype(),
-                    })
+                    VMError::new(
+                        vm,
+                        VMErrorKind::TypeError {
+                            expected: T::static_objtype(),
+                            got: tobj.deref().dyn_objtype(),
+                        },
+                    )
                 })
             }
             ValKind::ILLEGAL => unreachable!(),
@@ -314,10 +321,13 @@ impl Val {
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() & rhs.bigint());
             }
-            return Err(Box::new(VMError::TypeError {
-                expected: self.dyn_objtype(vm),
-                got: other.dyn_objtype(vm),
-            }));
+            return Err(VMError::new(
+                vm,
+                VMErrorKind::TypeError {
+                    expected: self.dyn_objtype(vm),
+                    got: other.dyn_objtype(vm),
+                },
+            ));
         }
         self.tobj(vm).unwrap().and(vm, other)
     }
@@ -331,7 +341,7 @@ impl Val {
                     val: (self.val / other.val) * (1 << TAG_BITSIZE),
                 });
             } else {
-                return Err(Box::new(VMError::DivisionByZero));
+                return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
             }
         }
         self.tobj(vm).unwrap().div(vm, other)
@@ -342,28 +352,31 @@ impl Val {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 if rhs == 0 {
-                    return Err(Box::new(VMError::DivisionByZero));
+                    return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
                 } else {
                     return Ok(Double::new(vm, (lhs as f64) / (rhs as f64)));
                 }
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 if Zero::is_zero(rhs.bigint()) {
-                    return Err(Box::new(VMError::DivisionByZero));
+                    return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
                 } else if let Some(i) = rhs.bigint().to_f64() {
                     return Ok(Double::new(vm, (lhs as f64) / i));
                 } else {
-                    return Err(Box::new(VMError::CantRepresentAsDouble));
+                    return Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble));
                 }
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
                 if rhs.double() == 0f64 {
-                    return Err(Box::new(VMError::DivisionByZero));
+                    return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
                 } else {
                     return Ok(Double::new(vm, (lhs as f64) / rhs.double()));
                 }
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
+            return Err(VMError::new(
+                vm,
+                VMErrorKind::NotANumber {
+                    got: other.dyn_objtype(vm),
+                },
+            ));
         }
         self.tobj(vm).unwrap().double_div(vm, other)
     }
@@ -378,9 +391,12 @@ impl Val {
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
                 return Ok(Double::new(vm, (lhs as f64) % rhs.double()));
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
+            return Err(VMError::new(
+                vm,
+                VMErrorKind::NotANumber {
+                    got: other.dyn_objtype(vm),
+                },
+            ));
         }
         self.tobj(vm).unwrap().modulus(vm, other)
     }
@@ -401,9 +417,10 @@ impl Val {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 if rhs < 0 {
-                    return Err(Box::new(VMError::NegativeShift));
+                    return Err(VMError::new(vm, VMErrorKind::NegativeShift));
                 } else {
-                    let rhs_i = u32::try_from(rhs).map_err(|_| Box::new(VMError::ShiftTooBig))?;
+                    let rhs_i = u32::try_from(rhs)
+                        .map_err(|_| VMError::new(vm, VMErrorKind::ShiftTooBig))?;
                     if let Some(i) = lhs.checked_shl(rhs_i) {
                         // We have to be careful as shifting bits in an isize can lead to positive
                         // numbers becoming negative in two's complement. For example, on a 64-bit
@@ -422,11 +439,14 @@ impl Val {
                 }
             }
             if other.try_downcast::<ArbInt>(vm).is_some() {
-                return Err(Box::new(VMError::ShiftTooBig));
+                return Err(VMError::new(vm, VMErrorKind::ShiftTooBig));
             }
-            return Err(Box::new(VMError::NotANumber {
-                got: other.dyn_objtype(vm),
-            }));
+            return Err(VMError::new(
+                vm,
+                VMErrorKind::NotANumber {
+                    got: other.dyn_objtype(vm),
+                },
+            ));
         }
         self.tobj(vm).unwrap().shl(vm, other)
     }
@@ -435,7 +455,7 @@ impl Val {
     pub fn sqrt(&self, vm: &VM) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if lhs < 0 {
-                return Err(Box::new(VMError::DomainError));
+                return Err(VMError::new(vm, VMErrorKind::DomainError));
             } else {
                 let result = (lhs as f64).sqrt();
                 if result.round() == result {
@@ -467,10 +487,13 @@ impl Val {
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() ^ rhs.bigint());
             }
-            return Err(Box::new(VMError::TypeError {
-                expected: self.dyn_objtype(vm),
-                got: other.dyn_objtype(vm),
-            }));
+            return Err(VMError::new(
+                vm,
+                VMErrorKind::TypeError {
+                    expected: self.dyn_objtype(vm),
+                    got: other.dyn_objtype(vm),
+                },
+            ));
         }
         self.tobj(vm).unwrap().xor(vm, other)
     }
@@ -518,7 +541,7 @@ macro_rules! binop_typeerror {
                         Ok(Val::from_bool(vm,
                             &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
                     } else {
-                        Err(Box::new(VMError::NotANumber {
+                        Err(VMError::new(vm, VMErrorKind::NotANumber {
                           got: other.dyn_objtype(vm),
                         }))
                     }
@@ -576,7 +599,7 @@ impl Drop for Val {
 mod tests {
     use super::*;
     use crate::vm::{
-        core::{VMError, VM},
+        core::VM,
         objects::{Class, ObjType, String_},
     };
 
@@ -674,8 +697,8 @@ mod tests {
         let v = String_::new(&vm, "s".to_owned(), true);
         assert!(v.downcast::<String_>(&vm).is_ok());
         assert_eq!(
-            *v.downcast::<Class>(&vm).unwrap_err(),
-            VMError::TypeError {
+            v.downcast::<Class>(&vm).unwrap_err().kind,
+            VMErrorKind::TypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_
             }

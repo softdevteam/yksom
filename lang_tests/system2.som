@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: TypeError { expected: String_, got: Inst }
+  stderr:
+    ...
+    Expected object of type 'String_' but got type 'Inst'.
 "
 
 system2 = (

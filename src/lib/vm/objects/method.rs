@@ -1,5 +1,7 @@
 #![allow(clippy::new_ret_no_self)]
 
+use std::cell::UnsafeCell;
+
 use abgc_derive::GcLayout;
 
 use crate::{
@@ -15,6 +17,7 @@ use crate::{
 pub struct Method {
     pub name: String,
     pub body: MethodBody,
+    class: UnsafeCell<Val>,
 }
 
 #[derive(Debug)]
@@ -46,5 +49,23 @@ impl NotUnboxable for Method {}
 impl StaticObjType for Method {
     fn static_objtype() -> ObjType {
         ObjType::Method
+    }
+}
+
+impl Method {
+    pub fn new(vm: &VM, name: String, body: MethodBody) -> Method {
+        Method {
+            name,
+            body,
+            class: UnsafeCell::new(vm.nil.clone()),
+        }
+    }
+
+    pub fn class(&self) -> Val {
+        unsafe { &*self.class.get() }.clone()
+    }
+
+    pub fn set_class(&self, _: &VM, class: Val) {
+        *unsafe { &mut *self.class.get() } = class;
     }
 }

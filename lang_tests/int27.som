@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: DomainError
+  stderr:
+    ...
+    Domain error.
 "
 
 int27 = (

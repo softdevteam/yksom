@@ -8,7 +8,7 @@ use std::{fs, path::Path, process};
 use lrlex::lrlex_mod;
 use lrpar::lrpar_mod;
 
-use crate::vm::{objects::Class, VM};
+use crate::vm::{val::Val, VM};
 
 mod ast;
 mod ast_to_instrs;
@@ -20,7 +20,7 @@ lrpar_mod!("lib/compiler/som.y");
 type StorageT = u32;
 
 /// Compile a class. Should only be called by the `VM`.
-pub fn compile(vm: &VM, path: &Path) -> Class {
+pub fn compile(vm: &VM, path: &Path) -> Val {
     let bytes = fs::read(path).unwrap_or_else(|_| panic!("Can't read {}.", path.to_str().unwrap()));
     let txt = String::from_utf8_lossy(&bytes);
 

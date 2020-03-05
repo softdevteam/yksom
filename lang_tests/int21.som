@@ -1,7 +1,9 @@
 "
 VM:
   status: error
-  stderr: NegativeShift
+  stderr:
+    ...
+    Negative shift.
 "
 
 int21 = (

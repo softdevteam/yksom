@@ -6,7 +6,8 @@ use abgc::Gc;
 use abgc_derive::GcLayout;
 
 use crate::vm::{
-    core::{VMError, VM},
+    core::VM,
+    error::{VMError, VMErrorKind},
     objects::{Method, Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
 };
@@ -15,6 +16,8 @@ use crate::vm::{
 pub struct Class {
     pub name: Val,
     pub path: PathBuf,
+    /// Offset to this class's instructions in VM::instrs.
+    pub instrs_off: usize,
     pub supercls: Option<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,
@@ -49,7 +52,7 @@ impl Class {
             .map(|x| Ok(Gc::clone(x)))
             .unwrap_or_else(|| match &self.supercls {
                 Some(scls) => scls.downcast::<Class>(vm)?.get_method(vm, msg),
-                None => Err(Box::new(VMError::UnknownMethod(msg.to_owned()))),
+                None => Err(VMError::new(vm, VMErrorKind::UnknownMethod(msg.to_owned()))),
             })
     }
 

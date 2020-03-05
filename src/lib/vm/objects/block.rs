@@ -5,7 +5,7 @@ use abgc_derive::GcLayout;
 
 use crate::vm::{
     core::{Closure, VM},
-    objects::{Obj, ObjType, StaticObjType},
+    objects::{Method, Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
 };
 
@@ -21,6 +21,7 @@ pub struct BlockInfo {
 
 #[derive(Debug, GcLayout)]
 pub struct Block {
+    pub method: Gc<Method>,
     /// This `Block`'s `self` val. XXX This should probably be part of the corresponding closure's
     /// variables.
     pub inst: Val,
@@ -51,6 +52,7 @@ impl StaticObjType for Block {
 impl Block {
     pub fn new(
         vm: &VM,
+        method: Gc<Method>,
         inst: Val,
         blockinfo_off: usize,
         parent_closure: Gc<Closure>,
@@ -65,6 +67,7 @@ impl Block {
         Val::from_obj(
             vm,
             Block {
+                method,
                 inst,
                 blockn_cls,
                 blockinfo_off,

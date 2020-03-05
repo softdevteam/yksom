@@ -2,7 +2,8 @@
 VM:
   status: error
   stderr:
-   InvalidSymbol 
+    ...
+    Invalid symbol.
 "
 
 instance_vars2 = (

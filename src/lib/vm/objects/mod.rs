@@ -39,10 +39,7 @@ pub use string_::String_;
 use abgc::{self, Gc};
 use natrob::narrowable_abgc;
 
-use crate::vm::{
-    core::{VMError, VM},
-    val::Val,
-};
+use crate::vm::{core::VM, error::VMError, val::Val};
 
 /// The SOM type of objects.
 #[derive(Debug, PartialEq)]
@@ -55,6 +52,21 @@ pub enum ObjType {
     Inst,
     Int,
     String_,
+}
+
+impl ObjType {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            ObjType::ArbInt => "ArbInt",
+            ObjType::Block => "Block",
+            ObjType::Class => "Class",
+            ObjType::Double => "Double",
+            ObjType::Method => "Method",
+            ObjType::Inst => "Inst",
+            ObjType::Int => "Int",
+            ObjType::String_ => "String_",
+        }
+    }
 }
 
 /// The main SOM Object trait. Notice that code should almost never call these functions directly:

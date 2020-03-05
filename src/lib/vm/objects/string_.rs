@@ -5,7 +5,8 @@ use std::str;
 use abgc_derive::GcLayout;
 
 use crate::vm::{
-    core::{VMError, VM},
+    core::VM,
+    error::VMError,
     objects::{Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
 };
