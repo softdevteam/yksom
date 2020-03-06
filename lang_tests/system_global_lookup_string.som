@@ -1,0 +1,13 @@
+"
+ignore: currently symbols are not properly handled
+VM:
+  status: error
+  stderr:
+    xxx
+"
+
+system_global_unset_global = (
+    run = (
+        (system global: 'ab') println.
+    )
+)

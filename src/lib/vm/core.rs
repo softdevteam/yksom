@@ -19,7 +19,7 @@ use crate::{
         error::{VMError, VMErrorKind},
         objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, String_},
         somstack::SOMStack,
-        val::Val,
+        val::{Val, ValKind},
     },
 };
 
@@ -73,7 +73,10 @@ pub struct VM {
     pub true_: Val,
     blockinfos: UnsafeCell<Vec<BlockInfo>>,
     classes: UnsafeCell<Vec<Val>>,
-    globals: UnsafeCell<HashMap<usize, Val>>,
+    /// The current known set of globals including those not yet assigned to: in other words, it is
+    /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
+    globals: UnsafeCell<Vec<Val>>,
+    reverse_globals: UnsafeCell<HashMap<String, usize>>,
     inline_caches: UnsafeCell<Vec<Option<(Val, Gc<Method>)>>>,
     /// `instrs` and `instr_span`s are always the same length: they are separated only because we
     /// rarely access `instr_spans`.
@@ -85,10 +88,10 @@ pub struct VM {
     reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
     stack: UnsafeCell<SOMStack>,
     strings: UnsafeCell<Vec<Val>>,
-    symbols: UnsafeCell<Vec<Val>>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
     reverse_strings: UnsafeCell<HashMap<String, usize>>,
+    symbols: UnsafeCell<Vec<Val>>,
     reverse_symbols: UnsafeCell<HashMap<String, usize>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
@@ -123,7 +126,8 @@ impl VM {
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
             classes: UnsafeCell::new(Vec::new()),
-            globals: UnsafeCell::new(HashMap::new()),
+            globals: UnsafeCell::new(Vec::new()),
+            reverse_globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
             instr_spans: UnsafeCell::new(Vec::new()),
@@ -159,13 +163,12 @@ impl VM {
         vm.sym_cls = vm.init_builtin_class("Symbol", false);
         vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
-        unsafe { &mut *vm.globals.get() }.insert(
-            vm.add_symbol("system".to_string()),
-            Inst::new(&vm, vm.system_cls.clone()),
-        );
         vm.false_ = Inst::new(&vm, vm.false_cls.clone());
         vm.system = Inst::new(&vm, vm.system_cls.clone());
         vm.true_ = Inst::new(&vm, vm.true_cls.clone());
+
+        // Populate globals.
+        vm.set_global("system", Inst::new(&vm, vm.system_cls.clone()));
 
         vm
     }
@@ -202,10 +205,7 @@ impl VM {
             .unwrap_or_else(|_| panic!("Can't find builtin class '{}'", name));
 
         let val = self.compile(&path, inst_vars_allowed);
-        let idx = self.add_symbol(name.to_string());
-        unsafe { &mut *self.globals.get() }
-            .entry(idx)
-            .or_insert(val.clone());
+        self.set_global(name, val.clone());
 
         val
     }
@@ -309,13 +309,9 @@ impl VM {
                     unsafe { &mut *self.stack.get() }.push(Double::new(self, i));
                     pc += 1;
                 }
-                Instr::Global(symbol_off) => {
-                    debug_assert!(unsafe { &*self.symbols.get() }.len() > symbol_off);
-                    if let Some(global) = unsafe { &mut *self.globals.get() }.get(&symbol_off) {
-                        unsafe { &mut *self.stack.get() }.push(global.clone());
-                    } else {
-                        return SendReturn::Err(VMError::new(self, VMErrorKind::InvalidSymbol));
-                    }
+                Instr::GlobalLookup(i) => {
+                    let v = stry!(self.get_legal_global(i));
+                    unsafe { &mut *self.stack.get() }.push(v);
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
@@ -475,28 +471,22 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Global => {
-                let name = unsafe { &mut *self.stack.get() }.pop();
-                let as_string: &String_ = stry!(name.downcast(self));
-                let s = as_string.as_str();
-
-                if let Some(i) = unsafe { &mut *self.reverse_symbols.get() }.get(s) {
-                    if let Some(val) = unsafe { &mut *self.globals.get() }.get(&i) {
-                        unsafe { &mut *self.stack.get() }.push(val.clone());
-                        return SendReturn::Val;
-                    }
-                }
-                SendReturn::Err(VMError::new(self, VMErrorKind::InvalidSymbol))
+                let name_val = unsafe { &mut *self.stack.get() }.pop();
+                // XXX This should use Symbols not strings.
+                let name: &String_ = stry!(name_val.downcast(self));
+                assert!(!name.is_str);
+                let g = self.get_global_or_nil(name.as_str());
+                unsafe { &mut *self.stack.get() }.push(g);
+                SendReturn::Val
             }
             Primitive::GlobalPut => {
-                let value = unsafe { &mut *self.stack.get() }.pop();
-                let name = unsafe { &mut *self.stack.get() }.pop();
-                let as_string: &String_ = stry!(name.downcast(self));
-                let s = as_string.as_str();
-
-                if let Some(i) = unsafe { &mut *self.reverse_symbols.get() }.get(s) {
-                    unsafe { &mut *self.globals.get() }.insert(*i, value.clone());
-                    unsafe { &mut *self.stack.get() }.push(value);
-                }
+                let v = unsafe { &mut *self.stack.get() }.pop();
+                let name_val = unsafe { &mut *self.stack.get() }.pop();
+                // XXX This should use Symbols not strings.
+                let name: &String_ = stry!(name_val.downcast(self));
+                assert!(!name.is_str);
+                self.set_global(name.as_str(), v);
+                unsafe { &mut *self.stack.get() }.push(rcv);
                 SendReturn::Val
             }
             Primitive::GreaterThan => {
@@ -740,7 +730,7 @@ impl VM {
         }
     }
 
-    /// Add the symbols `s` to the VM, returning its index. Note that symbols (like strings) are reused, so indexes
+    /// Add the symbol `s` to the VM, returning its index. Note that symbols are reused, so indexes
     /// are also reused.
     pub fn add_symbol(&self, s: String) -> usize {
         let reverse_symbols = unsafe { &mut *self.reverse_symbols.get() };
@@ -754,6 +744,75 @@ impl VM {
             reverse_symbols.insert(s.clone(), len);
             symbols.push(String_::new(self, s, false));
             len
+        }
+    }
+
+    /// Add the global `n` to the VM, returning its index. Note that global names (like strings)
+    /// are reused, so indexes are also reused.
+    pub fn add_global(&self, s: String) -> usize {
+        let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
+        // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_globals.get(&s) {
+            *i
+        } else {
+            let globals = unsafe { &mut *self.globals.get() };
+            let len = globals.len();
+            reverse_globals.insert(s.clone(), len);
+            globals.push(Val::illegal());
+            len
+        }
+    }
+
+    /// Lookup the global `name`: if it has not been added, or has been added but not set, then
+    /// `self.nil` will be returned. Notice that this does not change the stored value for this
+    /// global.
+    pub fn get_global_or_nil(&self, name: &str) -> Val {
+        let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
+        if let Some(i) = reverse_globals.get(name).map(|i| *i) {
+            let globals = unsafe { &mut *self.globals.get() };
+            let v = &globals[i];
+            if v.valkind() != ValKind::ILLEGAL {
+                return v.clone();
+            }
+        }
+        self.nil.clone()
+    }
+
+    /// Get the global at position `i`: if it has not been set (i.e. is `ValKind::ILLEGAL`) this
+    /// will return `Err(...)`.
+    pub fn get_legal_global(&self, i: usize) -> Result<Val, Box<VMError>> {
+        let globals = unsafe { &mut *self.globals.get() };
+        let v = &globals[i];
+        if v.valkind() != ValKind::ILLEGAL {
+            return Ok(v.clone());
+        }
+        let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
+        Err(VMError::new(
+            self,
+            VMErrorKind::UnknownGlobal(
+                reverse_globals
+                    .iter()
+                    .find(|(_, j)| **j == i)
+                    .map(|(n, _)| n)
+                    .unwrap()
+                    .clone(),
+            ),
+        ))
+    }
+
+    /// Set the global `name` to the value `v`, overwriting the previous value (if any).
+    pub fn set_global(&self, name: &str, v: Val) {
+        let globals = unsafe { &mut *self.globals.get() };
+        let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
+        debug_assert_eq!(globals.len(), reverse_globals.len());
+        // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
+        // this slightly laborious dance and double-lookup.
+        if let Some(i) = reverse_globals.get(name) {
+            globals[*i] = v;
+        } else {
+            reverse_globals.insert(name.to_owned(), globals.len());
+            globals.push(v);
         }
     }
 }
@@ -894,7 +953,8 @@ impl VM {
             true_: Val::illegal(),
             blockinfos: UnsafeCell::new(Vec::new()),
             classes: UnsafeCell::new(Vec::new()),
-            globals: UnsafeCell::new(HashMap::new()),
+            globals: UnsafeCell::new(Vec::new()),
+            reverse_globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
             instr_spans: UnsafeCell::new(Vec::new()),

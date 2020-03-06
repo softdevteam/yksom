@@ -2,7 +2,7 @@
 pub enum Instr {
     Block(usize),
     Builtin(Builtin),
-    Global(usize),
+    GlobalLookup(usize),
     ClosureReturn(usize),
     Double(f64),
     InstVarLookup(usize),
