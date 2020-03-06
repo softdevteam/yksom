@@ -13,7 +13,7 @@ use lrpar::Span;
 use crate::{
     compiler::{
         compile,
-        instrs::{Builtin, Instr, Primitive},
+        instrs::{Instr, Primitive},
     },
     vm::{
         error::{VMError, VMErrorKind},
@@ -168,6 +168,9 @@ impl VM {
         vm.true_ = Inst::new(&vm, vm.true_cls.clone());
 
         // Populate globals.
+        vm.set_global("false", vm.false_.clone());
+        vm.set_global("nil", vm.nil.clone());
+        vm.set_global("true", vm.true_.clone());
         vm.set_global("system", Inst::new(&vm, vm.system_cls.clone()));
 
         vm
@@ -275,15 +278,6 @@ impl VM {
                         num_params,
                     ));
                     pc = bytecode_end;
-                }
-                Instr::Builtin(b) => {
-                    unsafe { &mut *self.stack.get() }.push(match b {
-                        Builtin::Nil => self.nil.clone(),
-                        Builtin::False => self.false_.clone(),
-                        Builtin::System => self.system.clone(),
-                        Builtin::True => self.true_.clone(),
-                    });
-                    pc += 1;
                 }
                 Instr::ClosureReturn(closure_depth) => {
                     // We want to do a non-local return. Before we attempt that, we need to

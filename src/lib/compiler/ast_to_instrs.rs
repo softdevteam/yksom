@@ -11,7 +11,7 @@ use lrpar::{Lexer, Span};
 use crate::{
     compiler::{
         ast,
-        instrs::{Builtin, Instr, Primitive},
+        instrs::{Instr, Primitive},
         StorageT,
     },
     vm::{
@@ -518,14 +518,10 @@ impl<'a> Compiler<'a> {
                             vm.instrs_push(Instr::VarLookup(depth, var_num), *span);
                         }
                     }
-                    None => match self.lexer.span_str(*span) {
-                        "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil), *span),
-                        "false" => vm.instrs_push(Instr::Builtin(Builtin::False), *span),
-                        "true" => vm.instrs_push(Instr::Builtin(Builtin::True), *span),
-                        x => {
-                            vm.instrs_push(Instr::GlobalLookup(vm.add_global(x.to_owned())), *span);
-                        }
-                    },
+                    None => {
+                        let name = self.lexer.span_str(*span).to_owned();
+                        vm.instrs_push(Instr::GlobalLookup(vm.add_global(name)), *span);
+                    }
                 }
                 Ok(1)
             }
