@@ -9,6 +9,10 @@ Object = nil (
 
     value = ( ^self )
 
+    exit: error  = primitive
+    exit         = ( self exit: 0 )
+    error: string = ( '' println. ('ERROR: ' + string) println. system exit: 1 )
+
     print = ( self asString print )
     println = (
         self print.

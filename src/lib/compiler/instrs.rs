@@ -28,6 +28,7 @@ pub enum Primitive {
     Div,
     DoubleDiv,
     Equals,
+    Exit,
     Global,
     GlobalPut,
     GreaterThan,

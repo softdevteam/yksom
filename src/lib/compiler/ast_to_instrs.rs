@@ -247,6 +247,7 @@ impl<'a> Compiler<'a> {
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
+                "exit:" => Ok(MethodBody::Primitive(Primitive::Exit)),
                 "global:" => Ok(MethodBody::Primitive(Primitive::Global)),
                 "global:put:" => Ok(MethodBody::Primitive(Primitive::GlobalPut)),
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),

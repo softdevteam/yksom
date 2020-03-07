@@ -3,6 +3,7 @@
 use std::{
     cell::UnsafeCell,
     collections::HashMap,
+    convert::TryFrom,
     path::{Path, PathBuf},
     process,
 };
@@ -17,7 +18,9 @@ use crate::{
     },
     vm::{
         error::{VMError, VMErrorKind},
-        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, String_},
+        objects::{
+            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, StaticObjType, String_,
+        },
         somstack::SOMStack,
         val::{Val, ValKind},
     },
@@ -463,6 +466,29 @@ impl VM {
                     rcv.equals(self, unsafe { &mut *self.stack.get() }.pop())
                 ));
                 SendReturn::Val
+            }
+            Primitive::Exit => {
+                let c_val = unsafe { &mut *self.stack.get() }.pop();
+                // We now have to undertake a slightly awkward dance: unknown to the user,
+                // integers are unboxed, boxed, or big ints. Just because we can't convert the
+                // value to an isize doesn't mean that the user hasn't handed us an integer: we
+                // have to craft a special error message below to capture this.
+                if let Some(c) = c_val.as_isize(self) {
+                    if let Ok(c) = i32::try_from(c) {
+                        process::exit(c);
+                    }
+                }
+                if c_val.get_class(self) == self.int_cls {
+                    SendReturn::Err(VMError::new(self, VMErrorKind::DomainError))
+                } else {
+                    SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::TypeError {
+                            expected: Int::static_objtype(),
+                            got: c_val.dyn_objtype(self),
+                        },
+                    ))
+                }
             }
             Primitive::Global => {
                 let name_val = unsafe { &mut *self.stack.get() }.pop();
