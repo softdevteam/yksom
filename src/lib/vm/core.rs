@@ -39,17 +39,6 @@ enum SendReturn {
     Val,
 }
 
-/// A convenience macro for use in the `exec_*` functions.
-macro_rules! stry {
-    ($elem:expr) => {{
-        let e = $elem;
-        match e {
-            Ok(o) => o,
-            Err(e) => return SendReturn::Err(e),
-        }
-    }};
-}
-
 /// The core VM struct. Although SOM is single-threaded, we roughly model what a multi-threaded VM
 /// would need to look like. That is, since this struct would need to be shared between threads and
 /// called without a single lock, thread-safety would need to be handled internally. We model that
@@ -259,6 +248,23 @@ impl VM {
     /// calling this function.
     fn exec_user(&self, rcv: Val, method: Gc<Method>, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
+
+        macro_rules! stry {
+            ($elem:expr) => {{
+                let e = $elem;
+                match e {
+                    Ok(o) => o,
+                    Err(mut e) => {
+                        e.backtrace.push((
+                            Gc::clone(&method),
+                            unsafe { &*self.instr_spans.get() }[pc],
+                        ));
+                        return SendReturn::Err(e);
+                    }
+                }
+            }};
+        }
+
         let stack_start = unsafe { &*self.stack.get() }.len();
         loop {
             let instr = {
@@ -416,6 +422,16 @@ impl VM {
     }
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
+        macro_rules! stry {
+            ($elem:expr) => {{
+                let e = $elem;
+                match e {
+                    Ok(o) => o,
+                    Err(e) => return SendReturn::Err(e),
+                }
+            }};
+        }
+
         match prim {
             Primitive::Add => {
                 unsafe { &mut *self.stack.get() }
