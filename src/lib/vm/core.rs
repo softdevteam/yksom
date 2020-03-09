@@ -328,7 +328,8 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Int(i) => {
-                    unsafe { &mut *self.stack.get() }.push(stry!(Val::from_isize(self, i)));
+                    // from_isize(i) cannot fail so the unwrap() is safe.
+                    unsafe { &mut *self.stack.get() }.push(Val::from_isize(self, i).unwrap());
                     pc += 1;
                 }
                 Instr::Pop => {
