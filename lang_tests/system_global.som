@@ -9,9 +9,9 @@ VM:
     String
     21
     21
-    nil
-    true
-    false
+    a
+    b
+    c
 "
 
 system_global = (

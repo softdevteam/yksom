@@ -14,7 +14,7 @@ use crate::vm::{
 #[derive(Debug, GcLayout)]
 pub struct String_ {
     s: String,
-    is_str: bool,
+    pub is_str: bool,
 }
 
 impl Obj for String_ {

@@ -11,7 +11,7 @@ use lrpar::{Lexer, Span};
 use crate::{
     compiler::{
         ast,
-        instrs::{Builtin, Instr, Primitive},
+        instrs::{Instr, Primitive},
         StorageT,
     },
     vm::{
@@ -364,7 +364,15 @@ impl<'a> Compiler<'a> {
     fn c_expr(&mut self, vm: &VM, expr: &ast::Expr) -> CompileResult<usize> {
         match expr {
             ast::Expr::Assign { span, id, expr } => {
-                let (depth, var_num) = self.find_var(*id)?;
+                let (depth, var_num) = match self.find_var(*id) {
+                    Some((d, v)) => (d, v),
+                    None => {
+                        return Err(vec![(
+                            *span,
+                            format!("No such field '{}' in class", self.lexer.span_str(*id)),
+                        )])
+                    }
+                };
                 let max_stack = self.c_expr(vm, expr)?;
                 if depth == self.vars_stack.len() - 1 {
                     vm.instrs_push(Instr::InstVarSet(var_num), *span);
@@ -503,26 +511,16 @@ impl<'a> Compiler<'a> {
             }
             ast::Expr::VarLookup(span) => {
                 match self.find_var(*span) {
-                    Ok((depth, var_num)) => {
+                    Some((depth, var_num)) => {
                         if depth == self.vars_stack.len() - 1 {
                             vm.instrs_push(Instr::InstVarLookup(var_num), *span);
                         } else {
                             vm.instrs_push(Instr::VarLookup(depth, var_num), *span);
                         }
                     }
-                    Err(_) => {
-                        let lex_string = self.lexer.span_str(*span);
-                        match lex_string {
-                            "nil" => vm.instrs_push(Instr::Builtin(Builtin::Nil), *span),
-                            "false" => vm.instrs_push(Instr::Builtin(Builtin::False), *span),
-                            "true" => vm.instrs_push(Instr::Builtin(Builtin::True), *span),
-                            _ => {
-                                vm.instrs_push(
-                                    Instr::Global(vm.add_symbol(lex_string.to_string())),
-                                    *span,
-                                );
-                            }
-                        }
+                    None => {
+                        let name = self.lexer.span_str(*span).to_owned();
+                        vm.instrs_push(Instr::GlobalLookup(vm.add_global(name)), *span);
                     }
                 }
                 Ok(1)
@@ -533,13 +531,13 @@ impl<'a> Compiler<'a> {
     /// Find the variable at `span` in the variable stack returning a tuple `Some((depth,
     /// var_num))` or `Err` if the variable isn't found. `depth` is the number of closures away
     /// from the "current" one that the variable is found.
-    fn find_var(&self, span: Span) -> CompileResult<(usize, usize)> {
+    fn find_var(&self, span: Span) -> Option<(usize, usize)> {
         let name = self.lexer.span_str(span);
         for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
             if let Some(n) = vars.get(name) {
-                return Ok((self.vars_stack.len() - depth - 1, *n));
+                return Some((self.vars_stack.len() - depth - 1, *n));
             }
         }
-        Err(vec![(span, format!("Unknown variable '{}'", name))])
+        None
     }
 }

@@ -1,0 +1,16 @@
+"
+VM:
+  status: error
+  stderr:
+    ...
+    Unknown global 'unknown'.
+  stdout:
+    1
+"
+
+unknown_global_lookup = (
+    run = (
+        1 println.
+        unknown.
+    )
+)

@@ -156,6 +156,8 @@ pub enum VMErrorKind {
         expected: ObjType,
         got: ObjType,
     },
+    /// An unknown global.
+    UnknownGlobal(String),
     /// An unknown method.
     UnknownMethod(String),
 }
@@ -185,6 +187,7 @@ impl VMErrorKind {
                 expected.as_str(),
                 got.as_str()
             ),
+            VMErrorKind::UnknownGlobal(name) => format!("Unknown global '{}'", name),
             VMErrorKind::UnknownMethod(name) => format!("Unknown method '{}'", name),
         }
     }

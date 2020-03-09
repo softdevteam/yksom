@@ -1,8 +1,7 @@
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
     Block(usize),
-    Builtin(Builtin),
-    Global(usize),
+    GlobalLookup(usize),
     ClosureReturn(usize),
     Double(f64),
     InstVarLookup(usize),
@@ -15,14 +14,6 @@ pub enum Instr {
     Symbol(usize),
     VarLookup(usize, usize),
     VarSet(usize, usize),
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Builtin {
-    False,
-    Nil,
-    System,
-    True,
 }
 
 #[derive(Clone, Copy, Debug)]
