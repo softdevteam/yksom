@@ -351,8 +351,31 @@ impl VM {
                     pc += 1;
                 }
                 Instr::GlobalLookup(i) => {
-                    let v = stry!(self.get_legal_global(i));
-                    unsafe { &mut *self.stack.get() }.push(v);
+                    let v = unsafe { &mut *self.globals.get() }[i].clone();
+                    if v.valkind() != ValKind::ILLEGAL {
+                        // The global value is already set
+                        unsafe { &mut *self.stack.get() }.push(v.clone());
+                    } else {
+                        // We have to call `self unknownGlobal:<symbol name>`.
+                        let cls_val = rcv.get_class(self);
+                        let cls: &Class = stry!(cls_val.downcast(self));
+                        let meth = stry!(cls.get_method(self, "unknownGlobal:"));
+                        self.current_frame()
+                            .set_sp(unsafe { &*self.stack.get() }.len());
+                        let name = {
+                            let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
+                            // XXX O(n) lookup!
+                            reverse_globals
+                                .iter()
+                                .find(|(_, j)| **j == i)
+                                .map(|(n, _)| n)
+                                .unwrap()
+                                .clone()
+                        };
+                        let symbol = String_::new(self, name, false);
+                        unsafe { &mut *self.stack.get() }.push(symbol);
+                        send_args_on_stack!(rcv.clone(), meth, 1);
+                    }
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
@@ -561,6 +584,21 @@ impl VM {
                 unsafe { &mut *self.stack.get() }.push(stry!(
                     rcv.less_than_equals(self, unsafe { &mut *self.stack.get() }.pop())
                 ));
+                SendReturn::Val
+            }
+            Primitive::Load => {
+                let name_val = unsafe { &mut *self.stack.get() }.pop();
+                // XXX This should use Symbols not strings.
+                let name: &String_ = stry!(name_val.downcast(self));
+                match self.find_class(name.as_str()) {
+                    Ok(ref p) => {
+                        let cls = self.compile(p, true);
+                        unsafe { &mut *self.stack.get() }.push(cls);
+                    }
+                    Err(_) => {
+                        unsafe { &mut *self.stack.get() }.push(self.nil.clone());
+                    }
+                }
                 SendReturn::Val
             }
             Primitive::Mod => {

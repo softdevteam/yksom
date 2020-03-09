@@ -3,7 +3,7 @@ Class = (
 
     name     = primitive
 
-    asString = ( ^self name )
+    asString = ( ^self name asString )
 
     superclass = primitive
 )

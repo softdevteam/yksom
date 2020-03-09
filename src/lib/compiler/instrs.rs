@@ -39,6 +39,7 @@ pub enum Primitive {
     InstVarAt,
     InstVarAtPut,
     InstVarNamed,
+    Load,
     LessThan,
     LessThanEquals,
     Mod,
