@@ -29,7 +29,7 @@ use crate::{
 pub const SOM_EXTENSION: &str = "som";
 
 #[derive(Debug)]
-/// The (internal) result of a SOM send.
+/// The result of a non-top-level SOM send.
 enum SendReturn {
     /// A closure wants to perform a return *n* frames up the call stack.
     ClosureReturn(usize),
@@ -212,7 +212,8 @@ impl VM {
     }
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
-    pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
+    pub fn top_level_send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
+        assert!(self.frames_len() == 0);
         let cls = rcv.get_class(self);
         let meth = cls.downcast::<Class>(self)?.get_method(self, msg)?;
         match meth.body {
@@ -236,10 +237,31 @@ impl VM {
                 let r = self.exec_user(rcv, Gc::clone(&meth), bytecode_off);
                 self.frame_pop();
                 match r {
-                    SendReturn::ClosureReturn(_) => unimplemented!(),
+                    SendReturn::ClosureReturn(_) => unreachable!(),
                     SendReturn::Err(e) => Err(Box::new(*e)),
                     SendReturn::Val => Ok(unsafe { &mut *self.stack.get() }.pop()),
                 }
+            }
+        }
+    }
+
+    /// This function should only be called via the `send_args_on_stack!` macro.
+    fn send_args_on_stack(&self, rcv: Val, method: Gc<Method>, nargs: usize) -> SendReturn {
+        match method.body {
+            MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
+            MethodBody::User {
+                num_vars,
+                bytecode_off,
+                max_stack,
+            } => {
+                if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
+                    panic!("Not enough stack space to execute method.");
+                }
+                let nframe = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
+                unsafe { &mut *self.frames.get() }.push(nframe);
+                let r = self.exec_user(rcv, Gc::clone(&method), bytecode_off);
+                self.frame_pop();
+                r
             }
         }
     }
@@ -255,12 +277,28 @@ impl VM {
                 match e {
                     Ok(o) => o,
                     Err(mut e) => {
-                        e.backtrace.push((
-                            Gc::clone(&method),
-                            unsafe { &*self.instr_spans.get() }[pc],
-                        ));
+                        e.backtrace
+                            .push((Gc::clone(&method), unsafe { &*self.instr_spans.get() }[pc]));
                         return SendReturn::Err(e);
                     }
+                }
+            }};
+        }
+
+        macro_rules! send_args_on_stack {
+            ($send_rcv:expr, $send_method:expr, $nargs:expr) => {{
+                match self.send_args_on_stack($send_rcv, $send_method, $nargs) {
+                    SendReturn::ClosureReturn(d) => {
+                        if d > 0 {
+                            return SendReturn::ClosureReturn(d - 1);
+                        }
+                    }
+                    SendReturn::Err(mut e) => {
+                        e.backtrace
+                            .push((Gc::clone(&method), unsafe { &*self.instr_spans.get() }[pc]));
+                        return SendReturn::Err(e);
+                    }
+                    SendReturn::Val => (),
                 }
             }};
         }
@@ -354,46 +392,15 @@ impl VM {
                         (rcv, nargs, meth)
                     };
 
+                    if let MethodBody::Primitive(Primitive::Restart) = meth.body {
+                        unsafe { &mut *self.stack.get() }.truncate(stack_start);
+                        pc = meth_start_pc;
+                        continue;
+                    }
+
                     self.current_frame()
                         .set_sp(unsafe { &*self.stack.get() }.len() - nargs);
-                    let r = match meth.body {
-                        MethodBody::Primitive(Primitive::Restart) => {
-                            unsafe { &mut *self.stack.get() }.truncate(stack_start);
-                            pc = meth_start_pc;
-                            continue;
-                        }
-                        MethodBody::Primitive(p) => self.exec_primitive(p, send_rcv),
-                        MethodBody::User {
-                            num_vars,
-                            bytecode_off,
-                            max_stack,
-                        } => {
-                            if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
-                                panic!("Not enough stack space to execute method.");
-                            }
-                            let nframe =
-                                Frame::new(self, true, send_rcv.clone(), None, num_vars, *nargs);
-                            unsafe { &mut *self.frames.get() }.push(nframe);
-                            let r = self.exec_user(send_rcv, Gc::clone(&meth), bytecode_off);
-                            self.frame_pop();
-                            r
-                        }
-                    };
-                    match r {
-                        SendReturn::ClosureReturn(d) => {
-                            if d > 0 {
-                                return SendReturn::ClosureReturn(d - 1);
-                            }
-                        }
-                        SendReturn::Err(mut e) => {
-                            e.backtrace.push((
-                                Gc::clone(&method),
-                                unsafe { &*self.instr_spans.get() }[pc],
-                            ));
-                            return SendReturn::Err(e);
-                        }
-                        SendReturn::Val => (),
-                    }
+                    send_args_on_stack!(send_rcv, meth, *nargs);
                     pc += 1;
                 }
                 Instr::String(string_off) => {
