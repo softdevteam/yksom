@@ -2,8 +2,6 @@
 
 use std::cell::UnsafeCell;
 
-use abgc_derive::GcLayout;
-
 use crate::vm::{
     core::VM,
     objects::{Class, Obj, ObjType, StaticObjType},
@@ -11,7 +9,7 @@ use crate::vm::{
 };
 
 /// An instance of a user class.
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 pub struct Inst {
     class: Val,
     inst_vars: UnsafeCell<Vec<Val>>,

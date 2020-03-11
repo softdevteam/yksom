@@ -29,15 +29,14 @@ lazy_static = "1.3"
 regex = "1.1"
 
 [dependencies]
-abgc = { git="https://github.com/softdevteam/abgc" }
-abgc_derive = { git="https://github.com/softdevteam/abgc" }
+rboehm = { git = "https://github.com/softdevteam/rboehm" }
 arrayvec = "0.5"
 cfgrammar = "0.6"
 getopts = "0.2"
 itertools = "0.8"
 lrlex = "0.6"
 lrpar = "0.6"
-natrob = { git="https://github.com/softdevteam/natrob", features=["abgc"] }
+natrob = { git="https://github.com/softdevteam/natrob", features=["rboehm"] }
 num-bigint = "0.2"
 num-integer = "0.1"
 num_enum = "0.3"

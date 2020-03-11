@@ -2,8 +2,6 @@
 
 use std::str;
 
-use abgc_derive::GcLayout;
-
 use crate::vm::{
     core::VM,
     error::VMError,
@@ -11,7 +9,7 @@ use crate::vm::{
     val::{NotUnboxable, Val},
 };
 
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 pub struct String_ {
     s: String,
     pub is_str: bool,

@@ -13,7 +13,6 @@
 
 use std::convert::TryFrom;
 
-use abgc_derive::GcLayout;
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
@@ -24,7 +23,7 @@ use crate::vm::{
     val::{NotUnboxable, Val},
 };
 
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 /// A boxed arbitrary sized `BigInt`.
 pub struct ArbInt {
     val: BigInt,
@@ -335,7 +334,7 @@ impl ArbInt {
     }
 }
 
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 /// A boxed `isize`.
 pub struct Int {
     val: isize,

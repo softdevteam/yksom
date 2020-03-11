@@ -1,6 +1,5 @@
 #![allow(clippy::new_ret_no_self)]
 
-use abgc_derive::GcLayout;
 use num_traits::{ToPrimitive, Zero};
 
 use crate::vm::{
@@ -10,7 +9,7 @@ use crate::vm::{
     val::{NotUnboxable, Val},
 };
 
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 /// A boxed Double (which is synonymous with a f64 in yksom).
 pub struct Double {
     val: f64,

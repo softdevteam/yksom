@@ -1,6 +1,6 @@
 use std::{fs::read_to_string, io::stderr};
 
-use abgc::Gc;
+use rboehm::Gc;
 use lrpar::Span;
 use termion::{is_tty, style};
 
