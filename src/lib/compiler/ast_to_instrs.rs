@@ -120,7 +120,7 @@ impl<'a> Compiler<'a> {
         let cls_val = Val::from_obj(
             vm,
             Class {
-                name: String_::new(vm, name, true),
+                name: String_::new(vm, name, false),
                 path: compiler.path.to_path_buf(),
                 instrs_off,
                 supercls,
@@ -247,6 +247,7 @@ impl<'a> Compiler<'a> {
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
+                "exit:" => Ok(MethodBody::Primitive(Primitive::Exit)),
                 "global:" => Ok(MethodBody::Primitive(Primitive::Global)),
                 "global:put:" => Ok(MethodBody::Primitive(Primitive::GlobalPut)),
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
@@ -255,6 +256,7 @@ impl<'a> Compiler<'a> {
                 "instVarAt:" => Ok(MethodBody::Primitive(Primitive::InstVarAt)),
                 "instVarAt:put:" => Ok(MethodBody::Primitive(Primitive::InstVarAtPut)),
                 "instVarNamed:" => Ok(MethodBody::Primitive(Primitive::InstVarNamed)),
+                "load:" => Ok(MethodBody::Primitive(Primitive::Load)),
                 "name" => Ok(MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(MethodBody::Primitive(Primitive::New)),
                 "objectSize" => Ok(MethodBody::Primitive(Primitive::ObjectSize)),

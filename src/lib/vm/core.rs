@@ -3,6 +3,7 @@
 use std::{
     cell::UnsafeCell,
     collections::HashMap,
+    convert::TryFrom,
     path::{Path, PathBuf},
     process,
 };
@@ -17,7 +18,9 @@ use crate::{
     },
     vm::{
         error::{VMError, VMErrorKind},
-        objects::{Block, BlockInfo, Class, Double, Inst, Method, MethodBody, String_},
+        objects::{
+            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, StaticObjType, String_,
+        },
         somstack::SOMStack,
         val::{Val, ValKind},
     },
@@ -26,7 +29,7 @@ use crate::{
 pub const SOM_EXTENSION: &str = "som";
 
 #[derive(Debug)]
-/// The (internal) result of a SOM send.
+/// The result of a non-top-level SOM send.
 enum SendReturn {
     /// A closure wants to perform a return *n* frames up the call stack.
     ClosureReturn(usize),
@@ -34,17 +37,6 @@ enum SendReturn {
     Err(Box<VMError>),
     /// A return value has been left at the appropriate place on the SOM stack.
     Val,
-}
-
-/// A convenience macro for use in the `exec_*` functions.
-macro_rules! stry {
-    ($elem:expr) => {{
-        let e = $elem;
-        match e {
-            Ok(o) => o,
-            Err(e) => return SendReturn::Err(e),
-        }
-    }};
 }
 
 /// The core VM struct. Although SOM is single-threaded, we roughly model what a multi-threaded VM
@@ -220,7 +212,8 @@ impl VM {
     }
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
-    pub fn send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
+    pub fn top_level_send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
+        assert!(self.frames_len() == 0);
         let cls = rcv.get_class(self);
         let meth = cls.downcast::<Class>(self)?.get_method(self, msg)?;
         match meth.body {
@@ -244,10 +237,31 @@ impl VM {
                 let r = self.exec_user(rcv, Gc::clone(&meth), bytecode_off);
                 self.frame_pop();
                 match r {
-                    SendReturn::ClosureReturn(_) => unimplemented!(),
+                    SendReturn::ClosureReturn(_) => unreachable!(),
                     SendReturn::Err(e) => Err(Box::new(*e)),
                     SendReturn::Val => Ok(unsafe { &mut *self.stack.get() }.pop()),
                 }
+            }
+        }
+    }
+
+    /// This function should only be called via the `send_args_on_stack!` macro.
+    fn send_args_on_stack(&self, rcv: Val, method: Gc<Method>, nargs: usize) -> SendReturn {
+        match method.body {
+            MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
+            MethodBody::User {
+                num_vars,
+                bytecode_off,
+                max_stack,
+            } => {
+                if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
+                    panic!("Not enough stack space to execute method.");
+                }
+                let nframe = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
+                unsafe { &mut *self.frames.get() }.push(nframe);
+                let r = self.exec_user(rcv, Gc::clone(&method), bytecode_off);
+                self.frame_pop();
+                r
             }
         }
     }
@@ -256,6 +270,39 @@ impl VM {
     /// calling this function.
     fn exec_user(&self, rcv: Val, method: Gc<Method>, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
+
+        macro_rules! stry {
+            ($elem:expr) => {{
+                let e = $elem;
+                match e {
+                    Ok(o) => o,
+                    Err(mut e) => {
+                        e.backtrace
+                            .push((Gc::clone(&method), unsafe { &*self.instr_spans.get() }[pc]));
+                        return SendReturn::Err(e);
+                    }
+                }
+            }};
+        }
+
+        macro_rules! send_args_on_stack {
+            ($send_rcv:expr, $send_method:expr, $nargs:expr) => {{
+                match self.send_args_on_stack($send_rcv, $send_method, $nargs) {
+                    SendReturn::ClosureReturn(d) => {
+                        if d > 0 {
+                            return SendReturn::ClosureReturn(d - 1);
+                        }
+                    }
+                    SendReturn::Err(mut e) => {
+                        e.backtrace
+                            .push((Gc::clone(&method), unsafe { &*self.instr_spans.get() }[pc]));
+                        return SendReturn::Err(e);
+                    }
+                    SendReturn::Val => (),
+                }
+            }};
+        }
+
         let stack_start = unsafe { &*self.stack.get() }.len();
         loop {
             let instr = {
@@ -304,8 +351,31 @@ impl VM {
                     pc += 1;
                 }
                 Instr::GlobalLookup(i) => {
-                    let v = stry!(self.get_legal_global(i));
-                    unsafe { &mut *self.stack.get() }.push(v);
+                    let v = unsafe { &mut *self.globals.get() }[i].clone();
+                    if v.valkind() != ValKind::ILLEGAL {
+                        // The global value is already set
+                        unsafe { &mut *self.stack.get() }.push(v.clone());
+                    } else {
+                        // We have to call `self unknownGlobal:<symbol name>`.
+                        let cls_val = rcv.get_class(self);
+                        let cls: &Class = stry!(cls_val.downcast(self));
+                        let meth = stry!(cls.get_method(self, "unknownGlobal:"));
+                        self.current_frame()
+                            .set_sp(unsafe { &*self.stack.get() }.len());
+                        let name = {
+                            let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
+                            // XXX O(n) lookup!
+                            reverse_globals
+                                .iter()
+                                .find(|(_, j)| **j == i)
+                                .map(|(n, _)| n)
+                                .unwrap()
+                                .clone()
+                        };
+                        let symbol = String_::new(self, name, false);
+                        unsafe { &mut *self.stack.get() }.push(symbol);
+                        send_args_on_stack!(rcv.clone(), meth, 1);
+                    }
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
@@ -319,7 +389,8 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Int(i) => {
-                    unsafe { &mut *self.stack.get() }.push(stry!(Val::from_isize(self, i)));
+                    // from_isize(i) cannot fail so the unwrap() is safe.
+                    unsafe { &mut *self.stack.get() }.push(Val::from_isize(self, i).unwrap());
                     pc += 1;
                 }
                 Instr::Pop => {
@@ -344,46 +415,15 @@ impl VM {
                         (rcv, nargs, meth)
                     };
 
+                    if let MethodBody::Primitive(Primitive::Restart) = meth.body {
+                        unsafe { &mut *self.stack.get() }.truncate(stack_start);
+                        pc = meth_start_pc;
+                        continue;
+                    }
+
                     self.current_frame()
                         .set_sp(unsafe { &*self.stack.get() }.len() - nargs);
-                    let r = match meth.body {
-                        MethodBody::Primitive(Primitive::Restart) => {
-                            unsafe { &mut *self.stack.get() }.truncate(stack_start);
-                            pc = meth_start_pc;
-                            continue;
-                        }
-                        MethodBody::Primitive(p) => self.exec_primitive(p, send_rcv),
-                        MethodBody::User {
-                            num_vars,
-                            bytecode_off,
-                            max_stack,
-                        } => {
-                            if unsafe { &*self.stack.get() }.remaining_capacity() < max_stack {
-                                panic!("Not enough stack space to execute method.");
-                            }
-                            let nframe =
-                                Frame::new(self, true, send_rcv.clone(), None, num_vars, *nargs);
-                            unsafe { &mut *self.frames.get() }.push(nframe);
-                            let r = self.exec_user(send_rcv, Gc::clone(&meth), bytecode_off);
-                            self.frame_pop();
-                            r
-                        }
-                    };
-                    match r {
-                        SendReturn::ClosureReturn(d) => {
-                            if d > 0 {
-                                return SendReturn::ClosureReturn(d - 1);
-                            }
-                        }
-                        SendReturn::Err(mut e) => {
-                            e.backtrace.push((
-                                Gc::clone(&method),
-                                unsafe { &*self.instr_spans.get() }[pc],
-                            ));
-                            return SendReturn::Err(e);
-                        }
-                        SendReturn::Val => (),
-                    }
+                    send_args_on_stack!(send_rcv, meth, *nargs);
                     pc += 1;
                 }
                 Instr::String(string_off) => {
@@ -413,6 +453,16 @@ impl VM {
     }
 
     fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
+        macro_rules! stry {
+            ($elem:expr) => {{
+                let e = $elem;
+                match e {
+                    Ok(o) => o,
+                    Err(e) => return SendReturn::Err(e),
+                }
+            }};
+        }
+
         match prim {
             Primitive::Add => {
                 unsafe { &mut *self.stack.get() }
@@ -464,6 +514,29 @@ impl VM {
                 ));
                 SendReturn::Val
             }
+            Primitive::Exit => {
+                let c_val = unsafe { &mut *self.stack.get() }.pop();
+                // We now have to undertake a slightly awkward dance: unknown to the user,
+                // integers are unboxed, boxed, or big ints. Just because we can't convert the
+                // value to an isize doesn't mean that the user hasn't handed us an integer: we
+                // have to craft a special error message below to capture this.
+                if let Some(c) = c_val.as_isize(self) {
+                    if let Ok(c) = i32::try_from(c) {
+                        process::exit(c);
+                    }
+                }
+                if c_val.get_class(self) == self.int_cls {
+                    SendReturn::Err(VMError::new(self, VMErrorKind::DomainError))
+                } else {
+                    SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::TypeError {
+                            expected: Int::static_objtype(),
+                            got: c_val.dyn_objtype(self),
+                        },
+                    ))
+                }
+            }
             Primitive::Global => {
                 let name_val = unsafe { &mut *self.stack.get() }.pop();
                 // XXX This should use Symbols not strings.
@@ -511,6 +584,21 @@ impl VM {
                 unsafe { &mut *self.stack.get() }.push(stry!(
                     rcv.less_than_equals(self, unsafe { &mut *self.stack.get() }.pop())
                 ));
+                SendReturn::Val
+            }
+            Primitive::Load => {
+                let name_val = unsafe { &mut *self.stack.get() }.pop();
+                // XXX This should use Symbols not strings.
+                let name: &String_ = stry!(name_val.downcast(self));
+                match self.find_class(name.as_str()) {
+                    Ok(ref p) => {
+                        let cls = self.compile(p, true);
+                        unsafe { &mut *self.stack.get() }.push(cls);
+                    }
+                    Err(_) => {
+                        unsafe { &mut *self.stack.get() }.push(self.nil.clone());
+                    }
+                }
                 SendReturn::Val
             }
             Primitive::Mod => {

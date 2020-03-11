@@ -1,0 +1,12 @@
+"
+VM:
+  status: success
+  stdout:
+    Array
+"
+
+class_load = (
+    run = (
+        Array println.
+    )
+)

@@ -1,11 +1,10 @@
 "
 VM:
   status: error
-  stderr:
-    ...
-    Unknown global 'unknown'.
   stdout:
     1
+
+    ERROR: Unable to resolve unknown
 "
 
 unknown_global_lookup = (
