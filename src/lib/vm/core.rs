@@ -63,7 +63,7 @@ pub struct VM {
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
-    blockinfos: UnsafeCell<Vec<BlockInfo>>,
+    blockinfos: Vec<BlockInfo>,
     classes: UnsafeCell<Vec<Val>>,
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
@@ -116,7 +116,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
-            blockinfos: UnsafeCell::new(Vec::new()),
+            blockinfos: Vec::new(),
             classes: UnsafeCell::new(Vec::new()),
             globals: UnsafeCell::new(Vec::new()),
             reverse_globals: UnsafeCell::new(HashMap::new()),
@@ -324,7 +324,7 @@ impl VM {
             match instr {
                 Instr::Block(blkinfo_off) => {
                     let (num_params, bytecode_end) = {
-                        let blkinfo = &unsafe { &*self.blockinfos.get() }[blkinfo_off];
+                        let blkinfo = &self.blockinfos[blkinfo_off];
                         (blkinfo.num_params, blkinfo.bytecode_end)
                     };
                     let closure = Gc::clone(&self.current_frame().closure);
@@ -701,7 +701,7 @@ impl VM {
             Primitive::Value(nargs) => {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
                 let (num_vars, bytecode_off, max_stack) = {
-                    let blkinfo = &unsafe { &*self.blockinfos.get() }[rcv_blk.blockinfo_off];
+                    let blkinfo = &self.blockinfos[rcv_blk.blockinfo_off];
                     (blkinfo.num_vars, blkinfo.bytecode_off, blkinfo.max_stack)
                 };
                 if self.stack.remaining_capacity() < max_stack {
@@ -743,16 +743,14 @@ impl VM {
 
     /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
     pub fn push_blockinfo(&mut self, blkinfo: BlockInfo) -> usize {
-        let bis = unsafe { &mut *self.blockinfos.get() };
-        let i = bis.len();
-        bis.push(blkinfo);
-        i
+        let len = self.blockinfos.len();
+        self.blockinfos.push(blkinfo);
+        len
     }
 
     /// Update the `BlockInfo` at index `idx` to `blkinfo`.
     pub fn set_blockinfo(&mut self, idx: usize, blkinfo: BlockInfo) {
-        let bis = unsafe { &mut *self.blockinfos.get() };
-        bis[idx] = blkinfo;
+        self.blockinfos[idx] = blkinfo;
     }
 
     /// Add an empty inline cache to the VM, returning its index.
@@ -1061,7 +1059,7 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
-            blockinfos: UnsafeCell::new(Vec::new()),
+            blockinfos: Vec::new(),
             classes: UnsafeCell::new(Vec::new()),
             globals: UnsafeCell::new(Vec::new()),
             reverse_globals: UnsafeCell::new(HashMap::new()),
