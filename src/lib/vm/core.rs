@@ -67,7 +67,7 @@ pub struct VM {
     classes: Vec<Val>,
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
-    globals: UnsafeCell<Vec<Val>>,
+    globals: Vec<Val>,
     reverse_globals: UnsafeCell<HashMap<String, usize>>,
     inline_caches: UnsafeCell<Vec<Option<(Val, Gc<Method>)>>>,
     /// `instrs` and `instr_span`s are always the same length: they are separated only because we
@@ -118,7 +118,7 @@ impl VM {
             true_: Val::illegal(),
             blockinfos: Vec::new(),
             classes: Vec::new(),
-            globals: UnsafeCell::new(Vec::new()),
+            globals: Vec::new(),
             reverse_globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
@@ -366,7 +366,7 @@ impl VM {
                     pc += 1;
                 }
                 Instr::GlobalLookup(i) => {
-                    let v = unsafe { &mut *self.globals.get() }[i].clone();
+                    let v = &self.globals[i];
                     if v.valkind() != ValKind::ILLEGAL {
                         // The global value is already set
                         self.stack.push(v.clone());
@@ -864,10 +864,9 @@ impl VM {
         if let Some(i) = reverse_globals.get(&s) {
             *i
         } else {
-            let globals = unsafe { &mut *self.globals.get() };
-            let len = globals.len();
+            let len = self.globals.len();
             reverse_globals.insert(s.clone(), len);
-            globals.push(Val::illegal());
+            self.globals.push(Val::illegal());
             len
         }
     }
@@ -878,8 +877,7 @@ impl VM {
     pub fn get_global_or_nil(&mut self, name: &str) -> Val {
         let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
         if let Some(i) = reverse_globals.get(name).cloned() {
-            let globals = unsafe { &mut *self.globals.get() };
-            let v = &globals[i];
+            let v = &self.globals[i];
             if v.valkind() != ValKind::ILLEGAL {
                 return v.clone();
             }
@@ -890,8 +888,7 @@ impl VM {
     /// Get the global at position `i`: if it has not been set (i.e. is `ValKind::ILLEGAL`) this
     /// will return `Err(...)`.
     pub fn get_legal_global(&mut self, i: usize) -> Result<Val, Box<VMError>> {
-        let globals = unsafe { &mut *self.globals.get() };
-        let v = &globals[i];
+        let v = &self.globals[i];
         if v.valkind() != ValKind::ILLEGAL {
             return Ok(v.clone());
         }
@@ -911,16 +908,15 @@ impl VM {
 
     /// Set the global `name` to the value `v`, overwriting the previous value (if any).
     pub fn set_global(&mut self, name: &str, v: Val) {
-        let globals = unsafe { &mut *self.globals.get() };
         let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
-        debug_assert_eq!(globals.len(), reverse_globals.len());
+        debug_assert_eq!(self.globals.len(), reverse_globals.len());
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
         if let Some(i) = reverse_globals.get(name) {
-            globals[*i] = v;
+            self.globals[*i] = v;
         } else {
-            reverse_globals.insert(name.to_owned(), globals.len());
-            globals.push(v);
+            reverse_globals.insert(name.to_owned(), self.globals.len());
+            self.globals.push(v);
         }
     }
 }
@@ -1061,7 +1057,7 @@ impl VM {
             true_: Val::illegal(),
             blockinfos: Vec::new(),
             classes: Vec::new(),
-            globals: UnsafeCell::new(Vec::new()),
+            globals: Vec::new(),
             reverse_globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
             instrs: UnsafeCell::new(Vec::new()),
