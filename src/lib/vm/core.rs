@@ -73,7 +73,7 @@ pub struct VM {
     /// `instrs` and `instr_span`s are always the same length: they are separated only because we
     /// rarely access `instr_spans`.
     instrs: Vec<Instr>,
-    instr_spans: UnsafeCell<Vec<Span>>,
+    instr_spans: Vec<Span>,
     sends: UnsafeCell<Vec<(String, usize)>>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
@@ -122,7 +122,7 @@ impl VM {
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
             instrs: Vec::new(),
-            instr_spans: UnsafeCell::new(Vec::new()),
+            instr_spans: Vec::new(),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: SOMStack::new(),
@@ -288,8 +288,7 @@ impl VM {
                 match e {
                     Ok(o) => o,
                     Err(mut e) => {
-                        e.backtrace
-                            .push((Gc::clone(&method), unsafe { &*self.instr_spans.get() }[pc]));
+                        e.backtrace.push((Gc::clone(&method), self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                 }
@@ -305,8 +304,7 @@ impl VM {
                         }
                     }
                     SendReturn::Err(mut e) => {
-                        e.backtrace
-                            .push((Gc::clone(&method), unsafe { &*self.instr_spans.get() }[pc]));
+                        e.backtrace.push((Gc::clone(&method), self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                     SendReturn::Val => (),
@@ -791,12 +789,9 @@ impl VM {
     /// Push `instr` to the end of the current vector of instructions, associating `span` with it
     /// for the purposes of backtraces.
     pub fn instrs_push(&mut self, instr: Instr, span: Span) {
-        debug_assert_eq!(
-            self.instrs.len(),
-            unsafe { &mut *self.instr_spans.get() }.len()
-        );
+        debug_assert_eq!(self.instrs.len(), self.instr_spans.len());
         self.instrs.push(instr);
-        unsafe { &mut *self.instr_spans.get() }.push(span);
+        self.instr_spans.push(span);
     }
 
     /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
@@ -1053,7 +1048,7 @@ impl VM {
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
             instrs: Vec::new(),
-            instr_spans: UnsafeCell::new(Vec::new()),
+            instr_spans: Vec::new(),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
             stack: SOMStack::new(),
