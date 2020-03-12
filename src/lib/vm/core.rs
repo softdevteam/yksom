@@ -481,12 +481,14 @@ impl VM {
 
         match prim {
             Primitive::Add => {
-                let v = stry!(rcv.add(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.add(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::And => {
-                let v = stry!(rcv.and(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.and(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -501,7 +503,8 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::BitXor => {
-                let v = stry!(rcv.xor(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.xor(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -517,17 +520,20 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Div => {
-                let v = stry!(rcv.div(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.div(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::DoubleDiv => {
-                let v = stry!(rcv.double_div(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.double_div(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Equals => {
-                let v = stry!(rcv.equals(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.equals(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -570,12 +576,14 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::GreaterThan => {
-                let v = stry!(rcv.greater_than(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.greater_than(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::GreaterThanEquals => {
-                let v = stry!(rcv.greater_than_equals(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.greater_than_equals(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -586,12 +594,14 @@ impl VM {
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
             Primitive::LessThan => {
-                let v = stry!(rcv.less_than(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.less_than(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::LessThanEquals => {
-                let v = stry!(rcv.less_than_equals(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.less_than_equals(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -612,12 +622,14 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Mod => {
-                let v = stry!(rcv.modulus(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.modulus(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Mul => {
-                let v = stry!(rcv.mul(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.mul(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -632,7 +644,8 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::NotEquals => {
-                let v = stry!(rcv.not_equals(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.not_equals(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -642,7 +655,8 @@ impl VM {
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
             Primitive::RefEquals => {
-                let v = stry!(rcv.ref_equals(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.ref_equals(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -662,7 +676,8 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Shl => {
-                let v = stry!(rcv.shl(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.shl(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -672,7 +687,8 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Sub => {
-                let v = stry!(rcv.sub(self, self.stack.pop()));
+                let v = self.stack.pop();
+                let v = stry!(rcv.sub(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }

@@ -12,7 +12,6 @@
 
 #![feature(alloc_layout_extra)]
 #![feature(allocator_api)]
-#![feature(cell_update)]
 #![feature(coerce_unsized)]
 #![feature(specialization)]
 #![feature(unsize)]
