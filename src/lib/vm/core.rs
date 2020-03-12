@@ -69,7 +69,7 @@ pub struct VM {
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
     globals: Vec<Val>,
     reverse_globals: HashMap<String, usize>,
-    inline_caches: UnsafeCell<Vec<Option<(Val, Gc<Method>)>>>,
+    inline_caches: Vec<Option<(Val, Gc<Method>)>>,
     /// `instrs` and `instr_span`s are always the same length: they are separated only because we
     /// rarely access `instr_spans`.
     instrs: UnsafeCell<Vec<Instr>>,
@@ -120,7 +120,7 @@ impl VM {
             classes: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
-            inline_caches: UnsafeCell::new(Vec::new()),
+            inline_caches: Vec::new(),
             instrs: UnsafeCell::new(Vec::new()),
             instr_spans: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
@@ -754,9 +754,8 @@ impl VM {
 
     /// Add an empty inline cache to the VM, returning its index.
     pub fn new_inline_cache(&mut self) -> usize {
-        let ics = unsafe { &mut *self.inline_caches.get() };
-        let len = ics.len();
-        ics.push(None);
+        let len = self.inline_caches.len();
+        self.inline_caches.push(None);
         len
     }
 
@@ -773,8 +772,7 @@ impl VM {
     ) -> Result<Gc<Method>, Box<VMError>> {
         // Lookup the method in the inline cache.
         {
-            let cache = &unsafe { &*self.inline_caches.get() }[idx];
-            if let Some((cache_cls, cache_meth)) = cache {
+            if let Some((cache_cls, cache_meth)) = &self.inline_caches[idx] {
                 if cache_cls.bit_eq(&rcv_cls) {
                     return Ok(Gc::clone(cache_meth));
                 }
@@ -782,8 +780,7 @@ impl VM {
         }
         // The inline cache is empty or out of date, so store a new value in it.
         let meth = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
-        let ics = unsafe { &mut *self.inline_caches.get() };
-        ics[idx] = Some((rcv_cls, Gc::clone(&meth)));
+        self.inline_caches[idx] = Some((rcv_cls, Gc::clone(&meth)));
         Ok(meth)
     }
 
@@ -1055,7 +1052,7 @@ impl VM {
             classes: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
-            inline_caches: UnsafeCell::new(Vec::new()),
+            inline_caches: Vec::new(),
             instrs: UnsafeCell::new(Vec::new()),
             instr_spans: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
