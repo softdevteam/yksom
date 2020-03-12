@@ -64,7 +64,7 @@ pub struct VM {
     pub system: Val,
     pub true_: Val,
     blockinfos: Vec<BlockInfo>,
-    classes: UnsafeCell<Vec<Val>>,
+    classes: Vec<Val>,
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
     globals: UnsafeCell<Vec<Val>>,
@@ -117,7 +117,7 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: Vec::new(),
-            classes: UnsafeCell::new(Vec::new()),
+            classes: Vec::new(),
             globals: UnsafeCell::new(Vec::new()),
             reverse_globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
@@ -182,7 +182,7 @@ impl VM {
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
-        unsafe { &mut *self.classes.get() }.push(cls_val.clone());
+        self.classes.push(cls_val.clone());
         cls_val
     }
 
@@ -1060,7 +1060,7 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: Vec::new(),
-            classes: UnsafeCell::new(Vec::new()),
+            classes: Vec::new(),
             globals: UnsafeCell::new(Vec::new()),
             reverse_globals: UnsafeCell::new(HashMap::new()),
             inline_caches: UnsafeCell::new(Vec::new()),
