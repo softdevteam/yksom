@@ -72,7 +72,7 @@ pub struct VM {
     inline_caches: Vec<Option<(Val, Gc<Method>)>>,
     /// `instrs` and `instr_span`s are always the same length: they are separated only because we
     /// rarely access `instr_spans`.
-    instrs: UnsafeCell<Vec<Instr>>,
+    instrs: Vec<Instr>,
     instr_spans: UnsafeCell<Vec<Span>>,
     sends: UnsafeCell<Vec<(String, usize)>>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
@@ -121,7 +121,7 @@ impl VM {
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
-            instrs: UnsafeCell::new(Vec::new()),
+            instrs: Vec::new(),
             instr_spans: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
@@ -317,9 +317,8 @@ impl VM {
         let stack_start = self.stack.len();
         loop {
             let instr = {
-                let instrs = unsafe { &*self.instrs.get() };
-                debug_assert!(pc < instrs.len());
-                *unsafe { instrs.get_unchecked(pc) }
+                debug_assert!(pc < self.instrs.len());
+                *unsafe { self.instrs.get_unchecked(pc) }
             };
             match instr {
                 Instr::Block(blkinfo_off) => {
@@ -786,17 +785,17 @@ impl VM {
 
     /// How many instructions are currently present in the VM?
     pub fn instrs_len(&mut self) -> usize {
-        unsafe { &*self.instrs.get() }.len()
+        self.instrs.len()
     }
 
     /// Push `instr` to the end of the current vector of instructions, associating `span` with it
     /// for the purposes of backtraces.
     pub fn instrs_push(&mut self, instr: Instr, span: Span) {
         debug_assert_eq!(
-            unsafe { &mut *self.instrs.get() }.len(),
+            self.instrs.len(),
             unsafe { &mut *self.instr_spans.get() }.len()
         );
-        unsafe { &mut *self.instrs.get() }.push(instr);
+        self.instrs.push(instr);
         unsafe { &mut *self.instr_spans.get() }.push(span);
     }
 
@@ -1053,7 +1052,7 @@ impl VM {
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
-            instrs: UnsafeCell::new(Vec::new()),
+            instrs: Vec::new(),
             instr_spans: UnsafeCell::new(Vec::new()),
             sends: UnsafeCell::new(Vec::new()),
             reverse_sends: UnsafeCell::new(HashMap::new()),
