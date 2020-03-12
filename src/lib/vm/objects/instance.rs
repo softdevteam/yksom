@@ -22,7 +22,7 @@ impl Obj for Inst {
         ObjType::Inst
     }
 
-    fn get_class(&self, _: &VM) -> Val {
+    fn get_class(&self, _: &mut VM) -> Val {
         self.class.clone()
     }
 }
@@ -36,7 +36,7 @@ impl StaticObjType for Inst {
 }
 
 impl Inst {
-    pub fn new(vm: &VM, class: Val) -> Val {
+    pub fn new(vm: &mut VM, class: Val) -> Val {
         let cls: &Class = class.downcast(vm).unwrap();
         let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
         inst_vars.resize(cls.num_inst_vars, Val::illegal());

@@ -28,7 +28,7 @@ impl Obj for Class {
         ObjType::Class
     }
 
-    fn get_class(&self, vm: &VM) -> Val {
+    fn get_class(&self, vm: &mut VM) -> Val {
         vm.cls_cls.clone()
     }
 }
@@ -42,11 +42,11 @@ impl StaticObjType for Class {
 }
 
 impl Class {
-    pub fn name(&self, _: &VM) -> Result<Val, Box<VMError>> {
+    pub fn name(&self, _: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(self.name.clone())
     }
 
-    pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
+    pub fn get_method(&self, vm: &mut VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
         self.methods
             .get(msg)
             .map(|x| Ok(Gc::clone(x)))
@@ -56,7 +56,7 @@ impl Class {
             })
     }
 
-    pub fn superclass(&self, vm: &VM) -> Val {
+    pub fn superclass(&self, vm: &mut VM) -> Val {
         if let Some(superclass) = &self.supercls {
             return superclass.clone();
         }

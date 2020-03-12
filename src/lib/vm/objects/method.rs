@@ -39,7 +39,7 @@ impl Obj for Method {
         ObjType::Method
     }
 
-    fn get_class(&self, _: &VM) -> Val {
+    fn get_class(&self, _: &mut VM) -> Val {
         unimplemented!();
     }
 }
@@ -53,7 +53,7 @@ impl StaticObjType for Method {
 }
 
 impl Method {
-    pub fn new(vm: &VM, name: String, body: MethodBody) -> Method {
+    pub fn new(vm: &mut VM, name: String, body: MethodBody) -> Method {
         Method {
             name,
             body,
@@ -65,7 +65,7 @@ impl Method {
         unsafe { &*self.class.get() }.clone()
     }
 
-    pub fn set_class(&self, _: &VM, class: Val) {
+    pub fn set_class(&self, _: &mut VM, class: Val) {
         *unsafe { &mut *self.class.get() } = class;
     }
 }

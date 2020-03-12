@@ -139,7 +139,8 @@ impl VM {
         vm.obj_cls = vm.init_builtin_class("Object", false);
         vm.cls_cls = vm.init_builtin_class("Class", false);
         vm.nil_cls = vm.init_builtin_class("Nil", true);
-        vm.nil = Inst::new(&vm, vm.nil_cls.clone());
+        let v = vm.nil_cls.clone();
+        vm.nil = Inst::new(&mut vm, v);
 
         // The slightly delicate phase.
         //
@@ -155,22 +156,27 @@ impl VM {
         vm.sym_cls = vm.init_builtin_class("Symbol", false);
         vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
-        vm.false_ = Inst::new(&vm, vm.false_cls.clone());
-        vm.system = Inst::new(&vm, vm.system_cls.clone());
-        vm.true_ = Inst::new(&vm, vm.true_cls.clone());
+        let v = vm.false_cls.clone();
+        vm.false_ = Inst::new(&mut vm, v);
+        let v = vm.system_cls.clone();
+        vm.system = Inst::new(&mut vm, v);
+        let v = vm.true_cls.clone();
+        vm.true_ = Inst::new(&mut vm, v);
 
         // Populate globals.
         vm.set_global("false", vm.false_.clone());
         vm.set_global("nil", vm.nil.clone());
         vm.set_global("true", vm.true_.clone());
-        vm.set_global("system", Inst::new(&vm, vm.system_cls.clone()));
+        let v = vm.system_cls.clone();
+        let v = Inst::new(&mut vm, v);
+        vm.set_global("system", v);
 
         vm
     }
 
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
     /// builtin classes which do not lead to run-time instances of `Inst`.
-    pub fn compile(&self, path: &Path, inst_vars_allowed: bool) -> Val {
+    pub fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
         let cls_val = compile(self, path);
         let cls: &Class = cls_val.downcast(self).unwrap();
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
@@ -180,8 +186,8 @@ impl VM {
         cls_val
     }
 
-    fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
-        for dn in &self.classpath {
+    fn find_class(&mut self, name: &str) -> Result<PathBuf, ()> {
+        for dn in &mut self.classpath {
             let mut pb = PathBuf::new();
             pb.push(dn);
             pb.push(name);
@@ -194,7 +200,7 @@ impl VM {
     }
 
     /// Find and compile the builtin class 'name'.
-    fn init_builtin_class(&self, name: &str, inst_vars_allowed: bool) -> Val {
+    fn init_builtin_class(&mut self, name: &str, inst_vars_allowed: bool) -> Val {
         let path = self
             .find_class(name)
             .unwrap_or_else(|_| panic!("Can't find builtin class '{}'", name));
@@ -206,13 +212,18 @@ impl VM {
     }
 
     /// Inform the user of the error string `error` and then exit.
-    pub fn error(&self, error: &str) -> ! {
+    pub fn error(&mut self, error: &str) -> ! {
         eprintln!("{}", error);
         process::exit(1);
     }
 
     /// Send the message `msg` to the receiver `rcv` with arguments `args`.
-    pub fn top_level_send(&self, rcv: Val, msg: &str, args: Vec<Val>) -> Result<Val, Box<VMError>> {
+    pub fn top_level_send(
+        &mut self,
+        rcv: Val,
+        msg: &str,
+        args: Vec<Val>,
+    ) -> Result<Val, Box<VMError>> {
         assert!(self.frames_len() == 0);
         let cls = rcv.get_class(self);
         let meth = cls.downcast::<Class>(self)?.get_method(self, msg)?;
@@ -246,7 +257,7 @@ impl VM {
     }
 
     /// This function should only be called via the `send_args_on_stack!` macro.
-    fn send_args_on_stack(&self, rcv: Val, method: Gc<Method>, nargs: usize) -> SendReturn {
+    fn send_args_on_stack(&mut self, rcv: Val, method: Gc<Method>, nargs: usize) -> SendReturn {
         match method.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
             MethodBody::User {
@@ -268,7 +279,7 @@ impl VM {
 
     /// Execute a SOM method. Note that the frame for this method must have been created *before*
     /// calling this function.
-    fn exec_user(&self, rcv: Val, method: Gc<Method>, meth_start_pc: usize) -> SendReturn {
+    fn exec_user(&mut self, rcv: Val, method: Gc<Method>, meth_start_pc: usize) -> SendReturn {
         let mut pc = meth_start_pc;
 
         macro_rules! stry {
@@ -316,14 +327,16 @@ impl VM {
                         let blkinfo = &unsafe { &*self.blockinfos.get() }[blkinfo_off];
                         (blkinfo.num_params, blkinfo.bytecode_end)
                     };
-                    self.stack.push(Block::new(
+                    let closure = Gc::clone(&self.current_frame().closure);
+                    let v = Block::new(
                         self,
                         Gc::clone(&method),
                         rcv.clone(),
                         blkinfo_off,
-                        Gc::clone(&self.current_frame().closure),
+                        closure,
                         num_params,
-                    ));
+                    );
+                    self.stack.push(v);
                     pc = bytecode_end;
                 }
                 Instr::ClosureReturn(closure_depth) => {
@@ -362,7 +375,8 @@ impl VM {
                         let cls_val = rcv.get_class(self);
                         let cls: &Class = stry!(cls_val.downcast(self));
                         let meth = stry!(cls.get_method(self, "unknownGlobal:"));
-                        self.current_frame().set_sp(self.stack.len());
+                        let len = self.stack.len();
+                        self.current_frame().set_sp(len);
                         let name = {
                             let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
                             // XXX O(n) lookup!
@@ -373,7 +387,8 @@ impl VM {
                                 .unwrap()
                                 .clone()
                         };
-                        self.stack.push(String_::new(self, name, false));
+                        let v = String_::new(self, name, false);
+                        self.stack.push(v);
                         send_args_on_stack!(rcv.clone(), meth, 1);
                     }
                     pc += 1;
@@ -390,7 +405,8 @@ impl VM {
                 }
                 Instr::Int(i) => {
                     // from_isize(i) cannot fail so the unwrap() is safe.
-                    self.stack.push(Val::from_isize(self, i).unwrap());
+                    let v = Val::from_isize(self, i).unwrap();
+                    self.stack.push(v);
                     pc += 1;
                 }
                 Instr::Pop => {
@@ -421,7 +437,8 @@ impl VM {
                         continue;
                     }
 
-                    self.current_frame().set_sp(self.stack.len() - nargs);
+                    let len = self.stack.len() - nargs;
+                    self.current_frame().set_sp(len);
                     send_args_on_stack!(send_rcv, meth, *nargs);
                     pc += 1;
                 }
@@ -438,7 +455,8 @@ impl VM {
                     pc += 1;
                 }
                 Instr::VarLookup(d, n) => {
-                    self.stack.push(self.current_frame().var_lookup(d, n));
+                    let v = self.current_frame().var_lookup(d, n);
+                    self.stack.push(v);
                     pc += 1;
                 }
                 Instr::VarSet(d, n) => {
@@ -450,7 +468,7 @@ impl VM {
         }
     }
 
-    fn exec_primitive(&self, prim: Primitive, rcv: Val) -> SendReturn {
+    fn exec_primitive(&mut self, prim: Primitive, rcv: Val) -> SendReturn {
         macro_rules! stry {
             ($elem:expr) => {{
                 let e = $elem;
@@ -463,15 +481,18 @@ impl VM {
 
         match prim {
             Primitive::Add => {
-                self.stack.push(stry!(rcv.add(self, self.stack.pop())));
+                let v = stry!(rcv.add(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::And => {
-                self.stack.push(stry!(rcv.and(self, self.stack.pop())));
+                let v = stry!(rcv.and(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::AsString => {
-                self.stack.push(stry!(rcv.to_strval(self)));
+                let v = stry!(rcv.to_strval(self));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::AsSymbol => {
@@ -480,11 +501,13 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::BitXor => {
-                self.stack.push(stry!(rcv.xor(self, self.stack.pop())));
+                let v = stry!(rcv.xor(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Class => {
-                self.stack.push(rcv.get_class(self));
+                let v = rcv.get_class(self);
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Concatenate => {
@@ -494,16 +517,18 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Div => {
-                self.stack.push(stry!(rcv.div(self, self.stack.pop())));
+                let v = stry!(rcv.div(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::DoubleDiv => {
-                self.stack
-                    .push(stry!(rcv.double_div(self, self.stack.pop())));
+                let v = stry!(rcv.double_div(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Equals => {
-                self.stack.push(stry!(rcv.equals(self, self.stack.pop())));
+                let v = stry!(rcv.equals(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Exit => {
@@ -520,13 +545,9 @@ impl VM {
                 if c_val.get_class(self) == self.int_cls {
                     SendReturn::Err(VMError::new(self, VMErrorKind::DomainError))
                 } else {
-                    SendReturn::Err(VMError::new(
-                        self,
-                        VMErrorKind::TypeError {
-                            expected: Int::static_objtype(),
-                            got: c_val.dyn_objtype(self),
-                        },
-                    ))
+                    let expected = Int::static_objtype();
+                    let got = c_val.dyn_objtype(self);
+                    SendReturn::Err(VMError::new(self, VMErrorKind::TypeError { expected, got }))
                 }
             }
             Primitive::Global => {
@@ -549,13 +570,13 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::GreaterThan => {
-                self.stack
-                    .push(stry!(rcv.greater_than(self, self.stack.pop())));
+                let v = stry!(rcv.greater_than(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::GreaterThanEquals => {
-                self.stack
-                    .push(stry!(rcv.greater_than_equals(self, self.stack.pop())));
+                let v = stry!(rcv.greater_than_equals(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Halt => unimplemented!(),
@@ -565,13 +586,13 @@ impl VM {
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
             Primitive::LessThan => {
-                self.stack
-                    .push(stry!(rcv.less_than(self, self.stack.pop())));
+                let v = stry!(rcv.less_than(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::LessThanEquals => {
-                self.stack
-                    .push(stry!(rcv.less_than_equals(self, self.stack.pop())));
+                let v = stry!(rcv.less_than_equals(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Load => {
@@ -584,17 +605,20 @@ impl VM {
                         self.stack.push(cls);
                     }
                     Err(_) => {
-                        self.stack.push(self.nil.clone());
+                        let v = self.nil.clone();
+                        self.stack.push(v);
                     }
                 }
                 SendReturn::Val
             }
             Primitive::Mod => {
-                self.stack.push(stry!(rcv.modulus(self, self.stack.pop())));
+                let v = stry!(rcv.modulus(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Mul => {
-                self.stack.push(stry!(rcv.mul(self, self.stack.pop())));
+                let v = stry!(rcv.mul(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Name => {
@@ -603,12 +627,13 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::New => {
-                self.stack.push(Inst::new(self, rcv));
+                let v = Inst::new(self, rcv);
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::NotEquals => {
-                self.stack
-                    .push(stry!(rcv.not_equals(self, self.stack.pop())));
+                let v = stry!(rcv.not_equals(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::ObjectSize => unimplemented!(),
@@ -617,38 +642,44 @@ impl VM {
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
             Primitive::RefEquals => {
-                self.stack
-                    .push(stry!(rcv.ref_equals(self, self.stack.pop())));
+                let v = stry!(rcv.ref_equals(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Restart => unreachable!(),
             Primitive::PrintNewline => {
                 println!();
-                self.stack.push(self.system.clone());
+                let v = self.system.clone();
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::PrintString => {
                 let v = self.stack.pop();
                 let str_: &String_ = stry!(v.downcast(self));
                 print!("{}", str_.as_str());
-                self.stack.push(self.system.clone());
+                let v = self.system.clone();
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Shl => {
-                self.stack.push(stry!(rcv.shl(self, self.stack.pop())));
+                let v = stry!(rcv.shl(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Sqrt => {
-                self.stack.push(stry!(rcv.sqrt(self)));
+                let v = stry!(rcv.sqrt(self));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Sub => {
-                self.stack.push(stry!(rcv.sub(self, self.stack.pop())));
+                let v = stry!(rcv.sub(self, self.stack.pop()));
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Superclass => {
                 let cls: &Class = stry!(rcv.downcast(self));
-                self.stack.push(cls.superclass(self));
+                let v = cls.superclass(self);
+                self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::Value(nargs) => {
@@ -680,22 +711,22 @@ impl VM {
         }
     }
 
-    fn current_frame(&self) -> &Frame {
+    fn current_frame(&mut self) -> &Frame {
         debug_assert!(!unsafe { &*self.frames.get() }.is_empty());
         let frames_len = unsafe { &*self.frames.get() }.len();
         unsafe { (&*self.frames.get()).get_unchecked(frames_len - 1) }
     }
 
-    fn frame_pop(&self) {
+    fn frame_pop(&mut self) {
         unsafe { &mut *self.frames.get() }.pop();
     }
 
-    pub fn frames_len(&self) -> usize {
+    pub fn frames_len(&mut self) -> usize {
         unsafe { &mut *self.frames.get() }.len()
     }
 
     /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
-    pub fn push_blockinfo(&self, blkinfo: BlockInfo) -> usize {
+    pub fn push_blockinfo(&mut self, blkinfo: BlockInfo) -> usize {
         let bis = unsafe { &mut *self.blockinfos.get() };
         let i = bis.len();
         bis.push(blkinfo);
@@ -703,13 +734,13 @@ impl VM {
     }
 
     /// Update the `BlockInfo` at index `idx` to `blkinfo`.
-    pub fn set_blockinfo(&self, idx: usize, blkinfo: BlockInfo) {
+    pub fn set_blockinfo(&mut self, idx: usize, blkinfo: BlockInfo) {
         let bis = unsafe { &mut *self.blockinfos.get() };
         bis[idx] = blkinfo;
     }
 
     /// Add an empty inline cache to the VM, returning its index.
-    pub fn new_inline_cache(&self) -> usize {
+    pub fn new_inline_cache(&mut self) -> usize {
         let ics = unsafe { &mut *self.inline_caches.get() };
         let len = ics.len();
         ics.push(None);
@@ -722,7 +753,7 @@ impl VM {
     ///
     /// This method guarantees not to mutate `self.sends`.
     pub fn inline_cache_lookup(
-        &self,
+        &mut self,
         idx: usize,
         rcv_cls: Val,
         name: &str,
@@ -744,13 +775,13 @@ impl VM {
     }
 
     /// How many instructions are currently present in the VM?
-    pub fn instrs_len(&self) -> usize {
+    pub fn instrs_len(&mut self) -> usize {
         unsafe { &*self.instrs.get() }.len()
     }
 
     /// Push `instr` to the end of the current vector of instructions, associating `span` with it
     /// for the purposes of backtraces.
-    pub fn instrs_push(&self, instr: Instr, span: Span) {
+    pub fn instrs_push(&mut self, instr: Instr, span: Span) {
         debug_assert_eq!(
             unsafe { &mut *self.instrs.get() }.len(),
             unsafe { &mut *self.instr_spans.get() }.len()
@@ -761,7 +792,7 @@ impl VM {
 
     /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
     /// are also reused.
-    pub fn add_send(&self, send: (String, usize)) -> usize {
+    pub fn add_send(&mut self, send: (String, usize)) -> usize {
         let reverse_sends = unsafe { &mut *self.reverse_sends.get() };
         // We want to avoid `clone`ing `send` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
@@ -778,7 +809,7 @@ impl VM {
 
     /// Add the string `s` to the VM, returning its index. Note that strings are reused, so indexes
     /// are also reused.
-    pub fn add_string(&self, s: String) -> usize {
+    pub fn add_string(&mut self, s: String) -> usize {
         let reverse_strings = unsafe { &mut *self.reverse_strings.get() };
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
@@ -795,7 +826,7 @@ impl VM {
 
     /// Add the symbol `s` to the VM, returning its index. Note that symbols are reused, so indexes
     /// are also reused.
-    pub fn add_symbol(&self, s: String) -> usize {
+    pub fn add_symbol(&mut self, s: String) -> usize {
         let reverse_symbols = unsafe { &mut *self.reverse_symbols.get() };
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
@@ -812,7 +843,7 @@ impl VM {
 
     /// Add the global `n` to the VM, returning its index. Note that global names (like strings)
     /// are reused, so indexes are also reused.
-    pub fn add_global(&self, s: String) -> usize {
+    pub fn add_global(&mut self, s: String) -> usize {
         let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
@@ -830,7 +861,7 @@ impl VM {
     /// Lookup the global `name`: if it has not been added, or has been added but not set, then
     /// `self.nil` will be returned. Notice that this does not change the stored value for this
     /// global.
-    pub fn get_global_or_nil(&self, name: &str) -> Val {
+    pub fn get_global_or_nil(&mut self, name: &str) -> Val {
         let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
         if let Some(i) = reverse_globals.get(name).cloned() {
             let globals = unsafe { &mut *self.globals.get() };
@@ -844,7 +875,7 @@ impl VM {
 
     /// Get the global at position `i`: if it has not been set (i.e. is `ValKind::ILLEGAL`) this
     /// will return `Err(...)`.
-    pub fn get_legal_global(&self, i: usize) -> Result<Val, Box<VMError>> {
+    pub fn get_legal_global(&mut self, i: usize) -> Result<Val, Box<VMError>> {
         let globals = unsafe { &mut *self.globals.get() };
         let v = &globals[i];
         if v.valkind() != ValKind::ILLEGAL {
@@ -865,7 +896,7 @@ impl VM {
     }
 
     /// Set the global `name` to the value `v`, overwriting the previous value (if any).
-    pub fn set_global(&self, name: &str, v: Val) {
+    pub fn set_global(&mut self, name: &str, v: Val) {
         let globals = unsafe { &mut *self.globals.get() };
         let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
         debug_assert_eq!(globals.len(), reverse_globals.len());
@@ -890,7 +921,7 @@ pub struct Frame {
 
 impl Frame {
     fn new(
-        vm: &VM,
+        vm: &mut VM,
         is_method: bool,
         self_val: Val,
         parent_closure: Option<Gc<Closure>>,
@@ -1039,13 +1070,15 @@ mod tests {
 
     #[test]
     fn test_frame() {
-        let vm = VM::new_no_bootstrap();
-        let selfv = Val::from_isize(&vm, 42).unwrap();
-        vm.stack.push(Val::from_isize(&vm, 43).unwrap());
-        vm.stack.push(Val::from_isize(&vm, 44).unwrap());
-        let f = Frame::new(&vm, true, selfv, None, 3, 2);
-        assert_eq!(f.var_lookup(0, 0).as_isize(&vm).unwrap(), 42);
-        assert_eq!(f.var_lookup(0, 1).as_isize(&vm).unwrap(), 43);
-        assert_eq!(f.var_lookup(0, 2).as_isize(&vm).unwrap(), 44);
+        let mut vm = VM::new_no_bootstrap();
+        let selfv = Val::from_isize(&mut vm, 42).unwrap();
+        let v = Val::from_isize(&mut vm, 43).unwrap();
+        vm.stack.push(v);
+        let v = Val::from_isize(&mut vm, 44).unwrap();
+        vm.stack.push(v);
+        let f = Frame::new(&mut vm, true, selfv, None, 3, 2);
+        assert_eq!(f.var_lookup(0, 0).as_isize(&mut vm).unwrap(), 42);
+        assert_eq!(f.var_lookup(0, 1).as_isize(&mut vm).unwrap(), 43);
+        assert_eq!(f.var_lookup(0, 2).as_isize(&mut vm).unwrap(), 44);
     }
 }
