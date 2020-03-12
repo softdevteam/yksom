@@ -101,8 +101,8 @@ impl<'a> Compiler<'a> {
                     let line = compiler
                         .lexer
                         .span_lines_str(span)
-                        .split("\n")
-                        .nth(0)
+                        .split('\n')
+                        .next()
                         .unwrap();
                     format!(
                         "File '{}', line {}, column {}:\n  {}\n{}",

@@ -851,7 +851,7 @@ impl VM {
     /// global.
     pub fn get_global_or_nil(&self, name: &str) -> Val {
         let reverse_globals = unsafe { &mut *self.reverse_globals.get() };
-        if let Some(i) = reverse_globals.get(name).map(|i| *i) {
+        if let Some(i) = reverse_globals.get(name).cloned() {
             let globals = unsafe { &mut *self.globals.get() };
             let v = &globals[i];
             if v.valkind() != ValKind::ILLEGAL {
@@ -917,7 +917,7 @@ impl Frame {
         num_args: usize,
     ) -> Self {
         let mut vars = Vec::with_capacity(num_vars);
-        vars.resize_with(num_vars, || Val::illegal());
+        vars.resize_with(num_vars, Val::illegal);
 
         if is_method {
             vars[0] = self_val;

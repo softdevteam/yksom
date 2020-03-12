@@ -88,7 +88,7 @@ impl VMError {
                         );
                     }
                 } else {
-                    for i in start_line - 1..=end_line - 1 {
+                    for i in start_line - 1..end_line {
                         let line = if i == newlines.len() {
                             &d[newlines[i - 1]..]
                         } else {
@@ -101,7 +101,7 @@ impl VMError {
                 eprintln!("File {}:", cls_path);
             }
         }
-        eprintln!("{}.", self.kind.to_string());
+        eprintln!("{}.", self.kind.to_string(vm));
     }
 
     fn newlines(&self, d: &str) -> Vec<usize> {
@@ -111,7 +111,7 @@ impl VMError {
             .collect()
     }
 
-    fn line_col(&self, newlines: &Vec<usize>, i: usize) -> (usize, usize) {
+    fn line_col(&self, newlines: &[usize], i: usize) -> (usize, usize) {
         if newlines.is_empty() || i < newlines[0] {
             return (1, i);
         }
@@ -163,7 +163,7 @@ pub enum VMErrorKind {
 }
 
 impl VMErrorKind {
-    fn to_string(&self) -> String {
+    fn to_string(&self, _: &VM) -> String {
         match self {
             VMErrorKind::CantRepresentAsDouble => "Can't represent as double".to_owned(),
             VMErrorKind::CantRepresentAsIsize => {
