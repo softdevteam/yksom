@@ -85,7 +85,7 @@ pub struct VM {
     /// `usize` where the latter represents the index of the string in `strings`.
     reverse_strings: HashMap<String, usize>,
     symbols: Vec<Val>,
-    reverse_symbols: UnsafeCell<HashMap<String, usize>>,
+    reverse_symbols: HashMap<String, usize>,
     frames: UnsafeCell<Vec<Frame>>,
 }
 
@@ -130,7 +130,7 @@ impl VM {
             strings: Vec::new(),
             reverse_strings: HashMap::new(),
             symbols: Vec::new(),
-            reverse_symbols: UnsafeCell::new(HashMap::new()),
+            reverse_symbols: HashMap::new(),
             frames: UnsafeCell::new(Vec::new()),
         };
         // The very delicate phase.
@@ -839,14 +839,13 @@ impl VM {
     /// Add the symbol `s` to the VM, returning its index. Note that symbols are reused, so indexes
     /// are also reused.
     pub fn add_symbol(&mut self, s: String) -> usize {
-        let reverse_symbols = unsafe { &mut *self.reverse_symbols.get() };
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
-        if let Some(i) = reverse_symbols.get(&s) {
+        if let Some(i) = self.reverse_symbols.get(&s) {
             *i
         } else {
             let len = self.symbols.len();
-            reverse_symbols.insert(s.clone(), len);
+            self.reverse_symbols.insert(s.clone(), len);
             let v = String_::new(self, s, false);
             self.symbols.push(v);
             len
@@ -1063,7 +1062,7 @@ impl VM {
             strings: Vec::new(),
             reverse_strings: HashMap::new(),
             symbols: Vec::new(),
-            reverse_symbols: UnsafeCell::new(HashMap::new()),
+            reverse_symbols: HashMap::new(),
             frames: UnsafeCell::new(Vec::new()),
         }
     }
