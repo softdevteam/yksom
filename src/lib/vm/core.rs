@@ -80,7 +80,7 @@ pub struct VM {
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
     reverse_sends: HashMap<(Rc<String>, usize), usize>,
     stack: SOMStack,
-    strings: UnsafeCell<Vec<Val>>,
+    strings: Vec<Val>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
     reverse_strings: HashMap<String, usize>,
@@ -127,7 +127,7 @@ impl VM {
             sends: Vec::new(),
             reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
-            strings: UnsafeCell::new(Vec::new()),
+            strings: Vec::new(),
             reverse_strings: HashMap::new(),
             symbols: UnsafeCell::new(Vec::new()),
             reverse_symbols: UnsafeCell::new(HashMap::new()),
@@ -449,8 +449,8 @@ impl VM {
                     pc += 1;
                 }
                 Instr::String(string_off) => {
-                    debug_assert!(unsafe { &*self.strings.get() }.len() > string_off);
-                    let s = unsafe { (&*self.strings.get()).get_unchecked(string_off) }.clone();
+                    debug_assert!(self.strings.len() > string_off);
+                    let s = unsafe { self.strings.get_unchecked(string_off) }.clone();
                     self.stack.push(s);
                     pc += 1;
                 }
@@ -828,10 +828,10 @@ impl VM {
         if let Some(i) = self.reverse_strings.get(&s) {
             *i
         } else {
-            let strings = unsafe { &mut *self.strings.get() };
-            let len = strings.len();
+            let len = self.strings.len();
             self.reverse_strings.insert(s.clone(), len);
-            strings.push(String_::new(self, s, true));
+            let v = String_::new(self, s, true);
+            self.strings.push(v);
             len
         }
     }
@@ -1060,7 +1060,7 @@ impl VM {
             sends: Vec::new(),
             reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
-            strings: UnsafeCell::new(Vec::new()),
+            strings: Vec::new(),
             reverse_strings: HashMap::new(),
             symbols: UnsafeCell::new(Vec::new()),
             reverse_symbols: UnsafeCell::new(HashMap::new()),
