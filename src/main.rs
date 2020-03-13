@@ -43,7 +43,7 @@ fn main() {
             ..
         }) => (),
         Err(e) => {
-            e.console_print(&mut vm);
+            e.console_print(&vm);
             process::exit(1);
         }
     }

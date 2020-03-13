@@ -187,8 +187,8 @@ impl VM {
         cls_val
     }
 
-    fn find_class(&mut self, name: &str) -> Result<PathBuf, ()> {
-        for dn in &mut self.classpath {
+    fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
+        for dn in &self.classpath {
             let mut pb = PathBuf::new();
             pb.push(dn);
             pb.push(name);
@@ -213,7 +213,7 @@ impl VM {
     }
 
     /// Inform the user of the error string `error` and then exit.
-    pub fn error(&mut self, error: &str) -> ! {
+    pub fn error(&self, error: &str) -> ! {
         eprintln!("{}", error);
         process::exit(1);
     }
@@ -731,7 +731,7 @@ impl VM {
         }
     }
 
-    fn current_frame(&mut self) -> &Frame {
+    fn current_frame(&self) -> &Frame {
         debug_assert!(!self.frames.is_empty());
         let frames_len = self.frames.len();
         unsafe { self.frames.get_unchecked(frames_len - 1) }
@@ -741,7 +741,7 @@ impl VM {
         self.frames.pop();
     }
 
-    pub fn frames_len(&mut self) -> usize {
+    pub fn frames_len(&self) -> usize {
         self.frames.len()
     }
 
@@ -790,7 +790,7 @@ impl VM {
     }
 
     /// How many instructions are currently present in the VM?
-    pub fn instrs_len(&mut self) -> usize {
+    pub fn instrs_len(&self) -> usize {
         self.instrs.len()
     }
 
@@ -866,9 +866,8 @@ impl VM {
     }
 
     /// Lookup the global `name`: if it has not been added, or has been added but not set, then
-    /// `self.nil` will be returned. Notice that this does not change the stored value for this
-    /// global.
-    pub fn get_global_or_nil(&mut self, name: &str) -> Val {
+    /// `self.nil` will be returned.
+    pub fn get_global_or_nil(&self, name: &str) -> Val {
         if let Some(i) = self.reverse_globals.get(name).cloned() {
             let v = &self.globals[i];
             if v.valkind() != ValKind::ILLEGAL {
@@ -880,7 +879,7 @@ impl VM {
 
     /// Get the global at position `i`: if it has not been set (i.e. is `ValKind::ILLEGAL`) this
     /// will return `Err(...)`.
-    pub fn get_legal_global(&mut self, i: usize) -> Result<Val, Box<VMError>> {
+    pub fn get_legal_global(&self, i: usize) -> Result<Val, Box<VMError>> {
         let v = &self.globals[i];
         if v.valkind() != ValKind::ILLEGAL {
             return Ok(v.clone());

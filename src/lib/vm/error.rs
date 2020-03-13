@@ -17,12 +17,12 @@ pub struct VMError {
 }
 
 impl VMError {
-    pub fn new(vm: &mut VM, kind: VMErrorKind) -> Box<Self> {
+    pub fn new(vm: &VM, kind: VMErrorKind) -> Box<Self> {
         let backtrace = Vec::with_capacity(vm.frames_len());
         Box::new(VMError { kind, backtrace })
     }
 
-    pub fn console_print(&self, vm: &mut VM) {
+    pub fn console_print(&self, vm: &VM) {
         eprintln!("Traceback (most recent call at bottom):");
         for (method, span) in self.backtrace.iter().rev() {
             let cls_val = method.class();
@@ -163,7 +163,7 @@ pub enum VMErrorKind {
 }
 
 impl VMErrorKind {
-    fn to_string(&self, _: &mut VM) -> String {
+    fn to_string(&self, _: &VM) -> String {
         match self {
             VMErrorKind::CantRepresentAsDouble => "Can't represent as double".to_owned(),
             VMErrorKind::CantRepresentAsIsize => {

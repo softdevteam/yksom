@@ -130,7 +130,7 @@ impl Val {
     /// be boxed) or return a `VMError` if the cast is invalid.
     pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(
         &self,
-        vm: &mut VM,
+        vm: &VM,
     ) -> Result<&T, Box<VMError>> {
         match self.valkind() {
             ValKind::INT => Err(VMError::new(
@@ -158,7 +158,7 @@ impl Val {
 
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
     /// be boxed) or return `None` if the cast is not valid.
-    pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &mut VM) -> Option<&T> {
+    pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<&T> {
         match self.valkind() {
             ValKind::INT => None,
             ValKind::GCBOX => unsafe { self.val_to_tobj() }.downcast(),
@@ -215,7 +215,7 @@ impl Val {
 
     /// If `v == true`, return a `Val` representing `vm.true_`, otherwise return a `Val`
     /// representing `vm.false_`.
-    pub fn from_bool(vm: &mut VM, v: bool) -> Val {
+    pub fn from_bool(vm: &VM, v: bool) -> Val {
         if v {
             vm.true_.clone()
         } else {
