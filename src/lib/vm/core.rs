@@ -40,10 +40,7 @@ enum SendReturn {
     Val,
 }
 
-/// The core VM struct. Although SOM is single-threaded, we roughly model what a multi-threaded VM
-/// would need to look like. That is, since this struct would need to be shared between threads and
-/// called without a single lock, thread-safety would need to be handled internally. We model that
-/// with [`UnsafeCell`].
+/// The core VM struct.
 pub struct VM {
     classpath: Vec<String>,
     pub block_cls: Val,
@@ -765,10 +762,6 @@ impl VM {
     }
 
     /// Lookup the method `name` in the class `rcv_cls`, utilising the inline cache at index `idx`.
-    ///
-    /// # Guarantees for UnsafeCell
-    ///
-    /// This method guarantees not to mutate `self.sends`.
     pub fn inline_cache_lookup(
         &mut self,
         idx: usize,
