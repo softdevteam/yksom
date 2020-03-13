@@ -728,10 +728,10 @@ impl VM {
         }
     }
 
-    fn current_frame(&self) -> &Frame {
+    fn current_frame(&mut self) -> &mut Frame {
         debug_assert!(!self.frames.is_empty());
         let frames_len = self.frames.len();
-        unsafe { self.frames.get_unchecked(frames_len - 1) }
+        unsafe { self.frames.get_unchecked_mut(frames_len - 1) }
     }
 
     fn frame_pop(&mut self) {
@@ -909,7 +909,7 @@ impl VM {
 pub struct Frame {
     /// Stack pointer. Note that this is updated lazily (i.e. it might not be accurate at all
     /// points, but it is guaranteed to be correct over function calls).
-    sp: UnsafeCell<usize>,
+    sp: usize,
     closure: Gc<Closure>,
 }
 
@@ -943,7 +943,7 @@ impl Frame {
         }
 
         Frame {
-            sp: UnsafeCell::new(0),
+            sp: 0,
             closure: Gc::new(Closure::new(parent_closure, vars)),
         }
     }
@@ -952,7 +952,7 @@ impl Frame {
         self.closure(depth).get_var(var)
     }
 
-    fn var_set(&self, depth: usize, var: usize, val: Val) {
+    fn var_set(&mut self, depth: usize, var: usize, val: Val) {
         self.closure(depth).set_var(var, val);
     }
 
@@ -969,12 +969,12 @@ impl Frame {
 
     /// Return this frame's stack pointer.
     fn sp(&self) -> usize {
-        *unsafe { &*self.sp.get() }
+        self.sp
     }
 
     /// Set this frame's stack pointer to `sp`.
-    fn set_sp(&self, sp: usize) {
-        *unsafe { &mut *self.sp.get() } = sp;
+    fn set_sp(&mut self, sp: usize) {
+        self.sp = sp;
     }
 }
 
