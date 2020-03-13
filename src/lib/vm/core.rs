@@ -84,7 +84,7 @@ pub struct VM {
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
     reverse_strings: HashMap<String, usize>,
-    symbols: UnsafeCell<Vec<Val>>,
+    symbols: Vec<Val>,
     reverse_symbols: UnsafeCell<HashMap<String, usize>>,
     frames: UnsafeCell<Vec<Frame>>,
 }
@@ -129,7 +129,7 @@ impl VM {
             stack: SOMStack::new(),
             strings: Vec::new(),
             reverse_strings: HashMap::new(),
-            symbols: UnsafeCell::new(Vec::new()),
+            symbols: Vec::new(),
             reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         };
@@ -455,8 +455,8 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Symbol(symbol_off) => {
-                    debug_assert!(unsafe { &*self.symbols.get() }.len() > symbol_off);
-                    let s = unsafe { (&*self.symbols.get()).get_unchecked(symbol_off) }.clone();
+                    debug_assert!(self.symbols.len() > symbol_off);
+                    let s = unsafe { self.symbols.get_unchecked(symbol_off) }.clone();
                     self.stack.push(s);
                     pc += 1;
                 }
@@ -845,10 +845,10 @@ impl VM {
         if let Some(i) = reverse_symbols.get(&s) {
             *i
         } else {
-            let symbols = unsafe { &mut *self.symbols.get() };
-            let len = symbols.len();
+            let len = self.symbols.len();
             reverse_symbols.insert(s.clone(), len);
-            symbols.push(String_::new(self, s, false));
+            let v = String_::new(self, s, false);
+            self.symbols.push(v);
             len
         }
     }
@@ -1062,7 +1062,7 @@ impl VM {
             stack: SOMStack::new(),
             strings: Vec::new(),
             reverse_strings: HashMap::new(),
-            symbols: UnsafeCell::new(Vec::new()),
+            symbols: Vec::new(),
             reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
         }
