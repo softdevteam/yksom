@@ -86,7 +86,7 @@ pub struct VM {
     reverse_strings: HashMap<String, usize>,
     symbols: Vec<Val>,
     reverse_symbols: HashMap<String, usize>,
-    frames: UnsafeCell<Vec<Frame>>,
+    frames: Vec<Frame>,
 }
 
 impl VM {
@@ -131,7 +131,7 @@ impl VM {
             reverse_strings: HashMap::new(),
             symbols: Vec::new(),
             reverse_symbols: HashMap::new(),
-            frames: UnsafeCell::new(Vec::new()),
+            frames: Vec::new(),
         };
         // The very delicate phase.
         //
@@ -245,7 +245,7 @@ impl VM {
                     self.stack.push(a);
                 }
                 let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
-                unsafe { &mut *self.frames.get() }.push(frame);
+                self.frames.push(frame);
                 let r = self.exec_user(rcv, Gc::clone(&meth), bytecode_off);
                 self.frame_pop();
                 match r {
@@ -270,7 +270,7 @@ impl VM {
                     panic!("Not enough stack space to execute method.");
                 }
                 let nframe = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
-                unsafe { &mut *self.frames.get() }.push(nframe);
+                self.frames.push(nframe);
                 let r = self.exec_user(rcv, Gc::clone(&method), bytecode_off);
                 self.frame_pop();
                 r
@@ -346,9 +346,7 @@ impl VM {
                     // consistent with the frame stack, then the block has escaped.
                     let v = self.stack.pop();
                     let parent_closure = self.current_frame().closure(closure_depth);
-                    for (frame_depth, pframe) in
-                        unsafe { &*self.frames.get() }.iter().rev().enumerate()
-                    {
+                    for (frame_depth, pframe) in self.frames.iter().rev().enumerate() {
                         if Gc::ptr_eq(&parent_closure, &pframe.closure) {
                             let sp = pframe.sp();
                             self.stack.truncate(sp);
@@ -721,7 +719,7 @@ impl VM {
                     num_vars,
                     nargs as usize,
                 );
-                unsafe { &mut *self.frames.get() }.push(frame);
+                self.frames.push(frame);
                 let r = self.exec_user(
                     rcv_blk.inst.clone(),
                     Gc::clone(&rcv_blk.method),
@@ -734,17 +732,17 @@ impl VM {
     }
 
     fn current_frame(&mut self) -> &Frame {
-        debug_assert!(!unsafe { &*self.frames.get() }.is_empty());
-        let frames_len = unsafe { &*self.frames.get() }.len();
-        unsafe { (&*self.frames.get()).get_unchecked(frames_len - 1) }
+        debug_assert!(!self.frames.is_empty());
+        let frames_len = self.frames.len();
+        unsafe { self.frames.get_unchecked(frames_len - 1) }
     }
 
     fn frame_pop(&mut self) {
-        unsafe { &mut *self.frames.get() }.pop();
+        self.frames.pop();
     }
 
     pub fn frames_len(&mut self) -> usize {
-        unsafe { &mut *self.frames.get() }.len()
+        self.frames.len()
     }
 
     /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
@@ -1063,7 +1061,7 @@ impl VM {
             reverse_strings: HashMap::new(),
             symbols: Vec::new(),
             reverse_symbols: HashMap::new(),
-            frames: UnsafeCell::new(Vec::new()),
+            frames: Vec::new(),
         }
     }
 }
