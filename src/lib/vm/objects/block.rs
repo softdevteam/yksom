@@ -36,7 +36,7 @@ impl Obj for Block {
         ObjType::Block
     }
 
-    fn get_class(&self, _: &VM) -> Val {
+    fn get_class(&self, _: &mut VM) -> Val {
         self.blockn_cls.clone()
     }
 }
@@ -51,7 +51,7 @@ impl StaticObjType for Block {
 
 impl Block {
     pub fn new(
-        vm: &VM,
+        vm: &mut VM,
         method: Gc<Method>,
         inst: Val,
         blockinfo_off: usize,

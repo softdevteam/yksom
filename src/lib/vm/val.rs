@@ -70,7 +70,7 @@ impl Val {
     ///
     /// [In an ideal world, this would be a function on `Obj` itself, but that would mean that
     /// `Obj` couldn't be a trait object. Oh well.]
-    pub fn from_obj<T: Obj + 'static>(_: &VM, obj: T) -> Self {
+    pub fn from_obj<T: Obj + 'static>(_: &mut VM, obj: T) -> Self {
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         let ptr = ThinObj::new(obj).into_raw();
         Val {
@@ -167,7 +167,7 @@ impl Val {
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
-    pub fn tobj(&self, vm: &VM) -> Result<Gc<ThinObj>, Box<VMError>> {
+    pub fn tobj(&self, vm: &mut VM) -> Result<Gc<ThinObj>, Box<VMError>> {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
@@ -177,13 +177,16 @@ impl Val {
                     ))
                 })
             }
-            ValKind::INT => Int::boxed_isize(vm, self.as_isize(vm).unwrap()).map(|v| v.tobj(vm))?,
+            ValKind::INT => {
+                let i = self.as_isize(vm).unwrap();
+                Int::boxed_isize(vm, i).map(|v| v.tobj(vm))?
+            }
             ValKind::ILLEGAL => unreachable!(),
         }
     }
 
     /// Create a (possibly boxed) `Val` representing the `isize` integer `i`.
-    pub fn from_isize(vm: &VM, i: isize) -> Result<Val, Box<VMError>> {
+    pub fn from_isize(vm: &mut VM, i: isize) -> Result<Val, Box<VMError>> {
         let top_bits = i as usize & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1));
         if top_bits == 0 || top_bits == INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1) {
             // top_bits == 0: A positive integer that fits in our tagging scheme
@@ -199,7 +202,7 @@ impl Val {
     /// Create a (possibly boxed) `Val` representing the `usize` integer `i`. Notice that this can
     /// fail if `i` is too big (since we don't have BigNum support and ints are internally
     /// represented as `isize`).
-    pub fn from_usize(vm: &VM, i: usize) -> Result<Val, Box<VMError>> {
+    pub fn from_usize(vm: &mut VM, i: usize) -> Result<Val, Box<VMError>> {
         if i & (INT_BITMASK << (BITSIZE - TAG_BITSIZE - 1)) == 0 {
             // The top TAG_BITSIZE bits aren't set, so this fits within our pointer tagging scheme.
             Ok(Val {
@@ -221,7 +224,7 @@ impl Val {
     }
 
     /// If this `Val` represents a non-bigint integer, return its value as an `isize`.
-    pub fn as_isize(&self, vm: &VM) -> Option<isize> {
+    pub fn as_isize(&self, vm: &mut VM) -> Option<isize> {
         match self.valkind() {
             ValKind::GCBOX => self
                 .tobj(vm)
@@ -244,7 +247,7 @@ impl Val {
     }
 
     /// If this `Val` represents a non-bigint integer, return its value as an `usize`.
-    pub fn as_usize(&self, vm: &VM) -> Option<usize> {
+    pub fn as_usize(&self, vm: &mut VM) -> Option<usize> {
         match self.valkind() {
             ValKind::GCBOX => self
                 .tobj(vm)
@@ -273,7 +276,7 @@ impl Val {
 // Implement each function from the `Obj` type so that we can efficiently deal with tagged values.
 impl Val {
     /// What `ObjType` does this `Val` represent?
-    pub fn dyn_objtype(&self, vm: &VM) -> ObjType {
+    pub fn dyn_objtype(&self, vm: &mut VM) -> ObjType {
         match self.valkind() {
             ValKind::INT => ObjType::Int,
             ValKind::GCBOX => self.tobj(vm).unwrap().dyn_objtype(),
@@ -282,7 +285,7 @@ impl Val {
     }
 
     /// What class is this `Val` an instance of?
-    pub fn get_class(&self, vm: &VM) -> Val {
+    pub fn get_class(&self, vm: &mut VM) -> Val {
         match self.valkind() {
             ValKind::INT => vm.int_cls.clone(),
             ValKind::GCBOX => self.tobj(vm).unwrap().get_class(vm),
@@ -290,20 +293,19 @@ impl Val {
         }
     }
 
-    pub fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+    pub fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         match self.valkind() {
-            ValKind::INT => Ok(String_::new(
-                vm,
-                self.as_isize(vm).unwrap().to_string(),
-                true,
-            )),
+            ValKind::INT => {
+                let s = self.as_isize(vm).unwrap().to_string();
+                Ok(String_::new(vm, s, true))
+            }
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
             ValKind::ILLEGAL => unreachable!(),
         }
     }
 
     /// Produce a new `Val` which adds `other` to this.
-    pub fn add(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);
         if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
             if let Some(val) = self.val.checked_add(other.val) {
@@ -314,26 +316,22 @@ impl Val {
     }
 
     /// Produce a new `Val` which performs a bitwise and operation with `other` and this.
-    pub fn and(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn and(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 return Val::from_isize(vm, lhs & rhs);
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() & rhs.bigint());
             }
-            return Err(VMError::new(
-                vm,
-                VMErrorKind::TypeError {
-                    expected: self.dyn_objtype(vm),
-                    got: other.dyn_objtype(vm),
-                },
-            ));
+            let expected = self.dyn_objtype(vm);
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::TypeError { expected, got }));
         }
         self.tobj(vm).unwrap().and(vm, other)
     }
 
     /// Produce a new `Val` which divides `other` from this.
-    pub fn div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);
         if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
             if other.val != 0 {
@@ -348,7 +346,7 @@ impl Val {
     }
 
     /// Produce a new `Val` which perfoms a Double divide on `other` with this.
-    pub fn double_div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn double_div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 if rhs == 0 {
@@ -371,18 +369,14 @@ impl Val {
                     return Ok(Double::new(vm, (lhs as f64) / rhs.double()));
                 }
             }
-            return Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ));
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
         self.tobj(vm).unwrap().double_div(vm, other)
     }
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
-    pub fn modulus(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn modulus(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 return Val::from_isize(vm, lhs % rhs);
@@ -391,18 +385,14 @@ impl Val {
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
                 return Ok(Double::new(vm, (lhs as f64) % rhs.double()));
             }
-            return Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ));
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
         self.tobj(vm).unwrap().modulus(vm, other)
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
-    pub fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn mul(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);
         if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
             if let Some(val) = self.val.checked_mul(other.val / (1 << TAG_BITSIZE)) {
@@ -413,7 +403,7 @@ impl Val {
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
-    pub fn shl(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn shl(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 if rhs < 0 {
@@ -441,18 +431,14 @@ impl Val {
             if other.try_downcast::<ArbInt>(vm).is_some() {
                 return Err(VMError::new(vm, VMErrorKind::ShiftTooBig));
             }
-            return Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ));
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
         self.tobj(vm).unwrap().shl(vm, other)
     }
 
     /// Produces a new `Val` which is the square root of this.
-    pub fn sqrt(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+    pub fn sqrt(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if lhs < 0 {
                 return Err(VMError::new(vm, VMErrorKind::DomainError));
@@ -469,7 +455,7 @@ impl Val {
     }
 
     /// Produce a new `Val` which subtracts `other` from this.
-    pub fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn sub(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);
         if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
             if let Some(val) = self.val.checked_sub(other.val) {
@@ -480,27 +466,23 @@ impl Val {
     }
 
     /// Produce a new `Val` which performs a bitwise xor operation with `other` and this.
-    pub fn xor(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn xor(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
                 return Val::from_isize(vm, lhs ^ rhs);
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return ArbInt::new(vm, BigInt::from_isize(lhs).unwrap() ^ rhs.bigint());
             }
-            return Err(VMError::new(
-                vm,
-                VMErrorKind::TypeError {
-                    expected: self.dyn_objtype(vm),
-                    got: other.dyn_objtype(vm),
-                },
-            ));
+            let expected = self.dyn_objtype(vm);
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::TypeError { expected, got }));
         }
         self.tobj(vm).unwrap().xor(vm, other)
     }
 
     /// Is this `Val` reference equal to `other`? Notice that for integers (but not Doubles)
     /// "reference equal" is equivalent to "equals".
-    pub fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         match self.valkind() {
             ValKind::INT => self.equals(vm, other),
             ValKind::GCBOX => self.tobj(vm)?.ref_equals(vm, other),
@@ -512,7 +494,7 @@ impl Val {
 macro_rules! binop_all {
     ($name:ident, $op:tt, $tf:ident) => {
         impl Val {
-            pub fn $name(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+            pub fn $name(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
                 if let Some(lhs) = self.as_isize(vm) {
                     if let Some(rhs) = other.as_isize(vm) {
                         Ok(Val::from_bool(vm, lhs $op rhs))
@@ -533,7 +515,7 @@ macro_rules! binop_all {
 macro_rules! binop_typeerror {
     ($name:ident, $op:tt) => {
         impl Val {
-            pub fn $name(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+            pub fn $name(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
                 if let Some(lhs) = self.as_isize(vm) {
                     if let Some(rhs) = other.as_isize(vm) {
                         Ok(Val::from_bool(vm, lhs $op rhs))
@@ -541,8 +523,9 @@ macro_rules! binop_typeerror {
                         Ok(Val::from_bool(vm,
                             &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
                     } else {
+                        let got = other.dyn_objtype(vm);
                         Err(VMError::new(vm, VMErrorKind::NotANumber {
-                          got: other.dyn_objtype(vm),
+                          got
                         }))
                     }
                 } else {
@@ -607,80 +590,80 @@ mod tests {
 
     #[test]
     fn test_isize() {
-        let vm = VM::new_no_bootstrap();
+        let mut vm = VM::new_no_bootstrap();
 
-        let v = Val::from_isize(&vm, 0).unwrap();
+        let v = Val::from_isize(&mut vm, 0).unwrap();
         assert_eq!(v.valkind(), ValKind::INT);
-        assert_eq!(v.as_usize(&vm).unwrap(), 0);
-        assert_eq!(v.as_isize(&vm).unwrap(), 0);
+        assert_eq!(v.as_usize(&mut vm).unwrap(), 0);
+        assert_eq!(v.as_isize(&mut vm).unwrap(), 0);
 
-        let v = Val::from_isize(&vm, -1).unwrap();
+        let v = Val::from_isize(&mut vm, -1).unwrap();
         assert_eq!(v.valkind(), ValKind::INT);
-        assert!(v.as_usize(&vm).is_none());
-        assert_eq!(v.as_isize(&vm).unwrap(), -1);
+        assert!(v.as_usize(&mut vm).is_none());
+        assert_eq!(v.as_isize(&mut vm).unwrap(), -1);
 
-        let v = Val::from_isize(&vm, isize::min_value()).unwrap();
+        let v = Val::from_isize(&mut vm, isize::min_value()).unwrap();
         assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_isize(&vm).unwrap(), isize::min_value());
-        let v = Val::from_isize(&vm, isize::max_value()).unwrap();
+        assert_eq!(v.as_isize(&mut vm).unwrap(), isize::min_value());
+        let v = Val::from_isize(&mut vm, isize::max_value()).unwrap();
         assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_isize(&vm).unwrap(), isize::max_value());
+        assert_eq!(v.as_isize(&mut vm).unwrap(), isize::max_value());
 
-        let v = Val::from_isize(&vm, 1 << (BITSIZE - 1 - TAG_BITSIZE) - 1).unwrap();
+        let v = Val::from_isize(&mut vm, 1 << (BITSIZE - 1 - TAG_BITSIZE) - 1).unwrap();
         assert_eq!(v.valkind(), ValKind::INT);
         assert_eq!(
-            v.as_usize(&vm).unwrap(),
+            v.as_usize(&mut vm).unwrap(),
             1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
         );
         assert_eq!(
-            v.as_isize(&vm).unwrap(),
+            v.as_isize(&mut vm).unwrap(),
             1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
         );
 
-        let v = Val::from_isize(&vm, 1 << (BITSIZE - 2)).unwrap();
+        let v = Val::from_isize(&mut vm, 1 << (BITSIZE - 2)).unwrap();
         assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_usize(&vm).unwrap(), 1 << (BITSIZE - 2));
-        assert_eq!(v.as_isize(&vm).unwrap(), 1 << (BITSIZE - 2));
+        assert_eq!(v.as_usize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
+        assert_eq!(v.as_isize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
     }
 
     #[test]
     fn test_usize() {
-        let vm = VM::new_no_bootstrap();
+        let mut vm = VM::new_no_bootstrap();
 
-        let v = Val::from_usize(&vm, 0).unwrap();
+        let v = Val::from_usize(&mut vm, 0).unwrap();
         assert_eq!(v.valkind(), ValKind::INT);
-        assert_eq!(v.as_usize(&vm).unwrap(), 0);
-        assert_eq!(v.as_isize(&vm).unwrap(), 0);
+        assert_eq!(v.as_usize(&mut vm).unwrap(), 0);
+        assert_eq!(v.as_isize(&mut vm).unwrap(), 0);
 
-        let v = Val::from_usize(&vm, 1 << (BITSIZE - 1 - TAG_BITSIZE) - 1).unwrap();
+        let v = Val::from_usize(&mut vm, 1 << (BITSIZE - 1 - TAG_BITSIZE) - 1).unwrap();
         assert_eq!(v.valkind(), ValKind::INT);
         assert_eq!(
-            v.as_usize(&vm).unwrap(),
+            v.as_usize(&mut vm).unwrap(),
             1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
         );
         assert_eq!(
-            v.as_isize(&vm).unwrap(),
+            v.as_isize(&mut vm).unwrap(),
             1 << (BITSIZE - 1 - TAG_BITSIZE) - 1
         );
 
-        assert!(Val::from_usize(&vm, 1 << (BITSIZE - 1))
+        assert!(Val::from_usize(&mut vm, 1 << (BITSIZE - 1))
             .unwrap()
-            .try_downcast::<ArbInt>(&vm)
+            .try_downcast::<ArbInt>(&mut vm)
             .is_some());
 
-        let v = Val::from_usize(&vm, 1 << (BITSIZE - 2)).unwrap();
+        let v = Val::from_usize(&mut vm, 1 << (BITSIZE - 2)).unwrap();
         assert_eq!(v.valkind(), ValKind::GCBOX);
-        assert_eq!(v.as_usize(&vm).unwrap(), 1 << (BITSIZE - 2));
-        assert_eq!(v.as_isize(&vm).unwrap(), 1 << (BITSIZE - 2));
+        assert_eq!(v.as_usize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
+        assert_eq!(v.as_isize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
     }
 
     #[test]
     fn test_recovery() {
-        let vm = VM::new_no_bootstrap();
+        let mut vm = VM::new_no_bootstrap();
 
         let v = {
-            let v = String_::new(&vm, "s".to_owned(), true);
-            let v_tobj = v.tobj(&vm).unwrap();
+            let v = String_::new(&mut vm, "s".to_owned(), true);
+            let v_tobj = v.tobj(&mut vm).unwrap();
             let v_int: &dyn Obj = v_tobj.deref().deref();
             let v_recovered = Val::recover(v_int);
             assert_eq!(v_recovered.val, v.val);
@@ -688,16 +671,16 @@ mod tests {
         };
         // At this point, we will have dropped one of the references to the String above so the
         // assertion below is really checking that we're not doing a read after free.
-        assert_eq!(v.downcast::<String_>(&vm).unwrap().as_str(), "s");
+        assert_eq!(v.downcast::<String_>(&mut vm).unwrap().as_str(), "s");
     }
 
     #[test]
     fn test_cast() {
-        let vm = VM::new_no_bootstrap();
-        let v = String_::new(&vm, "s".to_owned(), true);
-        assert!(v.downcast::<String_>(&vm).is_ok());
+        let mut vm = VM::new_no_bootstrap();
+        let v = String_::new(&mut vm, "s".to_owned(), true);
+        assert!(v.downcast::<String_>(&mut vm).is_ok());
         assert_eq!(
-            v.downcast::<Class>(&vm).unwrap_err().kind,
+            v.downcast::<Class>(&mut vm).unwrap_err().kind,
             VMErrorKind::TypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_
@@ -707,15 +690,15 @@ mod tests {
 
     #[test]
     fn test_downcast() {
-        let vm = VM::new_no_bootstrap();
-        let v = String_::new(&vm, "s".to_owned(), true);
-        assert!(v.downcast::<String_>(&vm).is_ok());
-        assert!(v.downcast::<Class>(&vm).is_err());
-        assert!(v.try_downcast::<String_>(&vm).is_some());
-        assert!(v.try_downcast::<Class>(&vm).is_none());
+        let mut vm = VM::new_no_bootstrap();
+        let v = String_::new(&mut vm, "s".to_owned(), true);
+        assert!(v.downcast::<String_>(&mut vm).is_ok());
+        assert!(v.downcast::<Class>(&mut vm).is_err());
+        assert!(v.try_downcast::<String_>(&mut vm).is_some());
+        assert!(v.try_downcast::<Class>(&mut vm).is_none());
 
-        let v = Val::from_isize(&vm, 0).unwrap();
-        assert!(v.downcast::<String_>(&vm).is_err());
-        assert!(v.try_downcast::<String_>(&vm).is_none());
+        let v = Val::from_isize(&mut vm, 0).unwrap();
+        assert!(v.downcast::<String_>(&mut vm).is_err());
+        assert!(v.try_downcast::<String_>(&mut vm).is_none());
     }
 }

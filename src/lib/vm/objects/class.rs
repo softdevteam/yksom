@@ -28,7 +28,7 @@ impl Obj for Class {
         ObjType::Class
     }
 
-    fn get_class(&self, vm: &VM) -> Val {
+    fn get_class(&self, vm: &mut VM) -> Val {
         vm.cls_cls.clone()
     }
 }

@@ -39,7 +39,7 @@ impl Obj for Method {
         ObjType::Method
     }
 
-    fn get_class(&self, _: &VM) -> Val {
+    fn get_class(&self, _: &mut VM) -> Val {
         unimplemented!();
     }
 }

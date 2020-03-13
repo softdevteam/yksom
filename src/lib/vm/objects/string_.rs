@@ -22,7 +22,7 @@ impl Obj for String_ {
         ObjType::String_
     }
 
-    fn get_class(&self, vm: &VM) -> Val {
+    fn get_class(&self, vm: &mut VM) -> Val {
         // FIXME This is a temporary hack until we sort out bootstrapping of the String_ class
         if self.is_str {
             vm.str_cls.clone()
@@ -31,11 +31,11 @@ impl Obj for String_ {
         }
     }
 
-    fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+    fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(String_::new(vm, self.s.to_string(), true))
     }
 
-    fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let other_str: &String_ = other.downcast(vm)?;
 
         Ok(Val::from_bool(
@@ -54,7 +54,7 @@ impl StaticObjType for String_ {
 }
 
 impl String_ {
-    pub fn new(vm: &VM, s: String, is_str: bool) -> Val {
+    pub fn new(vm: &mut VM, s: String, is_str: bool) -> Val {
         Val::from_obj(vm, String_ { s, is_str })
     }
 
@@ -63,7 +63,7 @@ impl String_ {
     }
 
     /// Concatenate this string with another string and return the result.
-    pub fn concatenate(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn concatenate(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let other_str: &String_ = other.downcast(vm)?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
@@ -80,7 +80,7 @@ impl String_ {
         Ok(String_::new(vm, new, true))
     }
 
-    pub fn to_symbol(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+    pub fn to_symbol(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(String_::new(vm, self.s.to_string(), false))
     }
 }

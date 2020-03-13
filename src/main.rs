@@ -33,9 +33,9 @@ fn main() {
         usage(prog);
     }
 
-    let vm = VM::new(matches.opt_strs("cp"));
+    let mut vm = VM::new(matches.opt_strs("cp"));
     let cls = vm.compile(&Path::new(&matches.free[0]).canonicalize().unwrap(), true);
-    let app = Inst::new(&vm, cls);
+    let app = Inst::new(&mut vm, cls);
     match vm.top_level_send(app, "run", vec![]) {
         Ok(_)
         | Err(box VMError {

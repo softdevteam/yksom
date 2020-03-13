@@ -23,16 +23,16 @@ impl Obj for Double {
         ObjType::Double
     }
 
-    fn get_class(&self, vm: &VM) -> Val {
+    fn get_class(&self, vm: &mut VM) -> Val {
         vm.double_cls.clone()
     }
 
-    fn to_strval(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+    fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         let mut buf = ryu::Buffer::new();
         Ok(String_::new(vm, buf.format(self.val).to_owned(), true))
     }
 
-    fn add(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val + (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -43,16 +43,12 @@ impl Obj for Double {
                 None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
             }
         } else {
-            Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ))
+            let got = other.dyn_objtype(vm);
+            Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
         }
     }
 
-    fn double_div(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn double_div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
@@ -75,16 +71,12 @@ impl Obj for Double {
                 }
             }
         } else {
-            Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ))
+            let got = other.dyn_objtype(vm);
+            Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
         }
     }
 
-    fn modulus(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn modulus(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val % (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -95,16 +87,12 @@ impl Obj for Double {
                 None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
             }
         } else {
-            Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ))
+            let got = other.dyn_objtype(vm);
+            Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
         }
     }
 
-    fn mul(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn mul(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val * (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -115,20 +103,16 @@ impl Obj for Double {
                 None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
             }
         } else {
-            Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ))
+            let got = other.dyn_objtype(vm);
+            Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
         }
     }
 
-    fn sqrt(&self, vm: &VM) -> Result<Val, Box<VMError>> {
+    fn sqrt(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(Double::new(vm, self.val.sqrt()))
     }
 
-    fn sub(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn sub(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val - (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -139,16 +123,12 @@ impl Obj for Double {
                 None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
             }
         } else {
-            Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ))
+            let got = other.dyn_objtype(vm);
+            Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
         }
     }
 
-    fn ref_equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if let Some(rhs) = other.try_downcast::<Double>(vm) {
             self.val == rhs.double()
         } else {
@@ -157,7 +137,7 @@ impl Obj for Double {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn equals(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if let Some(rhs) = other.as_isize(vm) {
             self.val == (rhs as f64)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -174,7 +154,7 @@ impl Obj for Double {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn less_than(&self, vm: &VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn less_than(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if let Some(rhs) = other.as_isize(vm) {
             self.val < (rhs as f64)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -185,12 +165,8 @@ impl Obj for Double {
                 None => false,
             }
         } else {
-            return Err(VMError::new(
-                vm,
-                VMErrorKind::NotANumber {
-                    got: other.dyn_objtype(vm),
-                },
-            ));
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         };
 
         Ok(Val::from_bool(vm, b))
@@ -204,7 +180,7 @@ impl StaticObjType for Double {
 }
 
 impl Double {
-    pub fn new(vm: &VM, val: f64) -> Val {
+    pub fn new(vm: &mut VM, val: f64) -> Val {
         Val::from_obj(vm, Double { val })
     }
 
