@@ -83,7 +83,7 @@ pub struct VM {
     strings: UnsafeCell<Vec<Val>>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
-    reverse_strings: UnsafeCell<HashMap<String, usize>>,
+    reverse_strings: HashMap<String, usize>,
     symbols: UnsafeCell<Vec<Val>>,
     reverse_symbols: UnsafeCell<HashMap<String, usize>>,
     frames: UnsafeCell<Vec<Frame>>,
@@ -128,7 +128,7 @@ impl VM {
             reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
             strings: UnsafeCell::new(Vec::new()),
-            reverse_strings: UnsafeCell::new(HashMap::new()),
+            reverse_strings: HashMap::new(),
             symbols: UnsafeCell::new(Vec::new()),
             reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
@@ -823,15 +823,14 @@ impl VM {
     /// Add the string `s` to the VM, returning its index. Note that strings are reused, so indexes
     /// are also reused.
     pub fn add_string(&mut self, s: String) -> usize {
-        let reverse_strings = unsafe { &mut *self.reverse_strings.get() };
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
-        if let Some(i) = reverse_strings.get(&s) {
+        if let Some(i) = self.reverse_strings.get(&s) {
             *i
         } else {
             let strings = unsafe { &mut *self.strings.get() };
             let len = strings.len();
-            reverse_strings.insert(s.clone(), len);
+            self.reverse_strings.insert(s.clone(), len);
             strings.push(String_::new(self, s, true));
             len
         }
@@ -1062,7 +1061,7 @@ impl VM {
             reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
             strings: UnsafeCell::new(Vec::new()),
-            reverse_strings: UnsafeCell::new(HashMap::new()),
+            reverse_strings: HashMap::new(),
             symbols: UnsafeCell::new(Vec::new()),
             reverse_symbols: UnsafeCell::new(HashMap::new()),
             frames: UnsafeCell::new(Vec::new()),
