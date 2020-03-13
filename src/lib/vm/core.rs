@@ -6,6 +6,7 @@ use std::{
     convert::TryFrom,
     path::{Path, PathBuf},
     process,
+    rc::Rc,
 };
 
 use abgc::{Gc, GcLayout};
@@ -74,10 +75,10 @@ pub struct VM {
     /// rarely access `instr_spans`.
     instrs: Vec<Instr>,
     instr_spans: Vec<Span>,
-    sends: UnsafeCell<Vec<(String, usize)>>,
+    sends: Vec<(Rc<String>, usize)>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
-    reverse_sends: UnsafeCell<HashMap<(String, usize), usize>>,
+    reverse_sends: HashMap<(Rc<String>, usize), usize>,
     stack: SOMStack,
     strings: UnsafeCell<Vec<Val>>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
@@ -123,8 +124,8 @@ impl VM {
             inline_caches: Vec::new(),
             instrs: Vec::new(),
             instr_spans: Vec::new(),
-            sends: UnsafeCell::new(Vec::new()),
-            reverse_sends: UnsafeCell::new(HashMap::new()),
+            sends: Vec::new(),
+            reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
@@ -414,16 +415,25 @@ impl VM {
                 }
                 Instr::Send(send_idx, cache_idx) => {
                     let (send_rcv, nargs, meth) = {
-                        debug_assert!(send_idx < unsafe { &*self.sends.get() }.len());
-                        let (ref name, nargs) =
-                            unsafe { (&*self.sends.get()).get_unchecked(send_idx) };
-                        // Note that since we maintain a reference to `name` for the rest of this
-                        // block, we mustn't mutate (directly or indirectly) `self.sends` in any
-                        // way.
-                        let rcv = self.stack.pop_n(*nargs);
+                        debug_assert!(send_idx < self.sends.len());
+                        let nargs = unsafe { self.sends.get_unchecked(send_idx) }.1;
+                        let rcv = self.stack.pop_n(nargs);
                         let rcv_cls = rcv.get_class(self);
 
-                        let meth = stry!(self.inline_cache_lookup(cache_idx, rcv_cls, name));
+                        let meth = match &self.inline_caches[cache_idx] {
+                            Some((cache_cls, cache_meth)) if cache_cls.bit_eq(&rcv_cls) => {
+                                Gc::clone(cache_meth)
+                            }
+                            _ => {
+                                // The inline cache is empty or out of date, so store a new value in it.
+                                let cls: &Class = stry!(rcv_cls.downcast(self));
+                                let name =
+                                    Rc::clone(&unsafe { self.sends.get_unchecked(send_idx) }.0);
+                                let meth = stry!(cls.get_method(self, &*name));
+                                self.inline_caches[cache_idx] = Some((rcv_cls, Gc::clone(&meth)));
+                                meth
+                            }
+                        };
                         (rcv, nargs, meth)
                     };
 
@@ -435,7 +445,7 @@ impl VM {
 
                     let len = self.stack.len() - nargs;
                     self.current_frame().set_sp(len);
-                    send_args_on_stack!(send_rcv, meth, *nargs);
+                    send_args_on_stack!(send_rcv, meth, nargs);
                     pc += 1;
                 }
                 Instr::String(string_off) => {
@@ -797,16 +807,15 @@ impl VM {
     /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
     /// are also reused.
     pub fn add_send(&mut self, send: (String, usize)) -> usize {
-        let reverse_sends = unsafe { &mut *self.reverse_sends.get() };
         // We want to avoid `clone`ing `send` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
-        if let Some(i) = reverse_sends.get(&send) {
+        let send = (Rc::new(send.0), send.1);
+        if let Some(i) = self.reverse_sends.get(&send) {
             *i
         } else {
-            let sends = unsafe { &mut *self.sends.get() };
-            let len = sends.len();
-            reverse_sends.insert(send.clone(), len);
-            sends.push(send);
+            let len = self.sends.len();
+            self.reverse_sends.insert(send.clone(), len);
+            self.sends.push(send);
             len
         }
     }
@@ -1049,8 +1058,8 @@ impl VM {
             inline_caches: Vec::new(),
             instrs: Vec::new(),
             instr_spans: Vec::new(),
-            sends: UnsafeCell::new(Vec::new()),
-            reverse_sends: UnsafeCell::new(HashMap::new()),
+            sends: Vec::new(),
+            reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
             strings: UnsafeCell::new(Vec::new()),
             reverse_strings: UnsafeCell::new(HashMap::new()),
