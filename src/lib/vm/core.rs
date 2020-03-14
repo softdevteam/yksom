@@ -62,7 +62,6 @@ pub struct VM {
     pub system: Val,
     pub true_: Val,
     blockinfos: Vec<BlockInfo>,
-    classes: Vec<Val>,
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
     globals: Vec<Val>,
@@ -115,7 +114,6 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: Vec::new(),
-            classes: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
@@ -1040,7 +1038,6 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: Vec::new(),
-            classes: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
