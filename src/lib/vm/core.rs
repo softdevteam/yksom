@@ -175,12 +175,12 @@ impl VM {
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
     /// builtin classes which do not lead to run-time instances of `Inst`.
     pub fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
-        let cls_val = compile(self, path);
+        let (name, cls_val) = compile(self, path);
         let cls: &Class = cls_val.downcast(self).unwrap();
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
-        self.classes.push(cls_val.clone());
+        self.set_global(&name, cls_val.clone());
         cls_val
     }
 

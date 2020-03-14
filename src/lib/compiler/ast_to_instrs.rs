@@ -40,7 +40,7 @@ impl<'a> Compiler<'a> {
         lexer: &dyn Lexer<StorageT>,
         path: &Path,
         astcls: &ast::Class,
-    ) -> Result<Val, String> {
+    ) -> Result<(String, Val), String> {
         let mut compiler = Compiler {
             lexer,
             path,
@@ -117,11 +117,11 @@ impl<'a> Compiler<'a> {
             return Err(err_strs);
         }
 
-        let name = String_::new(vm, name, false);
+        let name_val = String_::new(vm, name.clone(), false);
         let cls_val = Val::from_obj(
             vm,
             Class {
-                name,
+                name: name_val,
                 path: compiler.path.to_path_buf(),
                 instrs_off,
                 supercls,
@@ -133,7 +133,7 @@ impl<'a> Compiler<'a> {
         for m in cls.methods.values() {
             m.set_class(vm, cls_val.clone());
         }
-        Ok(cls_val)
+        Ok((name, cls_val))
     }
 
     fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<Method> {
