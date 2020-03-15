@@ -51,6 +51,7 @@ pub struct VM {
     pub double_cls: Val,
     pub false_cls: Val,
     pub int_cls: Val,
+    pub metacls_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
@@ -103,6 +104,7 @@ impl VM {
             double_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
+            metacls_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
@@ -130,13 +132,53 @@ impl VM {
         };
         // The very delicate phase.
         //
-        // Nothing in this phase must store references to the nil object or any classes earlier
-        // than it in the phase.
+        // The problem in this phase is that we are creating objects that have references to other
+        // objects which are not yet created i.e. we end up with `Val::illegal`s lurking around.
+        // All of these *must* be patched with references to the "true" objects before main
+        // execution happens, or we will be in undefined behaviour (and, to be clear, this will be
+        // the sort of UB you notice: segfaults etc.).
         vm.obj_cls = vm.init_builtin_class("Object", false);
         vm.cls_cls = vm.init_builtin_class("Class", false);
         vm.nil_cls = vm.init_builtin_class("Nil", true);
         let v = vm.nil_cls.clone();
         vm.nil = Inst::new(&mut vm, v);
+        vm.metacls_cls = vm.init_builtin_class("Metaclass", false);
+        {
+            // Patch incorrect references.
+            let obj_cls = vm.obj_cls.clone();
+            obj_cls
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_supercls(&vm, vm.nil.clone());
+            obj_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+            obj_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_supercls(&vm, vm.cls_cls.clone());
+            let cls_cls = vm.cls_cls.clone();
+            cls_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+            let nil_cls = vm.nil_cls.clone();
+            nil_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+            let metacls_cls = vm.metacls_cls.clone();
+            metacls_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+        }
 
         // The slightly delicate phase.
         //
@@ -693,7 +735,7 @@ impl VM {
             }
             Primitive::Superclass => {
                 let cls: &Class = stry!(rcv.downcast(self));
-                let v = cls.superclass(self);
+                let v = cls.supercls(self);
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -1027,6 +1069,7 @@ impl VM {
             double_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
+            metacls_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),

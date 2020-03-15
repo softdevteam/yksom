@@ -6,6 +6,8 @@ pub struct Class {
     pub supername: Option<Span>,
     pub inst_vars: Vec<Span>,
     pub methods: Vec<Method>,
+    pub class_inst_vars: Vec<Span>,
+    pub class_methods: Vec<Method>,
 }
 
 #[derive(Debug)]

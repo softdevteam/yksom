@@ -3,7 +3,15 @@
 %%
 ClassDef -> Result<Class, ()>:
       "ID" "=" SuperClass "(" NameDefs MethodsOpt ClassMethods ")"
-      { Ok(Class{ name: map_err($1)?.span(), supername: $3?, inst_vars: $5?, methods: $6? }) }
+      { let (class_inst_vars, class_methods) = $7?;
+        Ok(Class{ name: map_err($1)?.span(),
+                  supername: $3?,
+                  inst_vars: $5?,
+                  methods: $6?,
+                  class_inst_vars,
+                  class_methods
+                })
+      }
     ;
 SuperClass -> Result<Option<Span>, ()>:
       "ID" { Ok(Some(map_err($1)?.span())) }
@@ -17,9 +25,11 @@ Methods -> Result<Vec<Method>, ()>:
       Method { Ok(vec![$1?]) }
     | Methods Method { flattenr($1, $2) }
     ;
-ClassMethods -> Result<(), ()>:
-          "SEPARATOR" NameDefs MethodsOpt { unimplemented!() }
-    | { Ok(()) }
+ClassMethods -> Result<(Vec<Span>, Vec<Method>), ()>:
+      "SEPARATOR" NameDefs MethodsOpt {
+        todo!()
+      }
+    | { Ok((vec![], vec![])) }
     ;
 Method -> Result<Method, ()>:
       MethodName "=" MethodBody
