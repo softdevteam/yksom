@@ -22,6 +22,7 @@ pub struct Class {
     supercls: UnsafeCell<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,
+    inst_vars: UnsafeCell<Vec<Val>>,
 }
 
 impl Obj for Class {
@@ -32,6 +33,16 @@ impl Obj for Class {
     fn get_class(&self, _: &mut VM) -> Val {
         debug_assert!(unsafe { &*self.metacls.get() }.valkind() != ValKind::ILLEGAL);
         unsafe { &*self.metacls.get() }.clone()
+    }
+
+    fn inst_var_lookup(&self, n: usize) -> Val {
+        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+        inst_vars[n].clone()
+    }
+
+    fn inst_var_set(&self, n: usize, v: Val) {
+        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+        inst_vars[n] = v;
     }
 }
 
@@ -45,7 +56,7 @@ impl StaticObjType for Class {
 
 impl Class {
     pub fn new(
-        _: &VM,
+        vm: &VM,
         metacls: Val,
         name: Val,
         path: PathBuf,
@@ -54,15 +65,18 @@ impl Class {
         num_inst_vars: usize,
         methods: HashMap<String, Gc<Method>>,
     ) -> Self {
-        Class {
-            metacls: UnsafeCell::new(metacls),
+        let cls = Class {
+            metacls: UnsafeCell::new(metacls.clone()),
             name,
             path,
             instrs_off,
             supercls: UnsafeCell::new(supercls),
             num_inst_vars,
             methods,
-        }
+            inst_vars: UnsafeCell::new(vec![]),
+        };
+        cls.set_metacls(vm, metacls);
+        cls
     }
 
     pub fn name(&self, _: &VM) -> Result<Val, Box<VMError>> {
@@ -83,8 +97,16 @@ impl Class {
             })
     }
 
-    pub fn set_metacls(&self, _: &VM, cls: Val) {
-        *unsafe { &mut *self.metacls.get() } = cls;
+    pub fn set_metacls(&self, vm: &VM, cls_val: Val) {
+        // This method is called during VM bootstrapping when not all objects have valid
+        // references.
+        if cls_val.valkind() != ValKind::ILLEGAL {
+            let cls: &Class = cls_val.downcast(vm).unwrap();
+            let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
+            inst_vars.resize(cls.num_inst_vars, Val::illegal());
+            *unsafe { &mut *self.metacls.get() } = cls_val;
+            *unsafe { &mut *self.inst_vars.get() } = inst_vars;
+        }
     }
 
     pub fn supercls(&self, _: &VM) -> Val {

@@ -426,12 +426,12 @@ impl VM {
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
-                    let inst: &Inst = rcv.downcast(self).unwrap();
+                    let inst = stry!(rcv.tobj(self));
                     self.stack.push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
-                    let inst: &Inst = rcv.downcast(self).unwrap();
+                    let inst = stry!(rcv.tobj(self));
                     inst.inst_var_set(n, self.stack.peek());
                     pc += 1;
                 }

@@ -27,7 +27,7 @@ Methods -> Result<Vec<Method>, ()>:
     ;
 ClassMethods -> Result<(Vec<Span>, Vec<Method>), ()>:
       "SEPARATOR" NameDefs MethodsOpt {
-        todo!()
+        Ok(($2?, $3?))
       }
     | { Ok((vec![], vec![])) }
     ;

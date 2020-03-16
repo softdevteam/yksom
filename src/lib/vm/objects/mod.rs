@@ -83,6 +83,16 @@ pub trait Obj: std::fmt::Debug + abgc::GcLayout {
         unimplemented!();
     }
 
+    /// Lookup an instance variable in this object.
+    fn inst_var_lookup(&self, _: usize) -> Val {
+        todo!();
+    }
+
+    /// Set an instance variable in this object.
+    fn inst_var_set(&self, _: usize, _: Val) {
+        todo!();
+    }
+
     /// Produce a new `Val` which adds `other` to this.
     fn add(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unimplemented!();
