@@ -51,6 +51,7 @@ pub struct VM {
     pub double_cls: Val,
     pub false_cls: Val,
     pub int_cls: Val,
+    pub metacls_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
@@ -62,7 +63,6 @@ pub struct VM {
     pub system: Val,
     pub true_: Val,
     blockinfos: Vec<BlockInfo>,
-    classes: Vec<Val>,
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
     globals: Vec<Val>,
@@ -104,6 +104,7 @@ impl VM {
             double_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
+            metacls_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
@@ -115,7 +116,6 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: Vec::new(),
-            classes: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
@@ -132,13 +132,53 @@ impl VM {
         };
         // The very delicate phase.
         //
-        // Nothing in this phase must store references to the nil object or any classes earlier
-        // than it in the phase.
+        // The problem in this phase is that we are creating objects that have references to other
+        // objects which are not yet created i.e. we end up with `Val::illegal`s lurking around.
+        // All of these *must* be patched with references to the "true" objects before main
+        // execution happens, or we will be in undefined behaviour (and, to be clear, this will be
+        // the sort of UB you notice: segfaults etc.).
         vm.obj_cls = vm.init_builtin_class("Object", false);
         vm.cls_cls = vm.init_builtin_class("Class", false);
         vm.nil_cls = vm.init_builtin_class("Nil", true);
         let v = vm.nil_cls.clone();
         vm.nil = Inst::new(&mut vm, v);
+        vm.metacls_cls = vm.init_builtin_class("Metaclass", false);
+        {
+            // Patch incorrect references.
+            let obj_cls = vm.obj_cls.clone();
+            obj_cls
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_supercls(&vm, vm.nil.clone());
+            obj_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+            obj_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_supercls(&vm, vm.cls_cls.clone());
+            let cls_cls = vm.cls_cls.clone();
+            cls_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+            let nil_cls = vm.nil_cls.clone();
+            nil_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+            let metacls_cls = vm.metacls_cls.clone();
+            metacls_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_metacls(&vm, vm.metacls_cls.clone());
+        }
 
         // The slightly delicate phase.
         //
@@ -175,12 +215,12 @@ impl VM {
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
     /// builtin classes which do not lead to run-time instances of `Inst`.
     pub fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
-        let cls_val = compile(self, path);
+        let (name, cls_val) = compile(self, path);
         let cls: &Class = cls_val.downcast(self).unwrap();
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
-        self.classes.push(cls_val.clone());
+        self.set_global(&name, cls_val.clone());
         cls_val
     }
 
@@ -386,12 +426,12 @@ impl VM {
                     pc += 1;
                 }
                 Instr::InstVarLookup(n) => {
-                    let inst: &Inst = rcv.downcast(self).unwrap();
+                    let inst = stry!(rcv.tobj(self));
                     self.stack.push(inst.inst_var_lookup(n));
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
-                    let inst: &Inst = rcv.downcast(self).unwrap();
+                    let inst = stry!(rcv.tobj(self));
                     inst.inst_var_set(n, self.stack.peek());
                     pc += 1;
                 }
@@ -695,7 +735,7 @@ impl VM {
             }
             Primitive::Superclass => {
                 let cls: &Class = stry!(rcv.downcast(self));
-                let v = cls.superclass(self);
+                let v = cls.supercls(self);
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -1029,6 +1069,7 @@ impl VM {
             double_cls: Val::illegal(),
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
+            metacls_cls: Val::illegal(),
             obj_cls: Val::illegal(),
             nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
@@ -1040,7 +1081,6 @@ impl VM {
             system: Val::illegal(),
             true_: Val::illegal(),
             blockinfos: Vec::new(),
-            classes: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),

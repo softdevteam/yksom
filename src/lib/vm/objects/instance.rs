@@ -25,6 +25,16 @@ impl Obj for Inst {
     fn get_class(&self, _: &mut VM) -> Val {
         self.class.clone()
     }
+
+    fn inst_var_lookup(&self, n: usize) -> Val {
+        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+        inst_vars[n].clone()
+    }
+
+    fn inst_var_set(&self, n: usize, v: Val) {
+        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+        inst_vars[n] = v;
+    }
 }
 
 impl NotUnboxable for Inst {}
@@ -45,15 +55,5 @@ impl Inst {
             inst_vars: UnsafeCell::new(inst_vars),
         };
         Val::from_obj(vm, inst)
-    }
-
-    pub fn inst_var_lookup(&self, n: usize) -> Val {
-        let inst_vars = unsafe { &mut *self.inst_vars.get() };
-        inst_vars[n].clone()
-    }
-
-    pub fn inst_var_set(&self, n: usize, v: Val) {
-        let inst_vars = unsafe { &mut *self.inst_vars.get() };
-        inst_vars[n] = v;
     }
 }

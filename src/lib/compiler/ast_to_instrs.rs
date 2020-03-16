@@ -16,7 +16,7 @@ use crate::{
     },
     vm::{
         objects::{BlockInfo, Class, Method, MethodBody, String_},
-        val::{Val, ValKind},
+        val::Val,
         VM,
     },
 };
@@ -40,58 +40,64 @@ impl<'a> Compiler<'a> {
         lexer: &dyn Lexer<StorageT>,
         path: &Path,
         astcls: &ast::Class,
-    ) -> Result<Val, String> {
+    ) -> Result<(String, Val), String> {
         let mut compiler = Compiler {
             lexer,
             path,
             vars_stack: Vec::new(),
             closure_depth: 0,
         };
-        let instrs_off = vm.instrs_len();
 
-        let mut errs = vec![];
         let name = lexer.span_str(astcls.name).to_owned();
-        let supercls;
-        if name != "Object" {
-            if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
-                supercls = match n {
-                    "Block" => Some(vm.block_cls.clone()),
-                    "Boolean" => Some(vm.bool_cls.clone()),
-                    "nil" => None,
-                    "String" => Some(vm.str_cls.clone()),
+        let (supercls, supercls_meta) = if name != "Object" {
+            let supercls = if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
+                match n {
+                    "Block" => vm.block_cls.clone(),
+                    "Class" => vm.cls_cls.clone(),
+                    "Boolean" => vm.bool_cls.clone(),
+                    "String" => vm.str_cls.clone(),
                     _ => unimplemented!(),
-                };
+                }
             } else {
-                supercls = Some(vm.obj_cls.clone());
-            }
-            // Whatever superclass has been chosen, it must have been initialised already or else
-            // bad things will happen.
-            debug_assert_ne!(
-                supercls.as_ref().map(|x| x.valkind()),
-                Some(ValKind::ILLEGAL)
-            );
+                vm.obj_cls.clone()
+            };
+            (supercls.clone(), supercls.get_class(vm).clone())
         } else {
-            supercls = None;
-        }
+            (vm.nil.clone(), vm.nil.clone())
+        };
 
-        let mut inst_vars = HashMap::with_capacity(astcls.inst_vars.len());
-        for var in &astcls.inst_vars {
-            let vars_len = inst_vars.len();
-            inst_vars.insert(lexer.span_str(*var), vars_len);
-        }
-        compiler.vars_stack.push(inst_vars);
-
-        let mut methods = HashMap::with_capacity(astcls.methods.len());
-        for astmeth in &astcls.methods {
-            match compiler.c_method(vm, &astmeth) {
-                Ok(m) => {
-                    methods.insert(m.name.clone(), Gc::new(m));
-                }
-                Err(mut e) => {
-                    errs.extend(e.drain(..));
-                }
+        // Create the "main" class.
+        let mut errs = vec![];
+        let cls = match compiler.c_class(
+            vm,
+            lexer,
+            name.clone(),
+            supercls,
+            &astcls.inst_vars,
+            &astcls.methods,
+        ) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                errs.extend(e);
+                None
             }
-        }
+        };
+
+        // Create the metaclass (i.e. for a class C, this creates a class called "C class").
+        let metacls = match compiler.c_class(
+            vm,
+            lexer,
+            format!("{} class", &name),
+            supercls_meta,
+            &astcls.class_inst_vars,
+            &astcls.class_methods,
+        ) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                errs.extend(e);
+                None
+            }
+        };
 
         if !errs.is_empty() {
             let err_strs = errs
@@ -117,18 +123,65 @@ impl<'a> Compiler<'a> {
             return Err(err_strs);
         }
 
-        let name = String_::new(vm, name, false);
-        let cls_val = Val::from_obj(
+        let cls = cls.unwrap();
+        let metacls = metacls.unwrap();
+        metacls
+            .downcast::<Class>(&vm)
+            .unwrap()
+            .set_metacls(&vm, vm.metacls_cls.clone());
+        cls.downcast::<Class>(&vm)
+            .unwrap()
+            .set_metacls(&vm, metacls);
+
+        Ok((name, cls))
+    }
+
+    fn c_class(
+        &mut self,
+        vm: &mut VM,
+        lexer: &'a dyn Lexer<StorageT>,
+        name: String,
+        supercls: Val,
+        ast_inst_vars: &[Span],
+        ast_methods: &[ast::Method],
+    ) -> CompileResult<Val> {
+        let instrs_off = vm.instrs_len();
+        let mut inst_vars = HashMap::with_capacity(ast_inst_vars.len());
+        for var in ast_inst_vars {
+            let vars_len = inst_vars.len();
+            inst_vars.insert(lexer.span_str(*var), vars_len);
+        }
+        self.vars_stack.push(inst_vars);
+
+        let mut methods = HashMap::with_capacity(ast_methods.len());
+        let mut errs = vec![];
+        for astmeth in ast_methods {
+            match self.c_method(vm, astmeth) {
+                Ok(m) => {
+                    methods.insert(m.name.clone(), Gc::new(m));
+                }
+                Err(mut e) => {
+                    errs.extend(e.drain(..));
+                }
+            }
+        }
+        self.vars_stack.pop();
+        if !errs.is_empty() {
+            return Err(errs);
+        }
+
+        let name_val = String_::new(vm, name, false);
+        let cls = Class::new(
             vm,
-            Class {
-                name,
-                path: compiler.path.to_path_buf(),
-                instrs_off,
-                supercls,
-                num_inst_vars: astcls.inst_vars.len(),
-                methods,
-            },
+            vm.cls_cls.clone(),
+            name_val,
+            self.path.to_path_buf(),
+            instrs_off,
+            supercls,
+            ast_inst_vars.len(),
+            methods,
         );
+        let cls_val = Val::from_obj(vm, cls);
         let cls: &Class = cls_val.downcast(vm).unwrap();
         for m in cls.methods.values() {
             m.set_class(vm, cls_val.clone());

@@ -20,7 +20,7 @@ lrpar_mod!("lib/compiler/som.y");
 type StorageT = u32;
 
 /// Compile a class. Should only be called by the `VM`.
-pub fn compile(vm: &mut VM, path: &Path) -> Val {
+pub fn compile(vm: &mut VM, path: &Path) -> (String, Val) {
     let bytes = fs::read(path).unwrap_or_else(|_| panic!("Can't read {}.", path.to_str().unwrap()));
     let txt = String::from_utf8_lossy(&bytes);
 
@@ -32,14 +32,13 @@ pub fn compile(vm: &mut VM, path: &Path) -> Val {
     }
     match astopt {
         Some(Ok(astcls)) => {
-            let cls = ast_to_instrs::Compiler::compile(vm, &lexer, &path, &astcls).unwrap_or_else(
-                |msg| {
+            let (name, cls) = ast_to_instrs::Compiler::compile(vm, &lexer, &path, &astcls)
+                .unwrap_or_else(|msg| {
                     eprintln!("{}", msg);
                     process::exit(1);
-                },
-            );
+                });
             if errs.is_empty() {
-                cls
+                (name, cls)
             } else {
                 process::exit(1);
             }
