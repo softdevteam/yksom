@@ -234,6 +234,10 @@ impl<'a> Compiler<'a> {
                     requires_args(1)?;
                     Ok(MethodBody::Primitive(Primitive::GreaterThan))
                 }
+                ">>>" => {
+                    requires_args(1)?;
+                    Ok(MethodBody::Primitive(Primitive::Shr))
+                }
                 ">=" => {
                     requires_args(1)?;
                     Ok(MethodBody::Primitive(Primitive::GreaterThanEquals))
@@ -243,12 +247,20 @@ impl<'a> Compiler<'a> {
                     Ok(MethodBody::Primitive(Primitive::And))
                 }
                 "bitXor:" => Ok(MethodBody::Primitive(Primitive::BitXor)),
-                "sqrt" => Ok(MethodBody::Primitive(Primitive::Sqrt)),
+                "as32BitSignedValue" => Ok(MethodBody::Primitive(Primitive::As32BitSignedValue)),
+                "as32BitUnsignedValue" => {
+                    Ok(MethodBody::Primitive(Primitive::As32BitUnsignedValue))
+                }
+                "asInteger" => Ok(MethodBody::Primitive(Primitive::AsInteger)),
                 "asString" => Ok(MethodBody::Primitive(Primitive::AsString)),
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
+                "atRandom" => Ok(MethodBody::Primitive(Primitive::AtRandom)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
+                "cos" => Ok(MethodBody::Primitive(Primitive::Cos)),
                 "exit:" => Ok(MethodBody::Primitive(Primitive::Exit)),
+                "fields" => Ok(MethodBody::Primitive(Primitive::Fields)),
+                "fromString:" => Ok(MethodBody::Primitive(Primitive::FromString)),
                 "global:" => Ok(MethodBody::Primitive(Primitive::Global)),
                 "global:put:" => Ok(MethodBody::Primitive(Primitive::GlobalPut)),
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
@@ -257,7 +269,9 @@ impl<'a> Compiler<'a> {
                 "instVarAt:" => Ok(MethodBody::Primitive(Primitive::InstVarAt)),
                 "instVarAt:put:" => Ok(MethodBody::Primitive(Primitive::InstVarAtPut)),
                 "instVarNamed:" => Ok(MethodBody::Primitive(Primitive::InstVarNamed)),
+                "length" => Ok(MethodBody::Primitive(Primitive::Length)),
                 "load:" => Ok(MethodBody::Primitive(Primitive::Load)),
+                "methods" => Ok(MethodBody::Primitive(Primitive::Methods)),
                 "name" => Ok(MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(MethodBody::Primitive(Primitive::New)),
                 "objectSize" => Ok(MethodBody::Primitive(Primitive::ObjectSize)),
@@ -271,9 +285,17 @@ impl<'a> Compiler<'a> {
                 "perform:withArguments:inSuperclass:" => Ok(MethodBody::Primitive(
                     Primitive::PerformWithArgumentsInSuperClass,
                 )),
+                "PositiveInfinity" => Ok(MethodBody::Primitive(Primitive::PositiveInfinity)),
+                "primSubstringFrom:to:" => {
+                    Ok(MethodBody::Primitive(Primitive::PrimSubstringFromTo))
+                }
                 "printNewline" => Ok(MethodBody::Primitive(Primitive::PrintNewline)),
                 "printString:" => Ok(MethodBody::Primitive(Primitive::PrintString)),
+                "rem:" => Ok(MethodBody::Primitive(Primitive::Rem)),
+                "sin" => Ok(MethodBody::Primitive(Primitive::Sin)),
+                "sqrt" => Ok(MethodBody::Primitive(Primitive::Sqrt)),
                 "restart" => Ok(MethodBody::Primitive(Primitive::Restart)),
+                "round" => Ok(MethodBody::Primitive(Primitive::Round)),
                 "superclass" => Ok(MethodBody::Primitive(Primitive::Superclass)),
                 "value" => Ok(MethodBody::Primitive(Primitive::Value(0))),
                 "value:" => Ok(MethodBody::Primitive(Primitive::Value(1))),
