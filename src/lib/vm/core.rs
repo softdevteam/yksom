@@ -533,6 +533,7 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::AsInteger => todo!(),
             Primitive::AsString => {
                 let v = stry!(rcv.to_strval(self));
                 self.stack.push(v);
@@ -543,6 +544,9 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::As32BitSignedValue => todo!(),
+            Primitive::As32BitUnsignedValue => todo!(),
+            Primitive::AtRandom => todo!(),
             Primitive::BitXor => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.xor(self, v));
@@ -560,6 +564,7 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::Cos => todo!(),
             Primitive::Div => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.div(self, v));
@@ -597,6 +602,8 @@ impl VM {
                     SendReturn::Err(VMError::new(self, VMErrorKind::TypeError { expected, got }))
                 }
             }
+            Primitive::Fields => todo!(),
+            Primitive::FromString => todo!(),
             Primitive::Global => {
                 let name_val = self.stack.pop();
                 // XXX This should use Symbols not strings.
@@ -634,6 +641,7 @@ impl VM {
             Primitive::InstVarAt => unimplemented!(),
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
+            Primitive::Length => todo!(),
             Primitive::LessThan => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.less_than(self, v));
@@ -662,6 +670,7 @@ impl VM {
                 }
                 SendReturn::Val
             }
+            Primitive::Methods => todo!(),
             Primitive::Mod => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.modulus(self, v));
@@ -695,6 +704,8 @@ impl VM {
             Primitive::PerformInSuperClass => unimplemented!(),
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
+            Primitive::PositiveInfinity => todo!(),
+            Primitive::PrimSubstringFromTo => todo!(),
             Primitive::RefEquals => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.ref_equals(self, v));
@@ -716,12 +727,16 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::Rem => todo!(),
+            Primitive::Round => todo!(),
             Primitive::Shl => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.shl(self, v));
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::Shr => todo!(),
+            Primitive::Sin => todo!(),
             Primitive::Sqrt => {
                 let v = stry!(rcv.sqrt(self));
                 self.stack.push(v);
