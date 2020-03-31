@@ -9,7 +9,7 @@ use std::{
     rc::Rc,
 };
 
-use abgc::{Gc, GcLayout};
+use rboehm::Gc;
 use lrpar::Span;
 
 use crate::{
@@ -1055,19 +1055,8 @@ impl Closure {
     }
 
     fn set_var(&self, var: usize, val: Val) {
-        unsafe { *(&mut *self.vars.0.get()).get_unchecked_mut(var) = val };
-    }
-}
-
-impl GcLayout for Closure {
-    fn layout(&self) -> std::alloc::Layout {
-        std::alloc::Layout::new::<Self>()
-    }
-}
-
-impl GcLayout for Vars {
-    fn layout(&self) -> std::alloc::Layout {
-        std::alloc::Layout::new::<Self>()
+        let raw = self.vars.0.get();
+        unsafe { *(&mut *raw).get_unchecked_mut(var) = val };
     }
 }
 
@@ -1116,8 +1105,10 @@ impl VM {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_frame() {
         let mut vm = VM::new_no_bootstrap();
         let selfv = Val::from_isize(&mut vm, 42).unwrap();

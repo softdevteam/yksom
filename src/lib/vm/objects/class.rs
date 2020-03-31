@@ -2,8 +2,7 @@
 
 use std::{cell::UnsafeCell, collections::HashMap, path::PathBuf, str};
 
-use abgc::Gc;
-use abgc_derive::GcLayout;
+use rboehm::Gc;
 
 use crate::vm::{
     core::VM,
@@ -12,7 +11,7 @@ use crate::vm::{
     val::{NotUnboxable, Val, ValKind},
 };
 
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 pub struct Class {
     metacls: UnsafeCell<Val>,
     pub name: Val,

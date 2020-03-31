@@ -36,8 +36,8 @@ pub use integers::{ArbInt, Int};
 pub use method::{Method, MethodBody};
 pub use string_::String_;
 
-use abgc::{self, Gc};
-use natrob::narrowable_abgc;
+use rboehm::Gc;
+use natrob::narrowable_rboehm;
 
 use crate::vm::{core::VM, error::VMError, val::Val};
 
@@ -71,8 +71,8 @@ impl ObjType {
 
 /// The main SOM Object trait. Notice that code should almost never call these functions directly:
 /// you should instead call the equivalent function in the `Val` struct.
-#[narrowable_abgc(ThinObj)]
-pub trait Obj: std::fmt::Debug + abgc::GcLayout {
+#[narrowable_rboehm(ThinObj)]
+pub trait Obj: std::fmt::Debug {
     /// What `ObjType` does this `Val` represent?
     fn dyn_objtype(&self) -> ObjType;
     /// What class is this object an instance of?

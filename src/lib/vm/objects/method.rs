@@ -2,8 +2,6 @@
 
 use std::cell::UnsafeCell;
 
-use abgc_derive::GcLayout;
-
 use crate::{
     compiler::instrs::Primitive,
     vm::{
@@ -13,7 +11,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 pub struct Method {
     pub name: String,
     pub body: MethodBody,

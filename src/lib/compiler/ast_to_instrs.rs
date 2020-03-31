@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use abgc::Gc;
+use rboehm::Gc;
 use itertools::Itertools;
 use lrpar::{Lexer, Span};
 

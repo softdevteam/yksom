@@ -11,6 +11,11 @@ use getopts::Options;
 
 use yksom::vm::{objects::Inst, VMError, VMErrorKind, VM};
 
+use rboehm::BoehmAllocator;
+
+#[global_allocator]
+static ALLOCATOR: BoehmAllocator = BoehmAllocator;
+
 fn usage(prog: &str) -> ! {
     let path = Path::new(prog);
     let leaf = path

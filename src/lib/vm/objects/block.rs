@@ -1,7 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use abgc::Gc;
-use abgc_derive::GcLayout;
+use rboehm::Gc;
 
 use crate::vm::{
     core::{Closure, VM},
@@ -19,7 +18,7 @@ pub struct BlockInfo {
     pub max_stack: usize,
 }
 
-#[derive(Debug, GcLayout)]
+#[derive(Debug)]
 pub struct Block {
     pub method: Gc<Method>,
     /// This `Block`'s `self` val. XXX This should probably be part of the corresponding closure's

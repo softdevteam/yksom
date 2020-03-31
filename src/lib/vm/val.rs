@@ -6,10 +6,9 @@ use std::{
     convert::TryFrom,
     mem::{size_of, transmute},
     ops::Deref,
-    ptr::NonNull,
 };
 
-use abgc::{self, Gc};
+use rboehm::{self, Gc};
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
@@ -58,7 +57,7 @@ pub trait NotUnboxable {}
 
 /// The core struct representing values in the language runtime: boxed and unboxed values are
 /// hidden behind this, such that they can be treated in exactly the same way.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
@@ -72,10 +71,10 @@ impl Val {
     /// `Obj` couldn't be a trait object. Oh well.]
     pub fn from_obj<T: Obj + 'static>(_: &mut VM, obj: T) -> Self {
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-        let ptr = ThinObj::new(obj).into_raw();
+        let ptr = Gc::into_raw(ThinObj::new(obj));
         Val {
             val: unsafe {
-                transmute::<*const ThinObj, usize>(ptr.as_ptr()) | (ValKind::GCBOX as usize)
+                transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize)
             },
         }
     }
@@ -93,9 +92,9 @@ impl Val {
     /// undefined behaviour.
     pub fn recover(obj: &dyn Obj) -> Self {
         unsafe {
-            let ptr = ThinObj::recover(obj).into_raw();
+            let ptr = Gc::into_raw(ThinObj::recover(obj));
             Val {
-                val: transmute::<*const ThinObj, usize>(ptr.as_ptr()) | (ValKind::GCBOX as usize),
+                val: transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize),
             }
         }
     }
@@ -172,9 +171,9 @@ impl Val {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
                 Ok(unsafe {
-                    Gc::clone_from_raw(NonNull::new_unchecked(
+                    Gc::from_raw(
                         self.val_to_tobj() as *const _ as *mut _
-                    ))
+                    )
                 })
             }
             ValKind::INT => {
@@ -543,41 +542,6 @@ binop_typeerror!(greater_than_equals, >=);
 binop_typeerror!(less_than, <);
 binop_typeerror!(less_than_equals, <=);
 
-impl Clone for Val {
-    fn clone(&self) -> Self {
-        let val = match self.valkind() {
-            ValKind::GCBOX => unsafe {
-                transmute::<*const ThinObj, usize>(
-                    Gc::<ThinObj>::clone_from_raw(NonNull::new_unchecked(self.val_to_tobj()
-                        as *const _
-                        as *mut _))
-                    .into_raw()
-                    .as_ptr(),
-                ) | (ValKind::GCBOX as usize)
-            },
-            ValKind::INT => self.val,
-            ValKind::ILLEGAL => self.val,
-        };
-        Val { val }
-    }
-}
-
-impl Drop for Val {
-    fn drop(&mut self) {
-        match self.valkind() {
-            ValKind::GCBOX => {
-                drop(unsafe {
-                    Gc::<ThinObj>::from_raw(NonNull::new_unchecked(
-                        self.val_to_tobj() as *const _ as *mut _
-                    ))
-                });
-            }
-            ValKind::INT => (),
-            ValKind::ILLEGAL => (),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -587,8 +551,10 @@ mod tests {
     };
 
     use std::ops::Deref;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_isize() {
         let mut vm = VM::new_no_bootstrap();
 
@@ -627,6 +593,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_usize() {
         let mut vm = VM::new_no_bootstrap();
 
@@ -658,6 +625,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_recovery() {
         let mut vm = VM::new_no_bootstrap();
 
@@ -675,6 +643,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_cast() {
         let mut vm = VM::new_no_bootstrap();
         let v = String_::new(&mut vm, "s".to_owned(), true);
@@ -689,6 +658,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_downcast() {
         let mut vm = VM::new_no_bootstrap();
         let v = String_::new(&mut vm, "s".to_owned(), true);
