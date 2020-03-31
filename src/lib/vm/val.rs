@@ -551,8 +551,10 @@ mod tests {
     };
 
     use std::ops::Deref;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_isize() {
         let mut vm = VM::new_no_bootstrap();
 
@@ -591,6 +593,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_usize() {
         let mut vm = VM::new_no_bootstrap();
 
@@ -622,6 +625,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_recovery() {
         let mut vm = VM::new_no_bootstrap();
 
@@ -639,6 +643,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_cast() {
         let mut vm = VM::new_no_bootstrap();
         let v = String_::new(&mut vm, "s".to_owned(), true);
@@ -653,6 +658,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_downcast() {
         let mut vm = VM::new_no_bootstrap();
         let v = String_::new(&mut vm, "s".to_owned(), true);

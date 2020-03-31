@@ -1105,8 +1105,10 @@ impl VM {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_frame() {
         let mut vm = VM::new_no_bootstrap();
         let selfv = Val::from_isize(&mut vm, 42).unwrap();

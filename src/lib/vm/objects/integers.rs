@@ -472,8 +472,10 @@ mod tests {
     use super::*;
     use crate::vm::val::{ValKind, BITSIZE, TAG_BITSIZE};
     use std::str::FromStr;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_boxed_int() {
         let mut vm = VM::new_no_bootstrap();
 
@@ -499,6 +501,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_bint() {
         let mut vm = VM::new_no_bootstrap();
 
