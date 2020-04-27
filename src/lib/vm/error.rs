@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, io::stderr};
 
-use rboehm::Gc;
 use lrpar::Span;
+use rboehm::Gc;
 use termion::{is_tty, style};
 
 use crate::vm::{

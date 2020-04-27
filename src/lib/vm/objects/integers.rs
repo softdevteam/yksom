@@ -37,7 +37,7 @@ impl Obj for ArbInt {
     }
 
     fn get_class(&self, vm: &mut VM) -> Val {
-        vm.int_cls.clone()
+        vm.int_cls
     }
 
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
@@ -346,7 +346,7 @@ impl Obj for Int {
     }
 
     fn get_class(&self, vm: &mut VM) -> Val {
-        vm.int_cls.clone()
+        vm.int_cls
     }
 
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
@@ -471,8 +471,8 @@ impl Int {
 mod tests {
     use super::*;
     use crate::vm::val::{ValKind, BITSIZE, TAG_BITSIZE};
-    use std::str::FromStr;
     use serial_test::serial;
+    use std::str::FromStr;
 
     #[test]
     #[serial]
@@ -564,26 +564,26 @@ mod tests {
         // Different LHS and RHS types
         assert!(Val::from_isize(&mut vm, 1)
             .unwrap()
-            .add(&mut vm, bi.clone())
+            .add(&mut vm, bi)
             .unwrap()
             .downcast::<ArbInt>(&mut vm)
             .is_ok());
         assert!(Val::from_isize(&mut vm, 1)
             .unwrap()
-            .sub(&mut vm, bi.clone())
+            .sub(&mut vm, bi)
             .unwrap()
             .downcast::<ArbInt>(&mut vm)
             .is_ok());
         assert!(Val::from_isize(&mut vm, 1)
             .unwrap()
-            .mul(&mut vm, bi.clone())
+            .mul(&mut vm, bi)
             .unwrap()
             .downcast::<ArbInt>(&mut vm)
             .is_ok());
         assert_eq!(
             Val::from_isize(&mut vm, 1)
                 .unwrap()
-                .div(&mut vm, bi.clone())
+                .div(&mut vm, bi)
                 .unwrap()
                 .valkind(),
             ValKind::INT
@@ -591,26 +591,23 @@ mod tests {
 
         let v = Val::from_isize(&mut vm, 1).unwrap();
         assert!(bi
-            .clone()
             .add(&mut vm, v)
             .unwrap()
             .downcast::<ArbInt>(&mut vm)
             .is_ok());
         let v = Val::from_isize(&mut vm, 1).unwrap();
         assert!(bi
-            .clone()
             .sub(&mut vm, v)
             .unwrap()
             .downcast::<ArbInt>(&mut vm)
             .is_ok());
         let v = Val::from_isize(&mut vm, 1).unwrap();
         assert!(bi
-            .clone()
             .mul(&mut vm, v)
             .unwrap()
             .downcast::<ArbInt>(&mut vm)
             .is_ok());
         let v = Val::from_isize(&mut vm, 99999999).unwrap();
-        assert_eq!(bi.clone().div(&mut vm, v).unwrap().valkind(), ValKind::INT);
+        assert_eq!(bi.div(&mut vm, v).unwrap().valkind(), ValKind::INT);
     }
 }

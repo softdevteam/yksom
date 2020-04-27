@@ -44,7 +44,7 @@ impl SOMStack {
     pub fn peek(&self) -> Val {
         debug_assert!(!self.is_empty());
         let v = unsafe { ptr::read(self.storage.add(self.len - 1)) };
-        let v2 = v.clone();
+        let v2 = v;
         forget(v);
         v2
     }

@@ -36,8 +36,8 @@ pub use integers::{ArbInt, Int};
 pub use method::{Method, MethodBody};
 pub use string_::String_;
 
-use rboehm::Gc;
 use natrob::narrowable_rboehm;
+use rboehm::Gc;
 
 use crate::vm::{core::VM, error::VMError, val::Val};
 

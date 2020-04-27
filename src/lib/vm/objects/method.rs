@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::cell::UnsafeCell;
+use std::cell::Cell;
 
 use crate::{
     compiler::instrs::Primitive,
@@ -15,7 +15,7 @@ use crate::{
 pub struct Method {
     pub name: String,
     pub body: MethodBody,
-    class: UnsafeCell<Val>,
+    class: Cell<Val>,
 }
 
 #[derive(Debug)]
@@ -55,15 +55,15 @@ impl Method {
         Method {
             name,
             body,
-            class: UnsafeCell::new(vm.nil.clone()),
+            class: Cell::new(vm.nil),
         }
     }
 
     pub fn class(&self) -> Val {
-        unsafe { &*self.class.get() }.clone()
+        self.class.get()
     }
 
     pub fn set_class(&self, _: &VM, class: Val) {
-        *unsafe { &mut *self.class.get() } = class;
+        self.class.set(class);
     }
 }

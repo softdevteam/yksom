@@ -8,10 +8,10 @@ use std::{
     ops::Deref,
 };
 
-use rboehm::{self, Gc};
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
+use rboehm::{self, Gc};
 
 use super::{
     core::VM,
@@ -57,7 +57,7 @@ pub trait NotUnboxable {}
 
 /// The core struct representing values in the language runtime: boxed and unboxed values are
 /// hidden behind this, such that they can be treated in exactly the same way.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
@@ -73,9 +73,7 @@ impl Val {
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         let ptr = Gc::into_raw(ThinObj::new(obj));
         Val {
-            val: unsafe {
-                transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize)
-            },
+            val: unsafe { transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize) },
         }
     }
 
@@ -170,11 +168,7 @@ impl Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                Ok(unsafe {
-                    Gc::from_raw(
-                        self.val_to_tobj() as *const _ as *mut _
-                    )
-                })
+                Ok(unsafe { Gc::from_raw(self.val_to_tobj() as *const _ as *mut _) })
             }
             ValKind::INT => {
                 let i = self.as_isize(vm).unwrap();
@@ -216,9 +210,9 @@ impl Val {
     /// representing `vm.false_`.
     pub fn from_bool(vm: &VM, v: bool) -> Val {
         if v {
-            vm.true_.clone()
+            vm.true_
         } else {
-            vm.false_.clone()
+            vm.false_
         }
     }
 
@@ -286,7 +280,7 @@ impl Val {
     /// What class is this `Val` an instance of?
     pub fn get_class(&self, vm: &mut VM) -> Val {
         match self.valkind() {
-            ValKind::INT => vm.int_cls.clone(),
+            ValKind::INT => vm.int_cls,
             ValKind::GCBOX => self.tobj(vm).unwrap().get_class(vm),
             ValKind::ILLEGAL => unreachable!(),
         }
@@ -501,7 +495,7 @@ macro_rules! binop_all {
                         Ok(Val::from_bool(vm,
                             &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
                     } else {
-                        Ok(vm.$tf.clone())
+                        Ok(vm.$tf)
                     }
                 } else {
                     self.tobj(vm).unwrap().$name(vm, other)
@@ -550,8 +544,8 @@ mod tests {
         objects::{Class, ObjType, String_},
     };
 
-    use std::ops::Deref;
     use serial_test::serial;
+    use std::ops::Deref;
 
     #[test]
     #[serial]

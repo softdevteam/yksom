@@ -23,9 +23,9 @@ impl Obj for String_ {
     fn get_class(&self, vm: &mut VM) -> Val {
         // FIXME This is a temporary hack until we sort out bootstrapping of the String_ class
         if self.is_str {
-            vm.str_cls.clone()
+            vm.str_cls
         } else {
-            vm.sym_cls.clone()
+            vm.sym_cls
         }
     }
 

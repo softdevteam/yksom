@@ -9,8 +9,8 @@ use std::{
     rc::Rc,
 };
 
-use rboehm::Gc;
 use lrpar::Span;
+use rboehm::Gc;
 
 use crate::{
     compiler::{
@@ -140,44 +140,44 @@ impl VM {
         vm.obj_cls = vm.init_builtin_class("Object", false);
         vm.cls_cls = vm.init_builtin_class("Class", false);
         vm.nil_cls = vm.init_builtin_class("Nil", true);
-        let v = vm.nil_cls.clone();
+        let v = vm.nil_cls;
         vm.nil = Inst::new(&mut vm, v);
         vm.metacls_cls = vm.init_builtin_class("Metaclass", false);
         {
             // Patch incorrect references.
-            let obj_cls = vm.obj_cls.clone();
+            let obj_cls = vm.obj_cls;
             obj_cls
                 .downcast::<Class>(&vm)
                 .unwrap()
-                .set_supercls(&vm, vm.nil.clone());
-            obj_cls
-                .get_class(&mut vm)
-                .downcast::<Class>(&vm)
-                .unwrap()
-                .set_metacls(&vm, vm.metacls_cls.clone());
+                .set_supercls(&vm, vm.nil);
             obj_cls
                 .get_class(&mut vm)
                 .downcast::<Class>(&vm)
                 .unwrap()
-                .set_supercls(&vm, vm.cls_cls.clone());
-            let cls_cls = vm.cls_cls.clone();
+                .set_metacls(&vm, vm.metacls_cls);
+            obj_cls
+                .get_class(&mut vm)
+                .downcast::<Class>(&vm)
+                .unwrap()
+                .set_supercls(&vm, vm.cls_cls);
+            let cls_cls = vm.cls_cls;
             cls_cls
                 .get_class(&mut vm)
                 .downcast::<Class>(&vm)
                 .unwrap()
-                .set_metacls(&vm, vm.metacls_cls.clone());
-            let nil_cls = vm.nil_cls.clone();
+                .set_metacls(&vm, vm.metacls_cls);
+            let nil_cls = vm.nil_cls;
             nil_cls
                 .get_class(&mut vm)
                 .downcast::<Class>(&vm)
                 .unwrap()
-                .set_metacls(&vm, vm.metacls_cls.clone());
-            let metacls_cls = vm.metacls_cls.clone();
+                .set_metacls(&vm, vm.metacls_cls);
+            let metacls_cls = vm.metacls_cls;
             metacls_cls
                 .get_class(&mut vm)
                 .downcast::<Class>(&vm)
                 .unwrap()
-                .set_metacls(&vm, vm.metacls_cls.clone());
+                .set_metacls(&vm, vm.metacls_cls);
         }
 
         // The slightly delicate phase.
@@ -194,18 +194,18 @@ impl VM {
         vm.sym_cls = vm.init_builtin_class("Symbol", false);
         vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
-        let v = vm.false_cls.clone();
+        let v = vm.false_cls;
         vm.false_ = Inst::new(&mut vm, v);
-        let v = vm.system_cls.clone();
+        let v = vm.system_cls;
         vm.system = Inst::new(&mut vm, v);
-        let v = vm.true_cls.clone();
+        let v = vm.true_cls;
         vm.true_ = Inst::new(&mut vm, v);
 
         // Populate globals.
-        vm.set_global("false", vm.false_.clone());
-        vm.set_global("nil", vm.nil.clone());
-        vm.set_global("true", vm.true_.clone());
-        let v = vm.system_cls.clone();
+        vm.set_global("false", vm.false_);
+        vm.set_global("nil", vm.nil);
+        vm.set_global("true", vm.true_);
+        let v = vm.system_cls;
         let v = Inst::new(&mut vm, v);
         vm.set_global("system", v);
 
@@ -220,7 +220,7 @@ impl VM {
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
-        self.set_global(&name, cls_val.clone());
+        self.set_global(&name, cls_val);
         cls_val
     }
 
@@ -244,7 +244,7 @@ impl VM {
             .unwrap_or_else(|_| panic!("Can't find builtin class '{}'", name));
 
         let val = self.compile(&path, inst_vars_allowed);
-        self.set_global(name, val.clone());
+        self.set_global(name, val);
 
         val
     }
@@ -281,9 +281,9 @@ impl VM {
                 for a in args {
                     self.stack.push(a);
                 }
-                let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
+                let frame = Frame::new(self, true, rcv, None, num_vars, nargs);
                 self.frames.push(frame);
-                let r = self.exec_user(rcv, Gc::clone(&meth), bytecode_off);
+                let r = self.exec_user(rcv, meth, bytecode_off);
                 self.frame_pop();
                 match r {
                     SendReturn::ClosureReturn(_) => unreachable!(),
@@ -306,9 +306,9 @@ impl VM {
                 if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
-                let nframe = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
+                let nframe = Frame::new(self, true, rcv, None, num_vars, nargs);
                 self.frames.push(nframe);
-                let r = self.exec_user(rcv, Gc::clone(&method), bytecode_off);
+                let r = self.exec_user(rcv, method, bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -326,7 +326,7 @@ impl VM {
                 match e {
                     Ok(o) => o,
                     Err(mut e) => {
-                        e.backtrace.push((Gc::clone(&method), self.instr_spans[pc]));
+                        e.backtrace.push((method, self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                 }
@@ -342,7 +342,7 @@ impl VM {
                         }
                     }
                     SendReturn::Err(mut e) => {
-                        e.backtrace.push((Gc::clone(&method), self.instr_spans[pc]));
+                        e.backtrace.push((method, self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                     SendReturn::Val => (),
@@ -362,15 +362,8 @@ impl VM {
                         let blkinfo = &self.blockinfos[blkinfo_off];
                         (blkinfo.num_params, blkinfo.bytecode_end)
                     };
-                    let closure = Gc::clone(&self.current_frame().closure);
-                    let v = Block::new(
-                        self,
-                        Gc::clone(&method),
-                        rcv.clone(),
-                        blkinfo_off,
-                        closure,
-                        num_params,
-                    );
+                    let closure = self.current_frame().closure;
+                    let v = Block::new(self, method, rcv, blkinfo_off, closure, num_params);
                     self.stack.push(v);
                     pc = bytecode_end;
                 }
@@ -399,10 +392,10 @@ impl VM {
                     pc += 1;
                 }
                 Instr::GlobalLookup(i) => {
-                    let v = &self.globals[i];
+                    let v = self.globals[i];
                     if v.valkind() != ValKind::ILLEGAL {
                         // The global value is already set
-                        self.stack.push(v.clone());
+                        self.stack.push(v);
                     } else {
                         // We have to call `self unknownGlobal:<symbol name>`.
                         let cls_val = rcv.get_class(self);
@@ -417,11 +410,11 @@ impl VM {
                                 .find(|(_, j)| **j == i)
                                 .map(|(n, _)| n)
                                 .unwrap()
-                                .clone()
+                                .to_string()
                         };
                         let v = String_::new(self, name, false);
                         self.stack.push(v);
-                        send_args_on_stack!(rcv.clone(), meth, 1);
+                        send_args_on_stack!(rcv, meth, 1);
                     }
                     pc += 1;
                 }
@@ -457,7 +450,7 @@ impl VM {
 
                         let meth = match &self.inline_caches[cache_idx] {
                             Some((cache_cls, cache_meth)) if cache_cls.bit_eq(&rcv_cls) => {
-                                Gc::clone(cache_meth)
+                                *cache_meth
                             }
                             _ => {
                                 // The inline cache is empty or out of date, so store a new value in it.
@@ -465,7 +458,7 @@ impl VM {
                                 let name =
                                     Rc::clone(&unsafe { self.sends.get_unchecked(send_idx) }.0);
                                 let meth = stry!(cls.get_method(self, &*name));
-                                self.inline_caches[cache_idx] = Some((rcv_cls, Gc::clone(&meth)));
+                                self.inline_caches[cache_idx] = Some((rcv_cls, meth));
                                 meth
                             }
                         };
@@ -485,13 +478,13 @@ impl VM {
                 }
                 Instr::String(string_off) => {
                     debug_assert!(self.strings.len() > string_off);
-                    let s = unsafe { self.strings.get_unchecked(string_off) }.clone();
+                    let s = *unsafe { self.strings.get_unchecked(string_off) };
                     self.stack.push(s);
                     pc += 1;
                 }
                 Instr::Symbol(symbol_off) => {
                     debug_assert!(self.symbols.len() > symbol_off);
-                    let s = unsafe { self.symbols.get_unchecked(symbol_off) }.clone();
+                    let s = *unsafe { self.symbols.get_unchecked(symbol_off) };
                     self.stack.push(s);
                     pc += 1;
                 }
@@ -664,7 +657,7 @@ impl VM {
                         self.stack.push(cls);
                     }
                     Err(_) => {
-                        let v = self.nil.clone();
+                        let v = self.nil;
                         self.stack.push(v);
                     }
                 }
@@ -715,7 +708,7 @@ impl VM {
             Primitive::Restart => unreachable!(),
             Primitive::PrintNewline => {
                 println!();
-                let v = self.system.clone();
+                let v = self.system;
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -723,7 +716,7 @@ impl VM {
                 let v = self.stack.pop();
                 let str_: &String_ = stry!(v.downcast(self));
                 print!("{}", str_.as_str());
-                let v = self.system.clone();
+                let v = self.system;
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -766,17 +759,13 @@ impl VM {
                 let frame = Frame::new(
                     self,
                     false,
-                    rcv.clone(),
-                    Some(Gc::clone(&rcv_blk.parent_closure)),
+                    rcv,
+                    Some(rcv_blk.parent_closure),
                     num_vars,
                     nargs as usize,
                 );
                 self.frames.push(frame);
-                let r = self.exec_user(
-                    rcv_blk.inst.clone(),
-                    Gc::clone(&rcv_blk.method),
-                    bytecode_off,
-                );
+                let r = self.exec_user(rcv_blk.inst, rcv_blk.method, bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -827,13 +816,13 @@ impl VM {
         {
             if let Some((cache_cls, cache_meth)) = &self.inline_caches[idx] {
                 if cache_cls.bit_eq(&rcv_cls) {
-                    return Ok(Gc::clone(cache_meth));
+                    return Ok(*cache_meth);
                 }
             }
         }
         // The inline cache is empty or out of date, so store a new value in it.
         let meth = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
-        self.inline_caches[idx] = Some((rcv_cls, Gc::clone(&meth)));
+        self.inline_caches[idx] = Some((rcv_cls, meth));
         Ok(meth)
     }
 
@@ -907,7 +896,7 @@ impl VM {
             *i
         } else {
             let len = self.globals.len();
-            self.reverse_globals.insert(s.clone(), len);
+            self.reverse_globals.insert(s, len);
             self.globals.push(Val::illegal());
             len
         }
@@ -916,21 +905,21 @@ impl VM {
     /// Lookup the global `name`: if it has not been added, or has been added but not set, then
     /// `self.nil` will be returned.
     pub fn get_global_or_nil(&self, name: &str) -> Val {
-        if let Some(i) = self.reverse_globals.get(name).cloned() {
-            let v = &self.globals[i];
+        if let Some(i) = self.reverse_globals.get(name) {
+            let v = self.globals[*i];
             if v.valkind() != ValKind::ILLEGAL {
-                return v.clone();
+                return v;
             }
         }
-        self.nil.clone()
+        self.nil
     }
 
     /// Get the global at position `i`: if it has not been set (i.e. is `ValKind::ILLEGAL`) this
     /// will return `Err(...)`.
     pub fn get_legal_global(&self, i: usize) -> Result<Val, Box<VMError>> {
-        let v = &self.globals[i];
+        let v = self.globals[i];
         if v.valkind() != ValKind::ILLEGAL {
-            return Ok(v.clone());
+            return Ok(v);
         }
         Err(VMError::new(
             self,
@@ -986,14 +975,14 @@ impl Frame {
                 vars[num_args - i] = vm.stack.pop();
             }
             for v in vars.iter_mut().skip(num_args + 1).take(num_vars) {
-                *v = vm.nil.clone();
+                *v = vm.nil;
             }
         } else {
             for i in 0..num_args {
                 vars[num_args - i - 1] = vm.stack.pop();
             }
             for v in vars.iter_mut().skip(num_args).take(num_vars) {
-                *v = vm.nil.clone();
+                *v = vm.nil;
             }
         }
 
@@ -1014,9 +1003,9 @@ impl Frame {
     /// Return the closure `depth` closures up from this frame's closure (where `depth` can be 0
     /// which returns this frame's closure).
     fn closure(&self, mut depth: usize) -> Gc<Closure> {
-        let mut c = Gc::clone(&self.closure);
+        let mut c = self.closure;
         while depth > 0 {
-            c = Gc::clone(c.parent.as_ref().unwrap());
+            c = *c.parent.as_ref().unwrap();
             depth -= 1;
         }
         c
@@ -1051,7 +1040,7 @@ impl Closure {
     }
 
     fn get_var(&self, var: usize) -> Val {
-        unsafe { (&*self.vars.0.get()).get_unchecked(var) }.clone()
+        *unsafe { (&*self.vars.0.get()).get_unchecked(var) }
     }
 
     fn set_var(&self, var: usize, val: Val) {
