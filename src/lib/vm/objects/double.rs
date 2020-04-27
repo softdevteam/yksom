@@ -23,7 +23,7 @@ impl Obj for Double {
     }
 
     fn get_class(&self, vm: &mut VM) -> Val {
-        vm.double_cls.clone()
+        vm.double_cls
     }
 
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {

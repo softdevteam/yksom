@@ -52,18 +52,18 @@ impl<'a> Compiler<'a> {
         let (supercls, supercls_meta) = if name != "Object" {
             let supercls = if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
                 match n {
-                    "Block" => vm.block_cls.clone(),
-                    "Class" => vm.cls_cls.clone(),
-                    "Boolean" => vm.bool_cls.clone(),
-                    "String" => vm.str_cls.clone(),
+                    "Block" => vm.block_cls,
+                    "Class" => vm.cls_cls,
+                    "Boolean" => vm.bool_cls,
+                    "String" => vm.str_cls,
                     _ => unimplemented!(),
                 }
             } else {
-                vm.obj_cls.clone()
+                vm.obj_cls
             };
-            (supercls.clone(), supercls.get_class(vm).clone())
+            (supercls, supercls.get_class(vm))
         } else {
-            (vm.nil.clone(), vm.nil.clone())
+            (vm.nil, vm.nil)
         };
 
         // Create the "main" class.
@@ -128,7 +128,7 @@ impl<'a> Compiler<'a> {
         metacls
             .downcast::<Class>(&vm)
             .unwrap()
-            .set_metacls(&vm, vm.metacls_cls.clone());
+            .set_metacls(&vm, vm.metacls_cls);
         cls.downcast::<Class>(&vm)
             .unwrap()
             .set_metacls(&vm, metacls);
@@ -173,7 +173,7 @@ impl<'a> Compiler<'a> {
         let name_val = String_::new(vm, name, false);
         let cls = Class::new(
             vm,
-            vm.cls_cls.clone(),
+            vm.cls_cls,
             name_val,
             self.path.to_path_buf(),
             instrs_off,
@@ -184,7 +184,7 @@ impl<'a> Compiler<'a> {
         let cls_val = Val::from_obj(vm, cls);
         let cls: &Class = cls_val.downcast(vm).unwrap();
         for m in cls.methods.values() {
-            m.set_class(vm, cls_val.clone());
+            m.set_class(vm, cls_val);
         }
         Ok(cls_val)
     }

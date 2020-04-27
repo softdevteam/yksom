@@ -21,12 +21,12 @@ impl Obj for Inst {
     }
 
     fn get_class(&self, _: &mut VM) -> Val {
-        self.class.clone()
+        self.class
     }
 
     fn inst_var_lookup(&self, n: usize) -> Val {
         let inst_vars = unsafe { &mut *self.inst_vars.get() };
-        inst_vars[n].clone()
+        inst_vars[n]
     }
 
     fn inst_var_set(&self, n: usize, v: Val) {

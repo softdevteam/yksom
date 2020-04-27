@@ -36,7 +36,7 @@ impl Obj for Block {
     }
 
     fn get_class(&self, _: &mut VM) -> Val {
-        self.blockn_cls.clone()
+        self.blockn_cls
     }
 }
 
@@ -58,9 +58,9 @@ impl Block {
         num_params: usize,
     ) -> Val {
         let blockn_cls = match num_params {
-            0 => vm.block_cls.clone(),
-            1 => vm.block2_cls.clone(),
-            2 => vm.block3_cls.clone(),
+            0 => vm.block_cls,
+            1 => vm.block2_cls,
+            2 => vm.block3_cls,
             _ => unimplemented!(),
         };
         Val::from_obj(

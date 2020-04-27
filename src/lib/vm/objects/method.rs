@@ -55,7 +55,7 @@ impl Method {
         Method {
             name,
             body,
-            class: UnsafeCell::new(vm.nil.clone()),
+            class: UnsafeCell::new(vm.nil),
         }
     }
 

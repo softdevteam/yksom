@@ -36,7 +36,7 @@ impl Obj for Class {
 
     fn inst_var_lookup(&self, n: usize) -> Val {
         let inst_vars = unsafe { &mut *self.inst_vars.get() };
-        inst_vars[n].clone()
+        inst_vars[n]
     }
 
     fn inst_var_set(&self, n: usize, v: Val) {
@@ -65,7 +65,7 @@ impl Class {
         methods: HashMap<String, Gc<Method>>,
     ) -> Self {
         let cls = Class {
-            metacls: UnsafeCell::new(metacls.clone()),
+            metacls: UnsafeCell::new(metacls),
             name,
             path,
             instrs_off,
@@ -79,7 +79,7 @@ impl Class {
     }
 
     pub fn name(&self, _: &VM) -> Result<Val, Box<VMError>> {
-        Ok(self.name.clone())
+        Ok(self.name)
     }
 
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {

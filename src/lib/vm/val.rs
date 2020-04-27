@@ -57,7 +57,7 @@ pub trait NotUnboxable {}
 
 /// The core struct representing values in the language runtime: boxed and unboxed values are
 /// hidden behind this, such that they can be treated in exactly the same way.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Val {
     // We use this usize for pointer tagging. Needless to say, this is highly dangerous, and needs
     // several parts of the code to cooperate in order to be correct.
@@ -210,9 +210,9 @@ impl Val {
     /// representing `vm.false_`.
     pub fn from_bool(vm: &VM, v: bool) -> Val {
         if v {
-            vm.true_.clone()
+            vm.true_
         } else {
-            vm.false_.clone()
+            vm.false_
         }
     }
 
@@ -280,7 +280,7 @@ impl Val {
     /// What class is this `Val` an instance of?
     pub fn get_class(&self, vm: &mut VM) -> Val {
         match self.valkind() {
-            ValKind::INT => vm.int_cls.clone(),
+            ValKind::INT => vm.int_cls,
             ValKind::GCBOX => self.tobj(vm).unwrap().get_class(vm),
             ValKind::ILLEGAL => unreachable!(),
         }
@@ -495,7 +495,7 @@ macro_rules! binop_all {
                         Ok(Val::from_bool(vm,
                             &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
                     } else {
-                        Ok(vm.$tf.clone())
+                        Ok(vm.$tf)
                     }
                 } else {
                     self.tobj(vm).unwrap().$name(vm, other)
