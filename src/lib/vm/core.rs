@@ -9,8 +9,8 @@ use std::{
     rc::Rc,
 };
 
-use rboehm::Gc;
 use lrpar::Span;
+use rboehm::Gc;
 
 use crate::{
     compiler::{
@@ -283,7 +283,7 @@ impl VM {
                 }
                 let frame = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
                 self.frames.push(frame);
-                let r = self.exec_user(rcv, Gc::clone(&meth), bytecode_off);
+                let r = self.exec_user(rcv, meth, bytecode_off);
                 self.frame_pop();
                 match r {
                     SendReturn::ClosureReturn(_) => unreachable!(),
@@ -308,7 +308,7 @@ impl VM {
                 }
                 let nframe = Frame::new(self, true, rcv.clone(), None, num_vars, nargs);
                 self.frames.push(nframe);
-                let r = self.exec_user(rcv, Gc::clone(&method), bytecode_off);
+                let r = self.exec_user(rcv, method, bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -326,7 +326,7 @@ impl VM {
                 match e {
                     Ok(o) => o,
                     Err(mut e) => {
-                        e.backtrace.push((Gc::clone(&method), self.instr_spans[pc]));
+                        e.backtrace.push((method, self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                 }
@@ -342,7 +342,7 @@ impl VM {
                         }
                     }
                     SendReturn::Err(mut e) => {
-                        e.backtrace.push((Gc::clone(&method), self.instr_spans[pc]));
+                        e.backtrace.push((method, self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                     SendReturn::Val => (),
@@ -362,15 +362,8 @@ impl VM {
                         let blkinfo = &self.blockinfos[blkinfo_off];
                         (blkinfo.num_params, blkinfo.bytecode_end)
                     };
-                    let closure = Gc::clone(&self.current_frame().closure);
-                    let v = Block::new(
-                        self,
-                        Gc::clone(&method),
-                        rcv.clone(),
-                        blkinfo_off,
-                        closure,
-                        num_params,
-                    );
+                    let closure = self.current_frame().closure;
+                    let v = Block::new(self, method, rcv.clone(), blkinfo_off, closure, num_params);
                     self.stack.push(v);
                     pc = bytecode_end;
                 }
@@ -457,7 +450,7 @@ impl VM {
 
                         let meth = match &self.inline_caches[cache_idx] {
                             Some((cache_cls, cache_meth)) if cache_cls.bit_eq(&rcv_cls) => {
-                                Gc::clone(cache_meth)
+                                *cache_meth
                             }
                             _ => {
                                 // The inline cache is empty or out of date, so store a new value in it.
@@ -465,7 +458,7 @@ impl VM {
                                 let name =
                                     Rc::clone(&unsafe { self.sends.get_unchecked(send_idx) }.0);
                                 let meth = stry!(cls.get_method(self, &*name));
-                                self.inline_caches[cache_idx] = Some((rcv_cls, Gc::clone(&meth)));
+                                self.inline_caches[cache_idx] = Some((rcv_cls, meth));
                                 meth
                             }
                         };
@@ -767,16 +760,12 @@ impl VM {
                     self,
                     false,
                     rcv.clone(),
-                    Some(Gc::clone(&rcv_blk.parent_closure)),
+                    Some(rcv_blk.parent_closure),
                     num_vars,
                     nargs as usize,
                 );
                 self.frames.push(frame);
-                let r = self.exec_user(
-                    rcv_blk.inst.clone(),
-                    Gc::clone(&rcv_blk.method),
-                    bytecode_off,
-                );
+                let r = self.exec_user(rcv_blk.inst.clone(), rcv_blk.method, bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -827,13 +816,13 @@ impl VM {
         {
             if let Some((cache_cls, cache_meth)) = &self.inline_caches[idx] {
                 if cache_cls.bit_eq(&rcv_cls) {
-                    return Ok(Gc::clone(cache_meth));
+                    return Ok(*cache_meth);
                 }
             }
         }
         // The inline cache is empty or out of date, so store a new value in it.
         let meth = rcv_cls.downcast::<Class>(self)?.get_method(self, &name)?;
-        self.inline_caches[idx] = Some((rcv_cls, Gc::clone(&meth)));
+        self.inline_caches[idx] = Some((rcv_cls, meth));
         Ok(meth)
     }
 
@@ -1014,9 +1003,9 @@ impl Frame {
     /// Return the closure `depth` closures up from this frame's closure (where `depth` can be 0
     /// which returns this frame's closure).
     fn closure(&self, mut depth: usize) -> Gc<Closure> {
-        let mut c = Gc::clone(&self.closure);
+        let mut c = self.closure;
         while depth > 0 {
-            c = Gc::clone(c.parent.as_ref().unwrap());
+            c = *c.parent.as_ref().unwrap();
             depth -= 1;
         }
         c

@@ -4,9 +4,9 @@ use std::{
     path::Path,
 };
 
-use rboehm::Gc;
 use itertools::Itertools;
 use lrpar::{Lexer, Span};
+use rboehm::Gc;
 
 use crate::{
     compiler::{

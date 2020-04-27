@@ -471,8 +471,8 @@ impl Int {
 mod tests {
     use super::*;
     use crate::vm::val::{ValKind, BITSIZE, TAG_BITSIZE};
-    use std::str::FromStr;
     use serial_test::serial;
+    use std::str::FromStr;
 
     #[test]
     #[serial]

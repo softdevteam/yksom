@@ -83,17 +83,14 @@ impl Class {
     }
 
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
-        self.methods
-            .get(msg)
-            .map(|x| Ok(Gc::clone(x)))
-            .unwrap_or_else(|| {
-                let supercls = self.supercls(vm);
-                if supercls != vm.nil {
-                    supercls.downcast::<Class>(vm)?.get_method(vm, msg)
-                } else {
-                    Err(VMError::new(vm, VMErrorKind::UnknownMethod(msg.to_owned())))
-                }
-            })
+        self.methods.get(msg).map(|x| Ok(*x)).unwrap_or_else(|| {
+            let supercls = self.supercls(vm);
+            if supercls != vm.nil {
+                supercls.downcast::<Class>(vm)?.get_method(vm, msg)
+            } else {
+                Err(VMError::new(vm, VMErrorKind::UnknownMethod(msg.to_owned())))
+            }
+        })
     }
 
     pub fn set_metacls(&self, vm: &VM, cls_val: Val) {

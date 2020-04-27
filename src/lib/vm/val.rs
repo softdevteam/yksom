@@ -8,10 +8,10 @@ use std::{
     ops::Deref,
 };
 
-use rboehm::{self, Gc};
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
+use rboehm::{self, Gc};
 
 use super::{
     core::VM,
@@ -73,9 +73,7 @@ impl Val {
         debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
         let ptr = Gc::into_raw(ThinObj::new(obj));
         Val {
-            val: unsafe {
-                transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize)
-            },
+            val: unsafe { transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize) },
         }
     }
 
@@ -170,11 +168,7 @@ impl Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                Ok(unsafe {
-                    Gc::from_raw(
-                        self.val_to_tobj() as *const _ as *mut _
-                    )
-                })
+                Ok(unsafe { Gc::from_raw(self.val_to_tobj() as *const _ as *mut _) })
             }
             ValKind::INT => {
                 let i = self.as_isize(vm).unwrap();
@@ -550,8 +544,8 @@ mod tests {
         objects::{Class, ObjType, String_},
     };
 
-    use std::ops::Deref;
     use serial_test::serial;
+    use std::ops::Deref;
 
     #[test]
     #[serial]
