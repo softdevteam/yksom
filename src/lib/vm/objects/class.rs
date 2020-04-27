@@ -1,6 +1,11 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::{cell::UnsafeCell, collections::HashMap, path::PathBuf, str};
+use std::{
+    cell::{Cell, UnsafeCell},
+    collections::HashMap,
+    path::PathBuf,
+    str,
+};
 
 use rboehm::Gc;
 
@@ -13,12 +18,12 @@ use crate::vm::{
 
 #[derive(Debug)]
 pub struct Class {
-    metacls: UnsafeCell<Val>,
+    metacls: Cell<Val>,
     pub name: Val,
     pub path: PathBuf,
     /// Offset to this class's instructions in VM::instrs.
     pub instrs_off: usize,
-    supercls: UnsafeCell<Val>,
+    supercls: Cell<Val>,
     pub num_inst_vars: usize,
     pub methods: HashMap<String, Gc<Method>>,
     inst_vars: UnsafeCell<Vec<Val>>,
@@ -30,8 +35,8 @@ impl Obj for Class {
     }
 
     fn get_class(&self, _: &mut VM) -> Val {
-        debug_assert!(unsafe { &*self.metacls.get() }.valkind() != ValKind::ILLEGAL);
-        unsafe { &*self.metacls.get() }.clone()
+        debug_assert!(self.metacls.get().valkind() != ValKind::ILLEGAL);
+        self.metacls.get()
     }
 
     fn inst_var_lookup(&self, n: usize) -> Val {
@@ -65,11 +70,11 @@ impl Class {
         methods: HashMap<String, Gc<Method>>,
     ) -> Self {
         let cls = Class {
-            metacls: UnsafeCell::new(metacls),
+            metacls: Cell::new(metacls),
             name,
             path,
             instrs_off,
-            supercls: UnsafeCell::new(supercls),
+            supercls: Cell::new(supercls),
             num_inst_vars,
             methods,
             inst_vars: UnsafeCell::new(vec![]),
@@ -100,16 +105,16 @@ impl Class {
             let cls: &Class = cls_val.downcast(vm).unwrap();
             let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
             inst_vars.resize(cls.num_inst_vars, Val::illegal());
-            *unsafe { &mut *self.metacls.get() } = cls_val;
+            self.metacls.set(cls_val);
             *unsafe { &mut *self.inst_vars.get() } = inst_vars;
         }
     }
 
     pub fn supercls(&self, _: &VM) -> Val {
-        unsafe { &*self.supercls.get() }.clone()
+        self.supercls.get()
     }
 
     pub fn set_supercls(&self, _: &VM, cls: Val) {
-        *unsafe { &mut *self.supercls.get() } = cls;
+        self.supercls.set(cls);
     }
 }
