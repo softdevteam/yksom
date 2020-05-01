@@ -5,8 +5,7 @@ use std::{
     collections::HashMap,
     convert::TryFrom,
     path::{Path, PathBuf},
-    process,
-    rc::Rc,
+    process
 };
 
 use lrpar::Span;
@@ -72,10 +71,10 @@ pub struct VM {
     /// rarely access `instr_spans`.
     instrs: Vec<Instr>,
     instr_spans: Vec<Span>,
-    sends: Vec<(Rc<String>, usize)>,
+    sends: Vec<(Gc<String>, usize)>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
-    reverse_sends: HashMap<(Rc<String>, usize), usize>,
+    reverse_sends: HashMap<(Gc<String>, usize), usize>,
     stack: SOMStack,
     strings: Vec<Val>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
@@ -455,8 +454,7 @@ impl VM {
                             _ => {
                                 // The inline cache is empty or out of date, so store a new value in it.
                                 let cls: &Class = stry!(rcv_cls.downcast(self));
-                                let name =
-                                    Rc::clone(&unsafe { self.sends.get_unchecked(send_idx) }.0);
+                                let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
                                 let meth = stry!(cls.get_method(self, &*name));
                                 self.inline_caches[cache_idx] = Some((rcv_cls, meth));
                                 meth
@@ -844,7 +842,7 @@ impl VM {
     pub fn add_send(&mut self, send: (String, usize)) -> usize {
         // We want to avoid `clone`ing `send` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
-        let send = (Rc::new(send.0), send.1);
+        let send = (Gc::new(send.0), send.1);
         if let Some(i) = self.reverse_sends.get(&send) {
             *i
         } else {
