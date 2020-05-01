@@ -5,7 +5,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use lrpar::{Lexer, Span};
+use lrpar::{NonStreamingLexer, Span};
 use rboehm::Gc;
 
 use crate::{
@@ -21,8 +21,8 @@ use crate::{
     },
 };
 
-pub struct Compiler<'a> {
-    lexer: &'a dyn Lexer<StorageT>,
+pub struct Compiler<'a, 'input> {
+    lexer: &'a dyn NonStreamingLexer<'input, StorageT>,
     path: &'a Path,
     /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<&'a str, usize>>,
@@ -34,10 +34,10 @@ pub struct Compiler<'a> {
 
 type CompileResult<T> = Result<T, Vec<(Span, String)>>;
 
-impl<'a> Compiler<'a> {
+impl<'a, 'input> Compiler<'a, 'input> {
     pub fn compile(
         vm: &mut VM,
-        lexer: &dyn Lexer<StorageT>,
+        lexer: &dyn NonStreamingLexer<StorageT>,
         path: &Path,
         astcls: &ast::Class,
     ) -> Result<(String, Val), String> {
@@ -139,7 +139,7 @@ impl<'a> Compiler<'a> {
     fn c_class(
         &mut self,
         vm: &mut VM,
-        lexer: &'a dyn Lexer<StorageT>,
+        lexer: &'a dyn NonStreamingLexer<StorageT>,
         name: String,
         supercls: Val,
         ast_inst_vars: &[Span],
