@@ -158,61 +158,60 @@ impl VM {
         let v = self.nil_cls;
         self.nil = Inst::new(&mut self, v);
         self.metacls_cls = self.init_builtin_class("Metaclass", false);
-        {
-            // Patch incorrect references.
-            let obj_cls = self.obj_cls;
-            obj_cls
-                .downcast::<Class>(&self)
-                .unwrap()
-                .set_supercls(&self, self.nil);
-            obj_cls
-                .get_class(&mut self)
-                .downcast::<Class>(&self)
-                .unwrap()
-                .set_metacls(&self, self.metacls_cls);
-            obj_cls
-                .get_class(&mut self)
-                .downcast::<Class>(&self)
-                .unwrap()
-                .set_supercls(&self, self.cls_cls);
-            let cls_cls = self.cls_cls;
-            cls_cls
-                .get_class(&mut self)
-                .downcast::<Class>(&self)
-                .unwrap()
-                .set_metacls(&self, self.metacls_cls);
-            let nil_cls = self.nil_cls;
-            nil_cls
-                .get_class(&mut self)
-                .downcast::<Class>(&self)
-                .unwrap()
-                .set_metacls(&self, self.metacls_cls);
-            let metacls_cls = self.metacls_cls;
-            metacls_cls
-                .get_class(&mut self)
-                .downcast::<Class>(&self)
-                .unwrap()
-                .set_metacls(&self, self.metacls_cls);
 
-            self.str_cls = self.init_builtin_class("String", false);
-            let str_cls = self.str_cls;
-            for c in &[obj_cls, cls_cls, nil_cls, metacls_cls, str_cls] {
-                let cls = c.downcast::<Class>(&self).unwrap();
-                cls.name
-                    .downcast::<String_>(&self)
-                    .unwrap()
-                    .set_cls(str_cls);
-                let metacls_val = c.get_class(&mut self);
-                let metacls = metacls_val.downcast::<Class>(&self).unwrap();
-                metacls
-                    .name
-                    .downcast::<String_>(&self)
-                    .unwrap()
-                    .set_cls(str_cls);
-            }
-            for s in &self.strings {
-                s.downcast::<String_>(&self).unwrap().set_cls(str_cls);
-            }
+        // Patch incorrect references.
+        let obj_cls = self.obj_cls;
+        obj_cls
+            .downcast::<Class>(&self)
+            .unwrap()
+            .set_supercls(&self, self.nil);
+        obj_cls
+            .get_class(&mut self)
+            .downcast::<Class>(&self)
+            .unwrap()
+            .set_metacls(&self, self.metacls_cls);
+        obj_cls
+            .get_class(&mut self)
+            .downcast::<Class>(&self)
+            .unwrap()
+            .set_supercls(&self, self.cls_cls);
+        let cls_cls = self.cls_cls;
+        cls_cls
+            .get_class(&mut self)
+            .downcast::<Class>(&self)
+            .unwrap()
+            .set_metacls(&self, self.metacls_cls);
+        let nil_cls = self.nil_cls;
+        nil_cls
+            .get_class(&mut self)
+            .downcast::<Class>(&self)
+            .unwrap()
+            .set_metacls(&self, self.metacls_cls);
+        let metacls_cls = self.metacls_cls;
+        metacls_cls
+            .get_class(&mut self)
+            .downcast::<Class>(&self)
+            .unwrap()
+            .set_metacls(&self, self.metacls_cls);
+
+        self.str_cls = self.init_builtin_class("String", false);
+        let str_cls = self.str_cls;
+        for c in &[obj_cls, cls_cls, nil_cls, metacls_cls, str_cls] {
+            let cls = c.downcast::<Class>(&self).unwrap();
+            cls.name
+                .downcast::<String_>(&self)
+                .unwrap()
+                .set_cls(str_cls);
+            let metacls_val = c.get_class(&mut self);
+            let metacls = metacls_val.downcast::<Class>(&self).unwrap();
+            metacls
+                .name
+                .downcast::<String_>(&self)
+                .unwrap()
+                .set_cls(str_cls);
+        }
+        for s in &self.strings {
+            s.downcast::<String_>(&self).unwrap().set_cls(str_cls);
         }
 
         self
