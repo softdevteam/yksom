@@ -130,95 +130,9 @@ impl VM {
             frames: Vec::new(),
         };
 
-        // The very delicate phase.
-        //
-        // The problem in this phase is that we are creating objects that have references to other
-        // objects which are not yet created i.e. we end up with `Val::illegal`s lurking around.
-        // All of these *must* be patched with references to the "true" objects before main
-        // execution happens, or we will be in undefined behaviour (and, to be clear, this will be
-        // the sort of UB you notice: segfaults etc.).
-
-        vm.obj_cls = vm.init_builtin_class("Object", false);
-        vm.cls_cls = vm.init_builtin_class("Class", false);
-        vm.nil_cls = vm.init_builtin_class("Nil", true);
-        let v = vm.nil_cls;
-        vm.nil = Inst::new(&mut vm, v);
-        vm.metacls_cls = vm.init_builtin_class("Metaclass", false);
-        {
-            // Patch incorrect references.
-            let obj_cls = vm.obj_cls;
-            obj_cls
-                .downcast::<Class>(&vm)
-                .unwrap()
-                .set_supercls(&vm, vm.nil);
-            obj_cls
-                .get_class(&mut vm)
-                .downcast::<Class>(&vm)
-                .unwrap()
-                .set_metacls(&vm, vm.metacls_cls);
-            obj_cls
-                .get_class(&mut vm)
-                .downcast::<Class>(&vm)
-                .unwrap()
-                .set_supercls(&vm, vm.cls_cls);
-            let cls_cls = vm.cls_cls;
-            cls_cls
-                .get_class(&mut vm)
-                .downcast::<Class>(&vm)
-                .unwrap()
-                .set_metacls(&vm, vm.metacls_cls);
-            let nil_cls = vm.nil_cls;
-            nil_cls
-                .get_class(&mut vm)
-                .downcast::<Class>(&vm)
-                .unwrap()
-                .set_metacls(&vm, vm.metacls_cls);
-            let metacls_cls = vm.metacls_cls;
-            metacls_cls
-                .get_class(&mut vm)
-                .downcast::<Class>(&vm)
-                .unwrap()
-                .set_metacls(&vm, vm.metacls_cls);
-
-            vm.str_cls = vm.init_builtin_class("String", false);
-            let str_cls = vm.str_cls;
-            for c in &[obj_cls, cls_cls, nil_cls, metacls_cls, str_cls] {
-                let cls = c.downcast::<Class>(&vm).unwrap();
-                cls.name.downcast::<String_>(&vm).unwrap().set_cls(str_cls);
-                let metacls_val = c.get_class(&mut vm);
-                let metacls = metacls_val.downcast::<Class>(&vm).unwrap();
-                metacls
-                    .name
-                    .downcast::<String_>(&vm)
-                    .unwrap()
-                    .set_cls(str_cls);
-            }
-            for s in &vm.strings {
-                s.downcast::<String_>(&vm).unwrap().set_cls(str_cls);
-            }
-        }
-
-        // The slightly delicate phase.
-        //
-        // Nothing in this phase must store references to any classes earlier than it in the phase.
-        assert!(vm.symbols.is_empty());
-        vm.sym_cls = vm.init_builtin_class("Symbol", false);
-
-        vm.block_cls = vm.init_builtin_class("Block", false);
-        vm.block2_cls = vm.init_builtin_class("Block2", false);
-        vm.block3_cls = vm.init_builtin_class("Block3", false);
-        vm.bool_cls = vm.init_builtin_class("Boolean", false);
-        vm.double_cls = vm.init_builtin_class("Double", false);
-        vm.false_cls = vm.init_builtin_class("False", false);
-        vm.int_cls = vm.init_builtin_class("Integer", false);
-        vm.system_cls = vm.init_builtin_class("System", false);
-        vm.true_cls = vm.init_builtin_class("True", false);
-        let v = vm.false_cls;
-        vm.false_ = Inst::new(&mut vm, v);
-        let v = vm.system_cls;
-        vm.system = Inst::new(&mut vm, v);
-        let v = vm.true_cls;
-        vm.true_ = Inst::new(&mut vm, v);
+        // These two phases must be executed in the correct order.
+        vm = vm.bootstrap_very_delicate();
+        vm = vm.bootstrap_semi_delicate();
 
         // Populate globals.
         vm.set_global("false", vm.false_);
@@ -229,6 +143,103 @@ impl VM {
         vm.set_global("system", v);
 
         vm
+    }
+
+    fn bootstrap_very_delicate(mut self) -> Self {
+        // The problem in this phase is that we are creating objects that have references to other
+        // objects which are not yet created i.e. we end up with `Val::illegal`s lurking around.
+        // All of these *must* be patched with references to the "true" objects before main
+        // execution happens, or we will be in undefined behaviour (and, to be clear, this will be
+        // the sort of UB you notice: segfaults etc.).
+
+        self.obj_cls = self.init_builtin_class("Object", false);
+        self.cls_cls = self.init_builtin_class("Class", false);
+        self.nil_cls = self.init_builtin_class("Nil", true);
+        let v = self.nil_cls;
+        self.nil = Inst::new(&mut self, v);
+        self.metacls_cls = self.init_builtin_class("Metaclass", false);
+        {
+            // Patch incorrect references.
+            let obj_cls = self.obj_cls;
+            obj_cls
+                .downcast::<Class>(&self)
+                .unwrap()
+                .set_supercls(&self, self.nil);
+            obj_cls
+                .get_class(&mut self)
+                .downcast::<Class>(&self)
+                .unwrap()
+                .set_metacls(&self, self.metacls_cls);
+            obj_cls
+                .get_class(&mut self)
+                .downcast::<Class>(&self)
+                .unwrap()
+                .set_supercls(&self, self.cls_cls);
+            let cls_cls = self.cls_cls;
+            cls_cls
+                .get_class(&mut self)
+                .downcast::<Class>(&self)
+                .unwrap()
+                .set_metacls(&self, self.metacls_cls);
+            let nil_cls = self.nil_cls;
+            nil_cls
+                .get_class(&mut self)
+                .downcast::<Class>(&self)
+                .unwrap()
+                .set_metacls(&self, self.metacls_cls);
+            let metacls_cls = self.metacls_cls;
+            metacls_cls
+                .get_class(&mut self)
+                .downcast::<Class>(&self)
+                .unwrap()
+                .set_metacls(&self, self.metacls_cls);
+
+            self.str_cls = self.init_builtin_class("String", false);
+            let str_cls = self.str_cls;
+            for c in &[obj_cls, cls_cls, nil_cls, metacls_cls, str_cls] {
+                let cls = c.downcast::<Class>(&self).unwrap();
+                cls.name
+                    .downcast::<String_>(&self)
+                    .unwrap()
+                    .set_cls(str_cls);
+                let metacls_val = c.get_class(&mut self);
+                let metacls = metacls_val.downcast::<Class>(&self).unwrap();
+                metacls
+                    .name
+                    .downcast::<String_>(&self)
+                    .unwrap()
+                    .set_cls(str_cls);
+            }
+            for s in &self.strings {
+                s.downcast::<String_>(&self).unwrap().set_cls(str_cls);
+            }
+        }
+
+        self
+    }
+
+    fn bootstrap_semi_delicate(mut self) -> Self {
+        // Nothing in this phase must store references to any classes earlier than it in the phase.
+        assert!(self.symbols.is_empty());
+        self.sym_cls = self.init_builtin_class("Symbol", false);
+
+        self.block_cls = self.init_builtin_class("Block", false);
+        self.block2_cls = self.init_builtin_class("Block2", false);
+        self.block3_cls = self.init_builtin_class("Block3", false);
+        self.bool_cls = self.init_builtin_class("Boolean", false);
+        self.double_cls = self.init_builtin_class("Double", false);
+        self.false_cls = self.init_builtin_class("False", false);
+        self.int_cls = self.init_builtin_class("Integer", false);
+        self.system_cls = self.init_builtin_class("System", false);
+        self.true_cls = self.init_builtin_class("True", false);
+        let v = self.false_cls;
+        self.false_ = Inst::new(&mut self, v);
+        let v = self.system_cls;
+        self.system = Inst::new(&mut self, v);
+        let v = self.true_cls;
+        self.true_ = Inst::new(&mut self, v);
+
+        self
     }
 
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
