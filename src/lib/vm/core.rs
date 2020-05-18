@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     convert::TryFrom,
     path::{Path, PathBuf},
-    process
+    process,
 };
 
 use lrpar::Span;
@@ -129,6 +129,7 @@ impl VM {
             reverse_symbols: HashMap::new(),
             frames: Vec::new(),
         };
+
         // The very delicate phase.
         //
         // The problem in this phase is that we are creating objects that have references to other
@@ -136,6 +137,7 @@ impl VM {
         // All of these *must* be patched with references to the "true" objects before main
         // execution happens, or we will be in undefined behaviour (and, to be clear, this will be
         // the sort of UB you notice: segfaults etc.).
+
         vm.obj_cls = vm.init_builtin_class("Object", false);
         vm.cls_cls = vm.init_builtin_class("Class", false);
         vm.nil_cls = vm.init_builtin_class("Nil", true);
@@ -177,11 +179,31 @@ impl VM {
                 .downcast::<Class>(&vm)
                 .unwrap()
                 .set_metacls(&vm, vm.metacls_cls);
+
+            vm.str_cls = vm.init_builtin_class("String", false);
+            let str_cls = vm.str_cls;
+            for c in &[obj_cls, cls_cls, nil_cls, metacls_cls, str_cls] {
+                let cls = c.downcast::<Class>(&vm).unwrap();
+                cls.name.downcast::<String_>(&vm).unwrap().set_cls(str_cls);
+                let metacls_val = c.get_class(&mut vm);
+                let metacls = metacls_val.downcast::<Class>(&vm).unwrap();
+                metacls
+                    .name
+                    .downcast::<String_>(&vm)
+                    .unwrap()
+                    .set_cls(str_cls);
+            }
+            for s in &vm.strings {
+                s.downcast::<String_>(&vm).unwrap().set_cls(str_cls);
+            }
         }
 
         // The slightly delicate phase.
         //
         // Nothing in this phase must store references to any classes earlier than it in the phase.
+        assert!(vm.symbols.is_empty());
+        vm.sym_cls = vm.init_builtin_class("Symbol", false);
+
         vm.block_cls = vm.init_builtin_class("Block", false);
         vm.block2_cls = vm.init_builtin_class("Block2", false);
         vm.block3_cls = vm.init_builtin_class("Block3", false);
@@ -189,8 +211,6 @@ impl VM {
         vm.double_cls = vm.init_builtin_class("Double", false);
         vm.false_cls = vm.init_builtin_class("False", false);
         vm.int_cls = vm.init_builtin_class("Integer", false);
-        vm.str_cls = vm.init_builtin_class("String", false);
-        vm.sym_cls = vm.init_builtin_class("Symbol", false);
         vm.system_cls = vm.init_builtin_class("System", false);
         vm.true_cls = vm.init_builtin_class("True", false);
         let v = vm.false_cls;
@@ -411,7 +431,7 @@ impl VM {
                                 .unwrap()
                                 .to_string()
                         };
-                        let v = String_::new(self, name, false);
+                        let v = String_::new_sym(self, name);
                         self.stack.push(v);
                         send_args_on_stack!(rcv, meth, 1);
                     }
@@ -527,7 +547,9 @@ impl VM {
             Primitive::AsInteger => todo!(),
             Primitive::AsString => {
                 let v = stry!(rcv.to_strval(self));
-                self.stack.push(v);
+                let str_maybe: &String_ = stry!(v.downcast(self));
+                let str_ = stry!(str_maybe.to_string_(self));
+                self.stack.push(str_);
                 SendReturn::Val
             }
             Primitive::AsSymbol => {
@@ -598,21 +620,26 @@ impl VM {
             Primitive::Global => {
                 let name_val = self.stack.pop();
                 // XXX This should use Symbols not strings.
-                let name: &String_ = stry!(name_val.downcast(self));
-                assert!(!name.is_str);
-                let g = self.get_global_or_nil(name.as_str());
-                self.stack.push(g);
-                SendReturn::Val
+                if name_val.get_class(self) == self.sym_cls {
+                    let name: &String_ = stry!(name_val.downcast(self));
+                    let g = self.get_global_or_nil(name.as_str());
+                    self.stack.push(g);
+                    SendReturn::Val
+                } else {
+                    todo!();
+                }
             }
             Primitive::GlobalPut => {
                 let v = self.stack.pop();
                 let name_val = self.stack.pop();
-                // XXX This should use Symbols not strings.
-                let name: &String_ = stry!(name_val.downcast(self));
-                assert!(!name.is_str);
-                self.set_global(name.as_str(), v);
-                self.stack.push(rcv);
-                SendReturn::Val
+                if name_val.get_class(self) == self.sym_cls {
+                    let name: &String_ = stry!(name_val.downcast(self));
+                    self.set_global(name.as_str(), v);
+                    self.stack.push(rcv);
+                    SendReturn::Val
+                } else {
+                    todo!();
+                }
             }
             Primitive::GreaterThan => {
                 let v = self.stack.pop();
@@ -676,7 +703,9 @@ impl VM {
             }
             Primitive::Name => {
                 let v = stry!(stry!(rcv.downcast::<Class>(self)).name(self));
-                self.stack.push(v);
+                let str_: &String_ = stry!(v.downcast(self));
+                let sym = stry!(str_.to_symbol(self));
+                self.stack.push(sym);
                 SendReturn::Val
             }
             Primitive::New => {
@@ -863,7 +892,7 @@ impl VM {
         } else {
             let len = self.strings.len();
             self.reverse_strings.insert(s.clone(), len);
-            let v = String_::new(self, s, true);
+            let v = String_::new_str(self, s);
             self.strings.push(v);
             len
         }
@@ -879,7 +908,7 @@ impl VM {
         } else {
             let len = self.symbols.len();
             self.reverse_symbols.insert(s.clone(), len);
-            let v = String_::new(self, s, false);
+            let v = String_::new_sym(self, s);
             self.symbols.push(v);
             len
         }

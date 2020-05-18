@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::str;
+use std::{cell::Cell, str};
 
 use crate::vm::{
     core::VM,
@@ -11,8 +11,8 @@ use crate::vm::{
 
 #[derive(Debug)]
 pub struct String_ {
+    cls: Cell<Val>,
     s: String,
-    pub is_str: bool,
 }
 
 impl Obj for String_ {
@@ -20,17 +20,23 @@ impl Obj for String_ {
         ObjType::String_
     }
 
-    fn get_class(&self, vm: &mut VM) -> Val {
-        // FIXME This is a temporary hack until we sort out bootstrapping of the String_ class
-        if self.is_str {
-            vm.str_cls
-        } else {
-            vm.sym_cls
-        }
+    fn get_class(&self, _: &mut VM) -> Val {
+        debug_assert!(
+            self.cls.get().valkind() != crate::vm::val::ValKind::ILLEGAL,
+            "{}",
+            self.s
+        );
+        self.cls.get()
     }
 
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(String_::new(vm, self.s.to_string(), true))
+        Ok(Val::from_obj(
+            vm,
+            String_ {
+                cls: self.cls.clone(),
+                s: self.s.clone(),
+            },
+        ))
     }
 
     fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
@@ -38,7 +44,7 @@ impl Obj for String_ {
 
         Ok(Val::from_bool(
             vm,
-            (self.is_str == other_str.is_str) && (self.s == other_str.s),
+            (self.cls == other_str.cls) && (self.s == other_str.s),
         ))
     }
 }
@@ -52,8 +58,24 @@ impl StaticObjType for String_ {
 }
 
 impl String_ {
-    pub fn new(vm: &mut VM, s: String, is_str: bool) -> Val {
-        Val::from_obj(vm, String_ { s, is_str })
+    pub fn new_str(vm: &mut VM, s: String) -> Val {
+        Val::from_obj(
+            vm,
+            String_ {
+                cls: Cell::new(vm.str_cls),
+                s,
+            },
+        )
+    }
+
+    pub fn new_sym(vm: &mut VM, s: String) -> Val {
+        Val::from_obj(
+            vm,
+            String_ {
+                cls: Cell::new(vm.sym_cls),
+                s,
+            },
+        )
     }
 
     pub fn as_str(&self) -> &str {
@@ -75,10 +97,18 @@ impl String_ {
         let mut new = String::with_capacity(self.s.len() + other_str.s.len());
         new.push_str(&self.s);
         new.push_str(&other_str.s);
-        Ok(String_::new(vm, new, true))
+        Ok(String_::new_str(vm, new))
+    }
+
+    pub fn to_string_(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
+        Ok(String_::new_str(vm, self.s.to_string()))
     }
 
     pub fn to_symbol(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(String_::new(vm, self.s.to_string(), false))
+        Ok(String_::new_sym(vm, self.s.to_string()))
+    }
+
+    pub fn set_cls(&self, cls: Val) {
+        self.cls.set(cls);
     }
 }

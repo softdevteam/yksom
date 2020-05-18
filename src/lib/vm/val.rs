@@ -290,7 +290,7 @@ impl Val {
         match self.valkind() {
             ValKind::INT => {
                 let s = self.as_isize(vm).unwrap().to_string();
-                Ok(String_::new(vm, s, true))
+                Ok(String_::new_str(vm, s))
             }
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
             ValKind::ILLEGAL => unreachable!(),
@@ -624,7 +624,7 @@ mod tests {
         let mut vm = VM::new_no_bootstrap();
 
         let v = {
-            let v = String_::new(&mut vm, "s".to_owned(), true);
+            let v = String_::new_str(&mut vm, "s".to_owned());
             let v_tobj = v.tobj(&mut vm).unwrap();
             let v_int: &dyn Obj = v_tobj.deref().deref();
             let v_recovered = Val::recover(v_int);
@@ -640,7 +640,7 @@ mod tests {
     #[serial]
     fn test_cast() {
         let mut vm = VM::new_no_bootstrap();
-        let v = String_::new(&mut vm, "s".to_owned(), true);
+        let v = String_::new_str(&mut vm, "s".to_owned());
         assert!(v.downcast::<String_>(&mut vm).is_ok());
         assert_eq!(
             v.downcast::<Class>(&mut vm).unwrap_err().kind,
@@ -655,7 +655,7 @@ mod tests {
     #[serial]
     fn test_downcast() {
         let mut vm = VM::new_no_bootstrap();
-        let v = String_::new(&mut vm, "s".to_owned(), true);
+        let v = String_::new_str(&mut vm, "s".to_owned());
         assert!(v.downcast::<String_>(&mut vm).is_ok());
         assert!(v.downcast::<Class>(&mut vm).is_err());
         assert!(v.try_downcast::<String_>(&mut vm).is_some());

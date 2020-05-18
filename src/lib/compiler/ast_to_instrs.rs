@@ -170,7 +170,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             return Err(errs);
         }
 
-        let name_val = String_::new(vm, name, false);
+        let name_val = String_::new_str(vm, name);
         let cls = Class::new(
             vm,
             vm.cls_cls,
