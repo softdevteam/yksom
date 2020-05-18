@@ -41,7 +41,7 @@ impl Obj for ArbInt {
     }
 
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(String_::new(vm, self.val.to_string(), true))
+        Ok(String_::new_str(vm, self.val.to_string()))
     }
 
     fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
@@ -350,7 +350,7 @@ impl Obj for Int {
     }
 
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(String_::new(vm, self.val.to_string(), true))
+        Ok(String_::new_str(vm, self.val.to_string()))
     }
 
     fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {

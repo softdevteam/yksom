@@ -28,7 +28,7 @@ impl Obj for Double {
 
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         let mut buf = ryu::Buffer::new();
-        Ok(String_::new(vm, buf.format(self.val).to_owned(), true))
+        Ok(String_::new_str(vm, buf.format(self.val).to_owned()))
     }
 
     fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
