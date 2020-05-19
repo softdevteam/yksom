@@ -657,7 +657,14 @@ impl VM {
                     self.stack.push(rcv);
                     SendReturn::Val
                 } else {
-                    todo!();
+                    let got_cls = name_val.get_class(self);
+                    SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::InstanceTypeError {
+                            expected_cls: self.sym_cls,
+                            got_cls,
+                        },
+                    ))
                 }
             }
             Primitive::GreaterThan => {
