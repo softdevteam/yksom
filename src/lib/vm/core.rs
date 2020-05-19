@@ -632,14 +632,20 @@ impl VM {
             Primitive::FromString => todo!(),
             Primitive::Global => {
                 let name_val = self.stack.pop();
-                // XXX This should use Symbols not strings.
                 if name_val.get_class(self) == self.sym_cls {
                     let name: &String_ = stry!(name_val.downcast(self));
                     let g = self.get_global_or_nil(name.as_str());
                     self.stack.push(g);
                     SendReturn::Val
                 } else {
-                    todo!();
+                    let got_cls = name_val.get_class(self);
+                    SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::InstanceTypeError {
+                            expected_cls: self.sym_cls,
+                            got_cls,
+                        },
+                    ))
                 }
             }
             Primitive::GlobalPut => {

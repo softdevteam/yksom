@@ -1,15 +1,14 @@
 "
-ignore: currently symbols are not properly handled
 VM:
   status: error
   stderr:
-    xxx
+    ...
+    Expected instance of 'Symbol' but got instance of 'String'.
 "
 
 
-system_global_unset_global = (
+system_global_lookup_string = (
     run = (
         (system global: 'ab') println.
     )
 )
-
