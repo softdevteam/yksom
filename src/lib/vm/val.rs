@@ -132,7 +132,7 @@ impl Val {
         match self.valkind() {
             ValKind::INT => Err(VMError::new(
                 vm,
-                VMErrorKind::TypeError {
+                VMErrorKind::BuiltinTypeError {
                     expected: T::static_objtype(),
                     got: Int::static_objtype(),
                 },
@@ -142,7 +142,7 @@ impl Val {
                 tobj.downcast().ok_or_else(|| {
                     VMError::new(
                         vm,
-                        VMErrorKind::TypeError {
+                        VMErrorKind::BuiltinTypeError {
                             expected: T::static_objtype(),
                             got: tobj.deref().dyn_objtype(),
                         },
@@ -318,7 +318,10 @@ impl Val {
             }
             let expected = self.dyn_objtype(vm);
             let got = other.dyn_objtype(vm);
-            return Err(VMError::new(vm, VMErrorKind::TypeError { expected, got }));
+            return Err(VMError::new(
+                vm,
+                VMErrorKind::BuiltinTypeError { expected, got },
+            ));
         }
         self.tobj(vm).unwrap().and(vm, other)
     }
@@ -468,7 +471,10 @@ impl Val {
             }
             let expected = self.dyn_objtype(vm);
             let got = other.dyn_objtype(vm);
-            return Err(VMError::new(vm, VMErrorKind::TypeError { expected, got }));
+            return Err(VMError::new(
+                vm,
+                VMErrorKind::BuiltinTypeError { expected, got },
+            ));
         }
         self.tobj(vm).unwrap().xor(vm, other)
     }
@@ -644,7 +650,7 @@ mod tests {
         assert!(v.downcast::<String_>(&mut vm).is_ok());
         assert_eq!(
             v.downcast::<Class>(&mut vm).unwrap_err().kind,
-            VMErrorKind::TypeError {
+            VMErrorKind::BuiltinTypeError {
                 expected: ObjType::Class,
                 got: ObjType::String_
             }

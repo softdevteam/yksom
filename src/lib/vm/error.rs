@@ -127,6 +127,11 @@ impl VMError {
 
 #[derive(Debug, PartialEq)]
 pub enum VMErrorKind {
+    /// We expected a Rust type `expected` but at run-time got a Rust type `got`.
+    BuiltinTypeError {
+        expected: ObjType,
+        got: ObjType,
+    },
     /// A value which can't be represented in an `f64`.
     CantRepresentAsDouble,
     /// A value which can't be represented in an `isize`.
@@ -151,11 +156,6 @@ pub enum VMErrorKind {
     PrimitiveError,
     /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
     ShiftTooBig,
-    /// A dynamic type error.
-    TypeError {
-        expected: ObjType,
-        got: ObjType,
-    },
     /// An unknown global.
     UnknownGlobal(String),
     /// An unknown method.
@@ -165,6 +165,11 @@ pub enum VMErrorKind {
 impl VMErrorKind {
     fn to_string(&self, _: &VM) -> String {
         match self {
+            VMErrorKind::BuiltinTypeError { expected, got } => format!(
+                "Expected object of type '{}' but got type '{}'",
+                expected.as_str(),
+                got.as_str()
+            ),
             VMErrorKind::CantRepresentAsDouble => "Can't represent as double".to_owned(),
             VMErrorKind::CantRepresentAsIsize => {
                 "Can't represent as signed machine integer".to_owned()
@@ -182,11 +187,6 @@ impl VMErrorKind {
             }
             VMErrorKind::PrimitiveError => "Primitive Error".to_owned(),
             VMErrorKind::ShiftTooBig => "Shift too big".to_owned(),
-            VMErrorKind::TypeError { expected, got } => format!(
-                "Expected object of type '{}' but got type '{}'",
-                expected.as_str(),
-                got.as_str()
-            ),
             VMErrorKind::UnknownGlobal(name) => format!("Unknown global '{}'", name),
             VMErrorKind::UnknownMethod(name) => format!("Unknown method '{}'", name),
         }

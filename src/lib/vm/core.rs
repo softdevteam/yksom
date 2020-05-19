@@ -622,7 +622,10 @@ impl VM {
                 } else {
                     let expected = Int::static_objtype();
                     let got = c_val.dyn_objtype(self);
-                    SendReturn::Err(VMError::new(self, VMErrorKind::TypeError { expected, got }))
+                    SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::BuiltinTypeError { expected, got },
+                    ))
                 }
             }
             Primitive::Fields => todo!(),
