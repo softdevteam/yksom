@@ -6,7 +6,8 @@ use termion::{is_tty, style};
 
 use crate::vm::{
     core::VM,
-    objects::{Class, Method, ObjType},
+    objects::{Class, Method, ObjType, String_},
+    val::Val,
 };
 
 #[derive(Debug)]
@@ -101,7 +102,13 @@ impl VMError {
                 eprintln!("File {}:", cls_path);
             }
         }
-        eprintln!("{}.", self.kind.to_string(vm));
+        match self.kind.to_string(vm) {
+            Ok(s) => eprintln!("{}.", s),
+            Err(_) => {
+                // We could do something more clever here, but it's not clear that it's worth it.
+                eprintln!("<Fatal error when running error handler>")
+            }
+        }
     }
 
     fn newlines(&self, d: &str) -> Vec<usize> {
@@ -127,6 +134,11 @@ impl VMError {
 
 #[derive(Debug, PartialEq)]
 pub enum VMErrorKind {
+    /// We expected a Rust type `expected` but at run-time got a Rust type `got`.
+    BuiltinTypeError {
+        expected: ObjType,
+        got: ObjType,
+    },
     /// A value which can't be represented in an `f64`.
     CantRepresentAsDouble,
     /// A value which can't be represented in an `isize`.
@@ -138,6 +150,12 @@ pub enum VMErrorKind {
     DomainError,
     /// The VM is trying to exit.
     Exit,
+    /// We expected a SOM value that is an instance of `expected_cls` but at run-time got a SOM
+    /// value that is an instance of `got_cls`.
+    InstanceTypeError {
+        expected_cls: Val,
+        got_cls: Val,
+    },
     /// Tried to access a global before it being initialised.
     InvalidSymbol,
     /// Tried to do a shl or shr with a value below zero.
@@ -151,11 +169,6 @@ pub enum VMErrorKind {
     PrimitiveError,
     /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
     ShiftTooBig,
-    /// A dynamic type error.
-    TypeError {
-        expected: ObjType,
-        got: ObjType,
-    },
     /// An unknown global.
     UnknownGlobal(String),
     /// An unknown method.
@@ -163,32 +176,47 @@ pub enum VMErrorKind {
 }
 
 impl VMErrorKind {
-    fn to_string(&self, _: &VM) -> String {
+    fn to_string(&self, vm: &VM) -> Result<String, Box<VMError>> {
         match self {
-            VMErrorKind::CantRepresentAsDouble => "Can't represent as double".to_owned(),
-            VMErrorKind::CantRepresentAsIsize => {
-                "Can't represent as signed machine integer".to_owned()
-            }
-            VMErrorKind::CantRepresentAsUsize => {
-                "Can't represent as unsigned machine integer".to_owned()
-            }
-            VMErrorKind::DivisionByZero => "Division by zero".to_owned(),
-            VMErrorKind::DomainError => "Domain error".to_owned(),
-            VMErrorKind::Exit => "Exit".to_owned(),
-            VMErrorKind::InvalidSymbol => "Invalid symbol".to_owned(),
-            VMErrorKind::NegativeShift => "Negative shift".to_owned(),
-            VMErrorKind::NotANumber { got } => {
-                format!("Expected a numeric type but got type '{}'", got.as_str())
-            }
-            VMErrorKind::PrimitiveError => "Primitive Error".to_owned(),
-            VMErrorKind::ShiftTooBig => "Shift too big".to_owned(),
-            VMErrorKind::TypeError { expected, got } => format!(
+            VMErrorKind::BuiltinTypeError { expected, got } => Ok(format!(
                 "Expected object of type '{}' but got type '{}'",
                 expected.as_str(),
                 got.as_str()
-            ),
-            VMErrorKind::UnknownGlobal(name) => format!("Unknown global '{}'", name),
-            VMErrorKind::UnknownMethod(name) => format!("Unknown method '{}'", name),
+            )),
+            VMErrorKind::CantRepresentAsDouble => Ok("Can't represent as double".to_owned()),
+            VMErrorKind::CantRepresentAsIsize => {
+                Ok("Can't represent as signed machine integer".to_owned())
+            }
+            VMErrorKind::CantRepresentAsUsize => {
+                Ok("Can't represent as unsigned machine integer".to_owned())
+            }
+            VMErrorKind::DivisionByZero => Ok("Division by zero".to_owned()),
+            VMErrorKind::DomainError => Ok("Domain error".to_owned()),
+            VMErrorKind::Exit => Ok("Exit".to_owned()),
+            VMErrorKind::InstanceTypeError {
+                expected_cls,
+                got_cls,
+            } => {
+                let expected_name_val = expected_cls.downcast::<Class>(vm)?.name;
+                let got_name_val = got_cls.downcast::<Class>(vm)?.name;
+                let expected_name: &String_ = expected_name_val.downcast(vm)?;
+                let got_name: &String_ = got_name_val.downcast(vm)?;
+                Ok(format!(
+                    "Expected instance of '{}' but got instance of '{}'",
+                    expected_name.as_str(),
+                    got_name.as_str()
+                ))
+            }
+            VMErrorKind::InvalidSymbol => Ok("Invalid symbol".to_owned()),
+            VMErrorKind::NegativeShift => Ok("Negative shift".to_owned()),
+            VMErrorKind::NotANumber { got } => Ok(format!(
+                "Expected a numeric type but got type '{}'",
+                got.as_str()
+            )),
+            VMErrorKind::PrimitiveError => Ok("Primitive Error".to_owned()),
+            VMErrorKind::ShiftTooBig => Ok("Shift too big".to_owned()),
+            VMErrorKind::UnknownGlobal(name) => Ok(format!("Unknown global '{}'", name)),
+            VMErrorKind::UnknownMethod(name) => Ok(format!("Unknown method '{}'", name)),
         }
     }
 }

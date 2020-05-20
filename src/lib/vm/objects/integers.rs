@@ -68,7 +68,10 @@ impl Obj for ArbInt {
         } else {
             let expected = self.dyn_objtype();
             let got = other.dyn_objtype(vm);
-            Err(VMError::new(vm, VMErrorKind::TypeError { expected, got }))
+            Err(VMError::new(
+                vm,
+                VMErrorKind::BuiltinTypeError { expected, got },
+            ))
         }
     }
 
@@ -220,7 +223,10 @@ impl Obj for ArbInt {
         } else {
             let expected = self.dyn_objtype();
             let got = other.dyn_objtype(vm);
-            Err(VMError::new(vm, VMErrorKind::TypeError { expected, got }))
+            Err(VMError::new(
+                vm,
+                VMErrorKind::BuiltinTypeError { expected, got },
+            ))
         }
     }
 

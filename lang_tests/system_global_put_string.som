@@ -7,8 +7,8 @@ VM:
 "
 
 
-system_global_lookup_string = (
+system_global_put_string = (
     run = (
-        (system global: 'ab') println.
+        (system global: 'ab' put: 2).
     )
 )
