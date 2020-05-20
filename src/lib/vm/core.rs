@@ -253,7 +253,7 @@ impl VM {
         cls_val
     }
 
-    fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
+    fn find_class_path(&self, name: &str) -> Result<PathBuf, ()> {
         for dn in &self.classpath {
             let mut pb = PathBuf::new();
             pb.push(dn);
@@ -269,7 +269,7 @@ impl VM {
     /// Find and compile the builtin class 'name'.
     fn init_builtin_class(&mut self, name: &str, inst_vars_allowed: bool) -> Val {
         let path = self
-            .find_class(name)
+            .find_class_path(name)
             .unwrap_or_else(|_| panic!("Can't find builtin class '{}'", name));
 
         let val = self.compile(&path, inst_vars_allowed);
@@ -710,7 +710,7 @@ impl VM {
                 let name_val = self.stack.pop();
                 // XXX This should use Symbols not strings.
                 let name: &String_ = stry!(name_val.downcast(self));
-                match self.find_class(name.as_str()) {
+                match self.find_class_path(name.as_str()) {
                     Ok(ref p) => {
                         let cls = self.compile(p, true);
                         self.stack.push(cls);
@@ -961,6 +961,24 @@ impl VM {
             self.globals.push(Val::illegal());
             len
         }
+    }
+
+    /// Lookup the global `name`: if it has not been added, or has been added but not set, then
+    /// a) try to load a class `name.som` b) if successful set that as the global `name` c) return
+    /// the class's [Val].
+    pub fn get_global_or_load_class(&mut self, name: &str) -> Result<Val, ()> {
+        if let Some(i) = self.reverse_globals.get(name) {
+            let v = self.globals[*i];
+            if v.valkind() != ValKind::ILLEGAL {
+                return Ok(v);
+            }
+        }
+        if let Ok(p) = self.find_class_path(name) {
+            let cls = self.compile(&p, true);
+            self.set_global(name, cls);
+            return Ok(cls);
+        }
+        Err(())
     }
 
     /// Lookup the global `name`: if it has not been added, or has been added but not set, then

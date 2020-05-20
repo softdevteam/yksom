@@ -51,12 +51,9 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let name = lexer.span_str(astcls.name).to_owned();
         let (supercls, supercls_meta) = if name != "Object" {
             let supercls = if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
-                match n {
-                    "Block" => vm.block_cls,
-                    "Class" => vm.cls_cls,
-                    "Boolean" => vm.bool_cls,
-                    "String" => vm.str_cls,
-                    _ => unimplemented!(),
+                match vm.get_global_or_load_class(n) {
+                    Ok(cls) => cls,
+                    Err(()) => todo!(),
                 }
             } else {
                 vm.obj_cls

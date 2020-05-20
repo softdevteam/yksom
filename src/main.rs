@@ -39,14 +39,20 @@ fn main() {
         usage(prog);
     }
 
-    let mut vm = VM::new(
+    let src_path = &Path::new(&matches.free[0]).canonicalize().unwrap();
+    let mut cp = match src_path.parent() {
+        Some(p) => vec![p.to_owned()],
+        None => vec![],
+    };
+    cp.extend(
         matches
             .opt_strs("cp")
             .iter()
-            .map(|x| PathBuf::from_str(x).unwrap())
-            .collect(),
+            .map(|x| PathBuf::from_str(x).unwrap()),
     );
-    let cls = vm.compile(&Path::new(&matches.free[0]).canonicalize().unwrap(), true);
+
+    let mut vm = VM::new(cp);
+    let cls = vm.compile(src_path, true);
     let app = Inst::new(&mut vm, cls);
     match vm.top_level_send(app, "run", vec![]) {
         Ok(_)
