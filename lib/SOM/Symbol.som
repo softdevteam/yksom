@@ -2,5 +2,5 @@ Symbol = String (
     asString = primitive
     asSymbol = ( ^self )
     "FIXME implement super keyword instead"
-    print    = ( '#' print. system printString: self )
+    print    = ( '#' print. super print )
 )

@@ -11,6 +11,7 @@ pub enum Instr {
     Return,
     Send(usize, usize),
     String(usize),
+    SuperSend(usize, usize),
     Symbol(usize),
     VarLookup(usize, usize),
     VarSet(usize, usize),

@@ -470,7 +470,7 @@ impl VM {
                 Instr::Return => {
                     return SendReturn::Val;
                 }
-                Instr::Send(send_idx, cache_idx) => {
+                Instr::Send(send_idx, cache_idx) | Instr::SuperSend(send_idx, cache_idx) => {
                     let (send_rcv, nargs, meth) = {
                         debug_assert!(send_idx < self.sends.len());
                         let nargs = unsafe { self.sends.get_unchecked(send_idx) }.1;
@@ -485,7 +485,15 @@ impl VM {
                                 // The inline cache is empty or out of date, so store a new value in it.
                                 let cls: &Class = stry!(rcv_cls.downcast(self));
                                 let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
-                                let meth = stry!(cls.get_method(self, &*name));
+                                let meth = match instr {
+                                    Instr::Send(_, _) => stry!(cls.get_method(self, &*name)),
+                                    Instr::SuperSend(_, _) => {
+                                        let supercls_val = cls.supercls(self);
+                                        let supercls: &Class = stry!(supercls_val.downcast(self));
+                                        stry!(supercls.get_method(self, &*name))
+                                    }
+                                    _ => unreachable!(),
+                                };
                                 self.inline_caches[cache_idx] = Some((rcv_cls, meth));
                                 meth
                             }

@@ -1,0 +1,14 @@
+"
+VM:
+  status: error
+  stderr:
+    Traceback ...
+    ...
+    Unknown method '+'.
+"
+
+binary_super = (
+    run = (
+        super + 1.
+    )
+)
