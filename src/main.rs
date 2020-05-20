@@ -3,8 +3,9 @@
 use std::{
     env,
     io::{stderr, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process,
+    str::FromStr,
 };
 
 use getopts::Options;
@@ -38,7 +39,13 @@ fn main() {
         usage(prog);
     }
 
-    let mut vm = VM::new(matches.opt_strs("cp"));
+    let mut vm = VM::new(
+        matches
+            .opt_strs("cp")
+            .iter()
+            .map(|x| PathBuf::from_str(x).unwrap())
+            .collect(),
+    );
     let cls = vm.compile(&Path::new(&matches.free[0]).canonicalize().unwrap(), true);
     let app = Inst::new(&mut vm, cls);
     match vm.top_level_send(app, "run", vec![]) {

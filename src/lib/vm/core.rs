@@ -41,7 +41,7 @@ enum SendReturn {
 
 /// The core VM struct.
 pub struct VM {
-    classpath: Vec<String>,
+    classpath: Vec<PathBuf>,
     pub block_cls: Val,
     pub block2_cls: Val,
     pub block3_cls: Val,
@@ -86,7 +86,7 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(classpath: Vec<String>) -> Self {
+    pub fn new(classpath: Vec<PathBuf>) -> Self {
         // The bootstrapping phase is delicate: we need to bootstrap the Object, Class, and Nil
         // classes before we can create basic objects like nil. We thus perform bootstrapping in
         // two phases: the "very delicate" phase (with very strict rules on what is possible)
