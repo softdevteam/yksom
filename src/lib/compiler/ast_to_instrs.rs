@@ -549,7 +549,13 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
                 let send_off = vm.add_send((mn, msglist.len()));
-                let instr = Instr::Send(send_off, vm.new_inline_cache());
+                let instr = match receiver {
+                    box ast::Expr::UnaryMsg {
+                        receiver: box ast::Expr::VarLookup(span),
+                        ..
+                    } if self.lexer.span_str(*span) == "super" => todo!(),
+                    _ => Instr::Send(send_off, vm.new_inline_cache()),
+                };
                 vm.instrs_push(instr, *span);
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -562,7 +568,12 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 let max_stack = self.c_expr(vm, receiver)?;
                 for id in ids {
                     let send_off = vm.add_send((self.lexer.span_str(*id).to_string(), 0));
-                    let instr = Instr::Send(send_off, vm.new_inline_cache());
+                    let instr = match receiver {
+                        box ast::Expr::VarLookup(span) if self.lexer.span_str(*span) == "super" => {
+                            Instr::SuperSend(send_off, vm.new_inline_cache())
+                        }
+                        _ => Instr::Send(send_off, vm.new_inline_cache()),
+                    };
                     vm.instrs_push(instr, *span);
                 }
                 debug_assert!(max_stack > 0);
@@ -618,7 +629,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
     /// var_num))` or `Err` if the variable isn't found. `depth` is the number of closures away
     /// from the "current" one that the variable is found.
     fn find_var(&self, span: Span) -> Option<(usize, usize)> {
-        let name = self.lexer.span_str(span);
+        let name = match self.lexer.span_str(span) {
+            "super" => "self",
+            s => s,
+        };
         for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
             if let Some(n) = vars.get(name) {
                 return Some((self.vars_stack.len() - depth - 1, *n));
