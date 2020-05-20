@@ -475,26 +475,26 @@ impl VM {
                         debug_assert!(send_idx < self.sends.len());
                         let nargs = unsafe { self.sends.get_unchecked(send_idx) }.1;
                         let rcv = self.stack.pop_n(nargs);
-                        let rcv_cls = rcv.get_class(self);
+                        let lookup_cls = match instr {
+                            Instr::Send(_, _) => rcv.get_class(self),
+                            Instr::SuperSend(_, _) => {
+                                let method_cls_val = method.class();
+                                let method_cls: &Class = stry!(method_cls_val.downcast(self));
+                                method_cls.supercls(self)
+                            }
+                            _ => unreachable!(),
+                        };
 
                         let meth = match &self.inline_caches[cache_idx] {
-                            Some((cache_cls, cache_meth)) if cache_cls.bit_eq(&rcv_cls) => {
+                            Some((cache_cls, cache_meth)) if cache_cls.bit_eq(&lookup_cls) => {
                                 *cache_meth
                             }
                             _ => {
                                 // The inline cache is empty or out of date, so store a new value in it.
-                                let cls: &Class = stry!(rcv_cls.downcast(self));
                                 let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
-                                let meth = match instr {
-                                    Instr::Send(_, _) => stry!(cls.get_method(self, &*name)),
-                                    Instr::SuperSend(_, _) => {
-                                        let supercls_val = cls.supercls(self);
-                                        let supercls: &Class = stry!(supercls_val.downcast(self));
-                                        stry!(supercls.get_method(self, &*name))
-                                    }
-                                    _ => unreachable!(),
-                                };
-                                self.inline_caches[cache_idx] = Some((rcv_cls, meth));
+                                let cls: &Class = stry!(lookup_cls.downcast(self));
+                                let meth = stry!(cls.get_method(self, &*name));
+                                self.inline_caches[cache_idx] = Some((lookup_cls, meth));
                                 meth
                             }
                         };
