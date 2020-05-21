@@ -41,7 +41,7 @@ enum SendReturn {
 
 /// The core VM struct.
 pub struct VM {
-    classpath: Vec<String>,
+    classpath: Vec<PathBuf>,
     pub block_cls: Val,
     pub block2_cls: Val,
     pub block3_cls: Val,
@@ -86,7 +86,7 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(classpath: Vec<String>) -> Self {
+    pub fn new(classpath: Vec<PathBuf>) -> Self {
         // The bootstrapping phase is delicate: we need to bootstrap the Object, Class, and Nil
         // classes before we can create basic objects like nil. We thus perform bootstrapping in
         // two phases: the "very delicate" phase (with very strict rules on what is possible)
@@ -253,7 +253,7 @@ impl VM {
         cls_val
     }
 
-    fn find_class(&self, name: &str) -> Result<PathBuf, ()> {
+    fn find_class_path(&self, name: &str) -> Result<PathBuf, ()> {
         for dn in &self.classpath {
             let mut pb = PathBuf::new();
             pb.push(dn);
@@ -269,7 +269,7 @@ impl VM {
     /// Find and compile the builtin class 'name'.
     fn init_builtin_class(&mut self, name: &str, inst_vars_allowed: bool) -> Val {
         let path = self
-            .find_class(name)
+            .find_class_path(name)
             .unwrap_or_else(|_| panic!("Can't find builtin class '{}'", name));
 
         let val = self.compile(&path, inst_vars_allowed);
@@ -475,26 +475,26 @@ impl VM {
                         debug_assert!(send_idx < self.sends.len());
                         let nargs = unsafe { self.sends.get_unchecked(send_idx) }.1;
                         let rcv = self.stack.pop_n(nargs);
-                        let rcv_cls = rcv.get_class(self);
+                        let lookup_cls = match instr {
+                            Instr::Send(_, _) => rcv.get_class(self),
+                            Instr::SuperSend(_, _) => {
+                                let method_cls_val = method.class();
+                                let method_cls: &Class = stry!(method_cls_val.downcast(self));
+                                method_cls.supercls(self)
+                            }
+                            _ => unreachable!(),
+                        };
 
                         let meth = match &self.inline_caches[cache_idx] {
-                            Some((cache_cls, cache_meth)) if cache_cls.bit_eq(&rcv_cls) => {
+                            Some((cache_cls, cache_meth)) if cache_cls.bit_eq(&lookup_cls) => {
                                 *cache_meth
                             }
                             _ => {
                                 // The inline cache is empty or out of date, so store a new value in it.
-                                let cls: &Class = stry!(rcv_cls.downcast(self));
                                 let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
-                                let meth = match instr {
-                                    Instr::Send(_, _) => stry!(cls.get_method(self, &*name)),
-                                    Instr::SuperSend(_, _) => {
-                                        let supercls_val = cls.supercls(self);
-                                        let supercls: &Class = stry!(supercls_val.downcast(self));
-                                        stry!(supercls.get_method(self, &*name))
-                                    }
-                                    _ => unreachable!(),
-                                };
-                                self.inline_caches[cache_idx] = Some((rcv_cls, meth));
+                                let cls: &Class = stry!(lookup_cls.downcast(self));
+                                let meth = stry!(cls.get_method(self, &*name));
+                                self.inline_caches[cache_idx] = Some((lookup_cls, meth));
                                 meth
                             }
                         };
@@ -710,7 +710,7 @@ impl VM {
                 let name_val = self.stack.pop();
                 // XXX This should use Symbols not strings.
                 let name: &String_ = stry!(name_val.downcast(self));
-                match self.find_class(name.as_str()) {
+                match self.find_class_path(name.as_str()) {
                     Ok(ref p) => {
                         let cls = self.compile(p, true);
                         self.stack.push(cls);
@@ -961,6 +961,24 @@ impl VM {
             self.globals.push(Val::illegal());
             len
         }
+    }
+
+    /// Lookup the global `name`: if it has not been added, or has been added but not set, then
+    /// a) try to load a class `name.som` b) if successful set that as the global `name` c) return
+    /// the class's [Val].
+    pub fn get_global_or_load_class(&mut self, name: &str) -> Result<Val, ()> {
+        if let Some(i) = self.reverse_globals.get(name) {
+            let v = self.globals[*i];
+            if v.valkind() != ValKind::ILLEGAL {
+                return Ok(v);
+            }
+        }
+        if let Ok(p) = self.find_class_path(name) {
+            let cls = self.compile(&p, true);
+            self.set_global(name, cls);
+            return Ok(cls);
+        }
+        Err(())
     }
 
     /// Lookup the global `name`: if it has not been added, or has been added but not set, then
