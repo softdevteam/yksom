@@ -3,6 +3,8 @@ System = (
     global: name put: value = primitive
     printString: string     = primitive
     printNewline            = primitive
+    exit: error             = primitive
+    exit                    = ( self exit: 0 )
 
     load: symbol = primitive
     resolve: symbol = (
