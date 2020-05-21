@@ -52,7 +52,18 @@ fn main() {
     );
 
     let mut vm = VM::new(cp);
-    let cls = vm.compile(src_path, true);
+    let cls = vm
+        .load_class(
+            src_path
+                .file_name()
+                .expect("Invalid source filename.")
+                .to_str()
+                .expect("Source filename must be valid UTF-8."),
+        )
+        .expect(&format!(
+            "Could not load class '{}'",
+            src_path.to_str().unwrap()
+        ));
     let app = Inst::new(&mut vm, cls);
     match vm.top_level_send(app, "run", vec![]) {
         Ok(_)

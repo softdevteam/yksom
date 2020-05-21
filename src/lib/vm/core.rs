@@ -241,9 +241,26 @@ impl VM {
         self
     }
 
+    /// Load the class `name`. Note that this looks `name` up in the globals, so you can get a
+    /// successful value back which isn't a class (e.g. `nil`, which is `Object`'s superclass).
+    pub fn load_class(&mut self, name: &str) -> Result<Val, ()> {
+        if let Some(i) = self.reverse_globals.get(name) {
+            let v = self.globals[*i];
+            if v.valkind() != ValKind::ILLEGAL {
+                return Ok(v);
+            }
+        }
+        if let Ok(p) = self.find_class_path(name) {
+            let cls = self.compile(&p, true);
+            self.set_global(name, cls);
+            return Ok(cls);
+        }
+        Err(())
+    }
+
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
     /// builtin classes which do not lead to run-time instances of `Inst`.
-    pub fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
+    fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
         let (name, cls_val) = compile(self, path);
         let cls: &Class = cls_val.downcast(self).unwrap();
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
@@ -961,24 +978,6 @@ impl VM {
             self.globals.push(Val::illegal());
             len
         }
-    }
-
-    /// Lookup the global `name`: if it has not been added, or has been added but not set, then
-    /// a) try to load a class `name.som` b) if successful set that as the global `name` c) return
-    /// the class's [Val].
-    pub fn get_global_or_load_class(&mut self, name: &str) -> Result<Val, ()> {
-        if let Some(i) = self.reverse_globals.get(name) {
-            let v = self.globals[*i];
-            if v.valkind() != ValKind::ILLEGAL {
-                return Ok(v);
-            }
-        }
-        if let Ok(p) = self.find_class_path(name) {
-            let cls = self.compile(&p, true);
-            self.set_global(name, cls);
-            return Ok(cls);
-        }
-        Err(())
     }
 
     /// Lookup the global `name`: if it has not been added, or has been added but not set, then
