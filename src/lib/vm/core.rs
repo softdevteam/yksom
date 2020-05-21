@@ -725,19 +725,28 @@ impl VM {
             }
             Primitive::Load => {
                 let name_val = self.stack.pop();
-                // XXX This should use Symbols not strings.
-                let name: &String_ = stry!(name_val.downcast(self));
-                match self.find_class_path(name.as_str()) {
-                    Ok(ref p) => {
-                        let cls = self.compile(p, true);
-                        self.stack.push(cls);
+                if name_val.get_class(self) == self.sym_cls {
+                    let name: &String_ = stry!(name_val.downcast(self));
+                    match self.load_class(name.as_str()) {
+                        Ok(cls) => {
+                            self.stack.push(cls);
+                        }
+                        Err(()) => {
+                            let v = self.nil;
+                            self.stack.push(v);
+                        }
                     }
-                    Err(_) => {
-                        let v = self.nil;
-                        self.stack.push(v);
-                    }
+                    SendReturn::Val
+                } else {
+                    let got_cls = name_val.get_class(self);
+                    SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::InstanceTypeError {
+                            expected_cls: self.sym_cls,
+                            got_cls,
+                        },
+                    ))
                 }
-                SendReturn::Val
             }
             Primitive::Methods => todo!(),
             Primitive::Mod => {
