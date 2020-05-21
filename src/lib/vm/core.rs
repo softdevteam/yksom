@@ -657,40 +657,18 @@ impl VM {
             Primitive::FromString => todo!(),
             Primitive::Global => {
                 let name_val = self.stack.pop();
-                if name_val.get_class(self) == self.sym_cls {
-                    let name: &String_ = stry!(name_val.downcast(self));
-                    let g = self.get_global_or_nil(name.as_str());
-                    self.stack.push(g);
-                    SendReturn::Val
-                } else {
-                    let got_cls = name_val.get_class(self);
-                    SendReturn::Err(VMError::new(
-                        self,
-                        VMErrorKind::InstanceTypeError {
-                            expected_cls: self.sym_cls,
-                            got_cls,
-                        },
-                    ))
-                }
+                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                let g = self.get_global_or_nil(name.as_str());
+                self.stack.push(g);
+                SendReturn::Val
             }
             Primitive::GlobalPut => {
                 let v = self.stack.pop();
                 let name_val = self.stack.pop();
-                if name_val.get_class(self) == self.sym_cls {
-                    let name: &String_ = stry!(name_val.downcast(self));
-                    self.set_global(name.as_str(), v);
-                    self.stack.push(rcv);
-                    SendReturn::Val
-                } else {
-                    let got_cls = name_val.get_class(self);
-                    SendReturn::Err(VMError::new(
-                        self,
-                        VMErrorKind::InstanceTypeError {
-                            expected_cls: self.sym_cls,
-                            got_cls,
-                        },
-                    ))
-                }
+                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                self.set_global(name.as_str(), v);
+                self.stack.push(rcv);
+                SendReturn::Val
             }
             Primitive::GreaterThan => {
                 let v = self.stack.pop();
@@ -725,28 +703,17 @@ impl VM {
             }
             Primitive::Load => {
                 let name_val = self.stack.pop();
-                if name_val.get_class(self) == self.sym_cls {
-                    let name: &String_ = stry!(name_val.downcast(self));
-                    match self.load_class(name.as_str()) {
-                        Ok(cls) => {
-                            self.stack.push(cls);
-                        }
-                        Err(()) => {
-                            let v = self.nil;
-                            self.stack.push(v);
-                        }
+                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                match self.load_class(name.as_str()) {
+                    Ok(cls) => {
+                        self.stack.push(cls);
                     }
-                    SendReturn::Val
-                } else {
-                    let got_cls = name_val.get_class(self);
-                    SendReturn::Err(VMError::new(
-                        self,
-                        VMErrorKind::InstanceTypeError {
-                            expected_cls: self.sym_cls,
-                            got_cls,
-                        },
-                    ))
+                    Err(()) => {
+                        let v = self.nil;
+                        self.stack.push(v);
+                    }
                 }
+                SendReturn::Val
             }
             Primitive::Methods => todo!(),
             Primitive::Mod => {
