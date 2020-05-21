@@ -4,7 +4,7 @@ use std::{cell::Cell, str};
 
 use crate::vm::{
     core::VM,
-    error::VMError,
+    error::{VMError, VMErrorKind},
     objects::{Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
 };
@@ -76,6 +76,24 @@ impl String_ {
                 s,
             },
         )
+    }
+
+    /// If the value `v` represents a `String_` which is an instance of the SOM `Symbol` class (and
+    /// not the SOM `String` class!), return a reference to the underlying `String_` or an
+    /// `InstanceTypeError` otherwise.
+    pub fn symbol_to_string_<'a>(vm: &mut VM, v: &'a Val) -> Result<&'a String_, Box<VMError>> {
+        if v.get_class(vm) == vm.sym_cls {
+            Ok(v.downcast(vm)?)
+        } else {
+            let got_cls = v.get_class(vm);
+            Err(VMError::new(
+                vm,
+                VMErrorKind::InstanceTypeError {
+                    expected_cls: vm.sym_cls,
+                    got_cls,
+                },
+            ))
+        }
     }
 
     pub fn as_str(&self) -> &str {

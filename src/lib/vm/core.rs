@@ -241,9 +241,26 @@ impl VM {
         self
     }
 
+    /// Load the class `name`. Note that this looks `name` up in the globals, so you can get a
+    /// successful value back which isn't a class (e.g. `nil`, which is `Object`'s superclass).
+    pub fn load_class(&mut self, name: &str) -> Result<Val, ()> {
+        if let Some(i) = self.reverse_globals.get(name) {
+            let v = self.globals[*i];
+            if v.valkind() != ValKind::ILLEGAL {
+                return Ok(v);
+            }
+        }
+        if let Ok(p) = self.find_class_path(name) {
+            let cls = self.compile(&p, true);
+            self.set_global(name, cls);
+            return Ok(cls);
+        }
+        Err(())
+    }
+
     /// Compile the file at `path`. `inst_vars_allowed` should be set to `false` only for those
     /// builtin classes which do not lead to run-time instances of `Inst`.
-    pub fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
+    fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
         let (name, cls_val) = compile(self, path);
         let cls: &Class = cls_val.downcast(self).unwrap();
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
@@ -640,40 +657,18 @@ impl VM {
             Primitive::FromString => todo!(),
             Primitive::Global => {
                 let name_val = self.stack.pop();
-                if name_val.get_class(self) == self.sym_cls {
-                    let name: &String_ = stry!(name_val.downcast(self));
-                    let g = self.get_global_or_nil(name.as_str());
-                    self.stack.push(g);
-                    SendReturn::Val
-                } else {
-                    let got_cls = name_val.get_class(self);
-                    SendReturn::Err(VMError::new(
-                        self,
-                        VMErrorKind::InstanceTypeError {
-                            expected_cls: self.sym_cls,
-                            got_cls,
-                        },
-                    ))
-                }
+                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                let g = self.get_global_or_nil(name.as_str());
+                self.stack.push(g);
+                SendReturn::Val
             }
             Primitive::GlobalPut => {
                 let v = self.stack.pop();
                 let name_val = self.stack.pop();
-                if name_val.get_class(self) == self.sym_cls {
-                    let name: &String_ = stry!(name_val.downcast(self));
-                    self.set_global(name.as_str(), v);
-                    self.stack.push(rcv);
-                    SendReturn::Val
-                } else {
-                    let got_cls = name_val.get_class(self);
-                    SendReturn::Err(VMError::new(
-                        self,
-                        VMErrorKind::InstanceTypeError {
-                            expected_cls: self.sym_cls,
-                            got_cls,
-                        },
-                    ))
-                }
+                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                self.set_global(name.as_str(), v);
+                self.stack.push(rcv);
+                SendReturn::Val
             }
             Primitive::GreaterThan => {
                 let v = self.stack.pop();
@@ -708,14 +703,12 @@ impl VM {
             }
             Primitive::Load => {
                 let name_val = self.stack.pop();
-                // XXX This should use Symbols not strings.
-                let name: &String_ = stry!(name_val.downcast(self));
-                match self.find_class_path(name.as_str()) {
-                    Ok(ref p) => {
-                        let cls = self.compile(p, true);
+                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                match self.load_class(name.as_str()) {
+                    Ok(cls) => {
                         self.stack.push(cls);
                     }
-                    Err(_) => {
+                    Err(()) => {
                         let v = self.nil;
                         self.stack.push(v);
                     }
@@ -961,24 +954,6 @@ impl VM {
             self.globals.push(Val::illegal());
             len
         }
-    }
-
-    /// Lookup the global `name`: if it has not been added, or has been added but not set, then
-    /// a) try to load a class `name.som` b) if successful set that as the global `name` c) return
-    /// the class's [Val].
-    pub fn get_global_or_load_class(&mut self, name: &str) -> Result<Val, ()> {
-        if let Some(i) = self.reverse_globals.get(name) {
-            let v = self.globals[*i];
-            if v.valkind() != ValKind::ILLEGAL {
-                return Ok(v);
-            }
-        }
-        if let Ok(p) = self.find_class_path(name) {
-            let cls = self.compile(&p, true);
-            self.set_global(name, cls);
-            return Ok(cls);
-        }
-        Err(())
     }
 
     /// Lookup the global `name`: if it has not been added, or has been added but not set, then
