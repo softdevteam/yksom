@@ -464,11 +464,11 @@ impl Int {
         self.val
     }
 
-    pub fn as_usize(&self) -> Option<usize> {
+    pub fn as_usize(&self, vm: &VM) -> Result<usize, Box<VMError>> {
         if self.val >= 0 {
-            Some(self.val as usize)
+            Ok(self.val as usize)
         } else {
-            None
+            Err(VMError::new(vm, VMErrorKind::CantRepresentAsUsize))
         }
     }
 }
@@ -500,7 +500,7 @@ mod tests {
                 .unwrap()
                 .downcast::<Int>()
                 .unwrap()
-                .as_usize()
+                .as_usize(&vm)
                 .unwrap(),
             v.as_usize(&mut vm).unwrap()
         );

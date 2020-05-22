@@ -240,18 +240,17 @@ impl Val {
     }
 
     /// If this `Val` represents a non-bigint integer, return its value as an `usize`.
-    pub fn as_usize(&self, vm: &mut VM) -> Option<usize> {
+    pub fn as_usize(&self, vm: &mut VM) -> Result<usize, Box<VMError>> {
         match self.valkind() {
-            ValKind::GCBOX => self
-                .tobj(vm)
-                .unwrap()
-                .downcast::<Int>()
-                .and_then(|tobj| tobj.as_usize()),
+            ValKind::GCBOX => match self.tobj(vm).unwrap().downcast::<Int>() {
+                Some(x) => x.as_usize(vm),
+                None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsUsize)),
+            },
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
-                    Some(self.val >> TAG_BITSIZE)
+                    Ok(self.val >> TAG_BITSIZE)
                 } else {
-                    None
+                    Err(VMError::new(vm, VMErrorKind::CantRepresentAsUsize))
                 }
             }
             ValKind::ILLEGAL => unreachable!(),
@@ -565,7 +564,7 @@ mod tests {
 
         let v = Val::from_isize(&mut vm, -1).unwrap();
         assert_eq!(v.valkind(), ValKind::INT);
-        assert!(v.as_usize(&mut vm).is_none());
+        assert!(v.as_usize(&mut vm).is_err());
         assert_eq!(v.as_isize(&mut vm).unwrap(), -1);
 
         let v = Val::from_isize(&mut vm, isize::min_value()).unwrap();
@@ -622,6 +621,9 @@ mod tests {
         assert_eq!(v.valkind(), ValKind::GCBOX);
         assert_eq!(v.as_usize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
         assert_eq!(v.as_isize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
+
+        let v = String_::new_str(&mut vm, "".to_owned());
+        assert!(v.as_usize(&mut vm).is_err());
     }
 
     #[test]
