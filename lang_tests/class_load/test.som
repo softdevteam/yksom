@@ -5,7 +5,7 @@ VM:
     other
 "
 
-class_load = (
+test = (
     run = (
         other new f println.
     )

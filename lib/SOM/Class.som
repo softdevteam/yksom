@@ -6,4 +6,5 @@ Class = (
     asString = ( ^self name asString )
 
     superclass = primitive
+    methods    = primitive
 )

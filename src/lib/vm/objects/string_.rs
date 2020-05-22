@@ -39,6 +39,10 @@ impl Obj for String_ {
         ))
     }
 
+    fn length(&self) -> usize {
+        todo!();
+    }
+
     fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let other_str: &String_ = other.downcast(vm)?;
 

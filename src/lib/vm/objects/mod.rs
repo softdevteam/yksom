@@ -20,6 +20,7 @@
 //! Although this constraint is not enforced through the type system, it is not hard to obey: as
 //! soon as you create an `Obj` instance, pass it to `Val::from_obj`.
 
+mod array;
 mod block;
 mod class;
 mod double;
@@ -28,6 +29,7 @@ mod integers;
 mod method;
 mod string_;
 
+pub use array::Array;
 pub use block::{Block, BlockInfo};
 pub use class::Class;
 pub use double::Double;
@@ -45,6 +47,7 @@ use crate::vm::{core::VM, error::VMError, val::Val};
 #[derive(Debug, PartialEq)]
 pub enum ObjType {
     ArbInt,
+    Array,
     Block,
     Class,
     Double,
@@ -58,6 +61,7 @@ impl ObjType {
     pub fn as_str(&self) -> &'static str {
         match *self {
             ObjType::ArbInt => "ArbInt",
+            ObjType::Array => "Array",
             ObjType::Block => "Block",
             ObjType::Class => "Class",
             ObjType::Double => "Double",
@@ -90,6 +94,11 @@ pub trait Obj: std::fmt::Debug {
 
     /// Set an instance variable in this object.
     fn inst_var_set(&self, _: usize, _: Val) {
+        todo!();
+    }
+
+    /// What is this object's length?
+    fn length(&self) -> usize {
         todo!();
     }
 

@@ -19,7 +19,8 @@ use crate::{
     vm::{
         error::{VMError, VMErrorKind},
         objects::{
-            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, StaticObjType, String_,
+            Array, Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, StaticObjType,
+            String_,
         },
         somstack::SOMStack,
         val::{Val, ValKind},
@@ -42,6 +43,7 @@ enum SendReturn {
 /// The core VM struct.
 pub struct VM {
     classpath: Vec<PathBuf>,
+    pub array_cls: Val,
     pub block_cls: Val,
     pub block2_cls: Val,
     pub block3_cls: Val,
@@ -95,6 +97,7 @@ impl VM {
 
         let mut vm = VM {
             classpath,
+            array_cls: Val::illegal(),
             block_cls: Val::illegal(),
             bool_cls: Val::illegal(),
             block2_cls: Val::illegal(),
@@ -222,6 +225,7 @@ impl VM {
         assert!(self.symbols.is_empty());
         self.sym_cls = self.init_builtin_class("Symbol", false);
 
+        self.array_cls = self.init_builtin_class("Array", false);
         self.block_cls = self.init_builtin_class("Block", false);
         self.block2_cls = self.init_builtin_class("Block2", false);
         self.block3_cls = self.init_builtin_class("Block3", false);
@@ -598,6 +602,21 @@ impl VM {
             }
             Primitive::As32BitSignedValue => todo!(),
             Primitive::As32BitUnsignedValue => todo!(),
+            Primitive::At => {
+                let arr = stry!(rcv.downcast::<Array>(self));
+                let idx = stry!(self.stack.pop().as_usize(self));
+                let v = stry!(arr.at(self, idx));
+                self.stack.push(v);
+                SendReturn::Val
+            }
+            Primitive::AtPut => {
+                let arr = stry!(rcv.downcast::<Array>(self));
+                let v = self.stack.pop();
+                let idx = stry!(self.stack.pop().as_usize(self));
+                stry!(arr.at_put(self, idx, v));
+                self.stack.push(rcv);
+                SendReturn::Val
+            }
             Primitive::AtRandom => todo!(),
             Primitive::BitXor => {
                 let v = self.stack.pop();
@@ -694,7 +713,14 @@ impl VM {
             Primitive::InstVarAt => unimplemented!(),
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
-            Primitive::Length => todo!(),
+            Primitive::Length => {
+                // Only Arrays and Strings can have this primitive installed.
+                debug_assert!(rcv.valkind() == ValKind::GCBOX);
+                let tobj = rcv.tobj(self).unwrap();
+                let v = Val::from_usize(self, tobj.length());
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::LessThan => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.less_than(self, v));
@@ -743,6 +769,12 @@ impl VM {
             }
             Primitive::New => {
                 let v = Inst::new(self, rcv);
+                self.stack.push(v);
+                SendReturn::Val
+            }
+            Primitive::NewArray => {
+                let len = stry!(self.stack.pop().as_usize(self));
+                let v = Array::new(self, len);
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -1116,6 +1148,7 @@ impl VM {
     pub fn new_no_bootstrap() -> Self {
         VM {
             classpath: vec![],
+            array_cls: Val::illegal(),
             block_cls: Val::illegal(),
             block2_cls: Val::illegal(),
             block3_cls: Val::illegal(),

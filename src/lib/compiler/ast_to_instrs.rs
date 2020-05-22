@@ -304,6 +304,8 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "asInteger" => Ok(MethodBody::Primitive(Primitive::AsInteger)),
                 "asString" => Ok(MethodBody::Primitive(Primitive::AsString)),
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
+                "at:" => Ok(MethodBody::Primitive(Primitive::At)),
+                "at:put:" => Ok(MethodBody::Primitive(Primitive::AtPut)),
                 "atRandom" => Ok(MethodBody::Primitive(Primitive::AtRandom)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
@@ -326,6 +328,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "methods" => Ok(MethodBody::Primitive(Primitive::Methods)),
                 "name" => Ok(MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(MethodBody::Primitive(Primitive::New)),
+                "new:" => Ok(MethodBody::Primitive(Primitive::NewArray)),
                 "objectSize" => Ok(MethodBody::Primitive(Primitive::ObjectSize)),
                 "perform:" => Ok(MethodBody::Primitive(Primitive::Perform)),
                 "perform:inSuperclass:" => {
