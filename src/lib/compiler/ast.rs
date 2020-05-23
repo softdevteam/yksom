@@ -32,6 +32,10 @@ pub enum MethodBody {
 
 #[derive(Debug)]
 pub enum Expr {
+    Array {
+        span: Span,
+        items: Vec<Expr>,
+    },
     Assign {
         span: Span,
         id: Span,
@@ -83,6 +87,7 @@ impl Expr {
     pub fn span(&self) -> Span {
         match self {
             Expr::Assign { span, .. } => *span,
+            Expr::Array { span, .. } => *span,
             Expr::BinaryMsg { span, .. } => *span,
             Expr::Block { span, .. } => *span,
             Expr::Double { span, .. } => *span,

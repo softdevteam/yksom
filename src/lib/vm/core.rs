@@ -407,6 +407,12 @@ impl VM {
                 *unsafe { self.instrs.get_unchecked(pc) }
             };
             match instr {
+                Instr::Array(num_items) => {
+                    let items = self.stack.split_off(self.stack.len() - num_items);
+                    let arr = Array::from_vec(self, items);
+                    self.stack.push(arr);
+                    pc += 1;
+                }
                 Instr::Block(blkinfo_off) => {
                     let (num_params, bytecode_end) = {
                         let blkinfo = &self.blockinfos[blkinfo_off];

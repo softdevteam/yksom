@@ -155,7 +155,7 @@ Literal -> Result<Expr, ()>:
     | "DOUBLE" { Ok(Expr::Double{ span: $span, is_negative: false, val: map_err($1)?.span() }) }
     | "-" "DOUBLE" { Ok(Expr::Double{ span: $span, is_negative: true, val: map_err($2)?.span() }) }
     | StringConst { $1 }
-    | ArrayConst { unimplemented!() }
+    | Array { $1 }
     ;
 Block -> Result<Expr, ()>:
       "[" BlockParamsOpt NameDefs BlockExprs "]" { Ok(Expr::Block{ span: $span, params: $2?, vars: $3?, exprs: $4? }) };
@@ -177,11 +177,11 @@ StringConst -> Result<Expr, ()>:
     | "#" "KEYWORD" { Ok(Expr::Symbol(map_err($2)?.span())) }
     | "#" BinOp { Ok(Expr::Symbol($2?)) }
     ;
-ArrayConst -> Result<(), ()>:
-      "#" "(" ArrayList ")" { unimplemented!() };
-ArrayList -> Result<(), ()>:
-      Unit { unimplemented!() }
-    | ArrayList Unit { unimplemented!() }
+Array -> Result<Expr, ()>:
+      "#" "(" ArrayList ")" { Ok(Expr::Array { span: $span, items: $3? }) };
+ArrayList -> Result<Vec<Expr>, ()>:
+      Literal { Ok(vec![$1?]) }
+    | ArrayList Literal { flattenr($1, $2) }
     ;
 
 %%

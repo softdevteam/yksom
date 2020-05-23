@@ -1,5 +1,6 @@
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
+    Array(usize),
     Block(usize),
     GlobalLookup(usize),
     ClosureReturn(usize),

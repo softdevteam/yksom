@@ -49,6 +49,15 @@ impl Array {
         )
     }
 
+    pub fn from_vec(vm: &mut VM, store: Vec<Val>) -> Val {
+        Val::from_obj(
+            vm,
+            Array {
+                store: UnsafeCell::new(store),
+            },
+        )
+    }
+
     pub fn at(&self, vm: &VM, mut idx: usize) -> Result<Val, Box<VMError>> {
         let store = unsafe { &*self.store.get() };
         if idx > 0 && idx <= store.len() {

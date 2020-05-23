@@ -445,6 +445,14 @@ impl<'a, 'input> Compiler<'a, 'input> {
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
     fn c_expr(&mut self, vm: &mut VM, expr: &ast::Expr) -> CompileResult<usize> {
         match expr {
+            ast::Expr::Array { span, items } => {
+                let mut max_stack = max(items.len(), 1);
+                for (i, it) in items.iter().enumerate() {
+                    max_stack = max(max_stack, i + self.c_expr(vm, it)?);
+                }
+                vm.instrs_push(Instr::Array(items.len()), *span);
+                Ok(max_stack)
+            }
             ast::Expr::Assign { span, id, expr } => {
                 let (depth, var_num) = match self.find_var(*id) {
                     Some((d, v)) => (d, v),
