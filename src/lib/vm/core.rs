@@ -578,7 +578,12 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::AsInteger => todo!(),
+            Primitive::AsInteger => {
+                let dbl = stry!(rcv.downcast::<Double>(self));
+                let v = dbl.as_integer(self);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::AsString => {
                 let v = stry!(rcv.to_strval(self));
                 let str_maybe: &String_ = stry!(v.downcast(self));
