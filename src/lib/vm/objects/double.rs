@@ -1,6 +1,7 @@
 #![allow(clippy::new_ret_no_self)]
 
-use num_traits::{ToPrimitive, Zero};
+use num_bigint::BigInt;
+use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
 use crate::vm::{
     core::VM,
@@ -185,5 +186,15 @@ impl Double {
 
     pub fn double(&self) -> f64 {
         self.val
+    }
+
+    pub fn as_integer(&self, vm: &mut VM) -> Val {
+        // This could be done more efficiently in the common case that self.val will fit in an
+        // isize.
+        if let Some(bi) = BigInt::from_f64(self.val) {
+            ArbInt::new(vm, bi)
+        } else {
+            todo!();
+        }
     }
 }

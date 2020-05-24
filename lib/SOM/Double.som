@@ -3,7 +3,7 @@ Double = (
     - argument = primitive
     * argument = primitive
     // argument = primitive
-    % argument = primitive    
+    % argument = primitive
     =  argument = primitive
     <  argument = primitive
     >  argument = ( ^(self >= argument) and: [ self <> argument ] )
@@ -12,4 +12,5 @@ Double = (
     negative = ( ^self < 0.0 )
     sqrt     = primitive
     asString = primitive
+    asInteger = primitive
 )
