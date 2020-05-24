@@ -311,9 +311,11 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "exit:" => Ok(MethodBody::Primitive(Primitive::Exit)),
                 "fields" => Ok(MethodBody::Primitive(Primitive::Fields)),
                 "fromString:" => Ok(MethodBody::Primitive(Primitive::FromString)),
+                "fullGC" => Ok(MethodBody::Primitive(Primitive::FullGC)),
                 "global:" => Ok(MethodBody::Primitive(Primitive::Global)),
                 "global:put:" => Ok(MethodBody::Primitive(Primitive::GlobalPut)),
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
+                "hasGlobal:" => Ok(MethodBody::Primitive(Primitive::HasGlobal)),
                 "hashcode" => Ok(MethodBody::Primitive(Primitive::Hashcode)),
                 "inspect" => Ok(MethodBody::Primitive(Primitive::Inspect)),
                 "instVarAt:" => Ok(MethodBody::Primitive(Primitive::InstVarAt)),
@@ -347,6 +349,8 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "restart" => Ok(MethodBody::Primitive(Primitive::Restart)),
                 "round" => Ok(MethodBody::Primitive(Primitive::Round)),
                 "superclass" => Ok(MethodBody::Primitive(Primitive::Superclass)),
+                "ticks" => Ok(MethodBody::Primitive(Primitive::Ticks)),
+                "time" => Ok(MethodBody::Primitive(Primitive::Time)),
                 "value" => Ok(MethodBody::Primitive(Primitive::Value(0))),
                 "value:" => Ok(MethodBody::Primitive(Primitive::Value(1))),
                 "value:with:" => Ok(MethodBody::Primitive(Primitive::Value(2))),
@@ -595,8 +599,16 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 vm.instrs_push(instr, *span);
                 Ok(1)
             }
-            ast::Expr::Symbol(span) => {
+            ast::Expr::StringSymbol(span) => {
                 // XXX are there string escaping rules we need to take account of?
+                let s_orig = self.lexer.span_str(*span);
+                // Strip off the beginning/end quotes.
+                let s = s_orig[1..s_orig.len() - 1].to_owned();
+                let instr = Instr::Symbol(vm.add_symbol(s.to_owned()));
+                vm.instrs_push(instr, *span);
+                Ok(1)
+            }
+            ast::Expr::Symbol(span) => {
                 let s = self.lexer.span_str(*span);
                 let instr = Instr::Symbol(vm.add_symbol(s.to_owned()));
                 vm.instrs_push(instr, *span);

@@ -172,10 +172,10 @@ Argument -> Result<Option<Span>, ()>:
     | { unimplemented!() }
     ;
 StringConst -> Result<Expr, ()>:
-      "#" "STRING" { unimplemented!() }
+      "#" "STRING" { Ok(Expr::StringSymbol(map_err($2)?.span())) }
     | "#" "ID" { Ok(Expr::Symbol(map_err($2)?.span())) }
-    | "#" "KEYWORD" { unimplemented!() }
-    | "#" BinOp { unimplemented!() }
+    | "#" "KEYWORD" { Ok(Expr::Symbol(map_err($2)?.span())) }
+    | "#" BinOp { Ok(Expr::Symbol($2?)) }
     ;
 ArrayConst -> Result<(), ()>:
       "#" "(" ArrayList ")" { unimplemented!() };
