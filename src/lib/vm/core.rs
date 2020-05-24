@@ -475,8 +475,7 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Int(i) => {
-                    // from_isize(i) cannot fail so the unwrap() is safe.
-                    let v = Val::from_isize(self, i).unwrap();
+                    let v = Val::from_isize(self, i);
                     self.stack.push(v);
                     pc += 1;
                 }
@@ -1154,10 +1153,10 @@ mod tests {
     #[serial]
     fn test_frame() {
         let mut vm = VM::new_no_bootstrap();
-        let selfv = Val::from_isize(&mut vm, 42).unwrap();
-        let v = Val::from_isize(&mut vm, 43).unwrap();
+        let selfv = Val::from_isize(&mut vm, 42);
+        let v = Val::from_isize(&mut vm, 43);
         vm.stack.push(v);
-        let v = Val::from_isize(&mut vm, 44).unwrap();
+        let v = Val::from_isize(&mut vm, 44);
         vm.stack.push(v);
         let f = Frame::new(&mut vm, true, selfv, None, 3, 2);
         assert_eq!(f.var_lookup(0, 0).as_isize(&mut vm).unwrap(), 42);
