@@ -74,6 +74,7 @@ pub enum Expr {
         expr: Box<Expr>,
     },
     String(Span),
+    StringSymbol(Span),
     Symbol(Span),
     VarLookup(Span),
 }
@@ -90,7 +91,7 @@ impl Expr {
             Expr::UnaryMsg { span, .. } => *span,
             Expr::Return { span, .. } => *span,
             Expr::String(span) => *span,
-            Expr::Symbol(span) => *span,
+            Expr::StringSymbol(span) | Expr::Symbol(span) => *span,
             Expr::VarLookup(span) => *span,
         }
     }

@@ -595,8 +595,16 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 vm.instrs_push(instr, *span);
                 Ok(1)
             }
-            ast::Expr::Symbol(span) => {
+            ast::Expr::StringSymbol(span) => {
                 // XXX are there string escaping rules we need to take account of?
+                let s_orig = self.lexer.span_str(*span);
+                // Strip off the beginning/end quotes.
+                let s = s_orig[1..s_orig.len() - 1].to_owned();
+                let instr = Instr::Symbol(vm.add_symbol(s.to_owned()));
+                vm.instrs_push(instr, *span);
+                Ok(1)
+            }
+            ast::Expr::Symbol(span) => {
                 let s = self.lexer.span_str(*span);
                 let instr = Instr::Symbol(vm.add_symbol(s.to_owned()));
                 vm.instrs_push(instr, *span);

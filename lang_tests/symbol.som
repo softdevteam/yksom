@@ -8,6 +8,10 @@ VM:
     true
     String
     String
+    #ab:
+    #ab
+    #+
+    #+-+
 "
 
 symbol = (
@@ -18,5 +22,12 @@ symbol = (
         (('a' + 'b') asSymbol == #ab) println.
         (('a' + #ab) class) println.
         ((#ab + 'a') class) println.
+
+        #ab: println.
+
+        #'ab' println.
+
+        #+ println.
+        #+-+ println.
     )
 )
