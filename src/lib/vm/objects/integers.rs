@@ -247,7 +247,7 @@ impl Obj for ArbInt {
 
     fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
-            debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            debug_assert!(self.val > BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
             false
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             self.val == rhs.val
@@ -259,7 +259,7 @@ impl Obj for ArbInt {
 
     fn not_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
-            debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            debug_assert!(self.val > BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
             true
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             self.val != rhs.val
@@ -284,7 +284,7 @@ impl Obj for ArbInt {
 
     fn greater_than_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
-            debug_assert!(self.val >= BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            debug_assert!(self.val > BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
             true
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             self.val >= rhs.val
@@ -297,7 +297,7 @@ impl Obj for ArbInt {
 
     fn less_than(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
-            debug_assert!(self.val < BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            debug_assert!(self.val > BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
             false
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             self.val < rhs.val
@@ -310,7 +310,7 @@ impl Obj for ArbInt {
 
     fn less_than_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
-            debug_assert!(self.val <= BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
+            debug_assert!(self.val > BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
             false
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             self.val <= rhs.val
