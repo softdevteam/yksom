@@ -37,11 +37,13 @@ pub enum Primitive {
     Exit,
     Fields,
     FromString,
+    FullGC,
     Global,
     GlobalPut,
     GreaterThan,
     GreaterThanEquals,
     Halt,
+    HasGlobal,
     Hashcode,
     Inspect,
     InstVarAt,
@@ -76,6 +78,8 @@ pub enum Primitive {
     Sqrt,
     Sub,
     Superclass,
+    Ticks,
+    Time,
     /// Is this `value` (0), `value:` (1), or `value:with:` (2)?
     Value(u8),
 }

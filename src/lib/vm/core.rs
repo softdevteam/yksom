@@ -655,6 +655,7 @@ impl VM {
             }
             Primitive::Fields => todo!(),
             Primitive::FromString => todo!(),
+            Primitive::FullGC => todo!(),
             Primitive::Global => {
                 let name_val = self.stack.pop();
                 let name = stry!(String_::symbol_to_string_(self, &name_val));
@@ -683,6 +684,7 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Halt => unimplemented!(),
+            Primitive::HasGlobal => todo!(),
             Primitive::Hashcode => unimplemented!(),
             Primitive::Inspect => unimplemented!(),
             Primitive::InstVarAt => unimplemented!(),
@@ -801,6 +803,8 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::Ticks => todo!(),
+            Primitive::Time => todo!(),
             Primitive::Value(nargs) => {
                 let rcv_blk: &Block = stry!(rcv.downcast(self));
                 let (num_vars, bytecode_off, max_stack) = {
