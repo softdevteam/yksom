@@ -2,6 +2,9 @@
 
 set -e
 
+git submodule init
+git pull --recurse-submodules
+
 export CARGO_HOME="`pwd`/.cargo"
 export RUSTUP_HOME="`pwd`/.rustup"
 
