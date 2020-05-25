@@ -1,0 +1,3 @@
+[submodule "SOM"]
+	path = SOM
+	url = https://github.com/SOM-st/SOM/
