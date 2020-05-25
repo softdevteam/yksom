@@ -84,71 +84,71 @@ pub trait Obj: std::fmt::Debug {
 
     /// Convert this object to a `Val` that represents a SOM string.
     fn to_strval(&self, _: &mut VM) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Lookup an instance variable in this object.
     fn inst_var_lookup(&self, _: usize) -> Val {
-        todo!();
+        unreachable!();
     }
 
     /// Set an instance variable in this object.
     fn inst_var_set(&self, _: usize, _: Val) {
-        todo!();
+        unreachable!();
     }
 
     /// What is this object's length?
     fn length(&self) -> usize {
-        todo!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which adds `other` to this.
     fn add(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which performs a bitwise and with `other` and this.
     fn and(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which divides `other` from this.
     fn div(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     fn double_div(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
     fn modulus(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
     fn mul(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
     fn shl(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produces a new `Val` which is the square root of this.
     fn sqrt(&self, _: &mut VM) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which subtracts `other` from this.
     fn sub(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Produce a new `Val` which performs a bitwise xor with `other` and this
     fn xor(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Is this `Val` reference equality equal to `other`? Only number types are likely to want to
@@ -165,32 +165,32 @@ pub trait Obj: std::fmt::Debug {
 
     /// Does this `Val` equal `other`?
     fn equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Does this `Val` not equal `other`?
     fn not_equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Is this `Val` greater than `other`?
     fn greater_than(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Is this `Val` greater than or equal to `other`?
     fn greater_than_equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Is this `Val` less than `other`?
     fn less_than(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 
     /// Is this `Val` less than or equal to `other`?
     fn less_than_equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
-        unimplemented!();
+        unreachable!();
     }
 }
 
