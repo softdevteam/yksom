@@ -53,6 +53,7 @@ pub struct VM {
     pub false_cls: Val,
     pub int_cls: Val,
     pub metacls_cls: Val,
+    pub method_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
@@ -107,8 +108,9 @@ impl VM {
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
             metacls_cls: Val::illegal(),
-            nil_cls: Val::illegal(),
+            method_cls: Val::illegal(),
             obj_cls: Val::illegal(),
+            nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
             sym_cls: Val::illegal(),
             system_cls: Val::illegal(),
@@ -233,6 +235,7 @@ impl VM {
         self.double_cls = self.init_builtin_class("Double", false);
         self.false_cls = self.init_builtin_class("False", false);
         self.int_cls = self.init_builtin_class("Integer", false);
+        self.method_cls = self.init_builtin_class("Method", false);
         self.system_cls = self.init_builtin_class("System", false);
         self.true_cls = self.init_builtin_class("True", false);
         let v = self.false_cls;
@@ -715,10 +718,12 @@ impl VM {
             Primitive::Halt => unimplemented!(),
             Primitive::HasGlobal => todo!(),
             Primitive::Hashcode => unimplemented!(),
+            Primitive::Holder => todo!(),
             Primitive::Inspect => unimplemented!(),
             Primitive::InstVarAt => unimplemented!(),
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
+            Primitive::InvokeOnWith => todo!(),
             Primitive::IsDigits => unimplemented!(),
             Primitive::IsLetters => unimplemented!(),
             Primitive::IsWhiteSpace => unimplemented!(),
@@ -830,6 +835,7 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Shr => todo!(),
+            Primitive::Signature => todo!(),
             Primitive::Sin => todo!(),
             Primitive::Sqrt => {
                 let v = stry!(rcv.sqrt(self));
@@ -1167,8 +1173,9 @@ impl VM {
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
             metacls_cls: Val::illegal(),
-            obj_cls: Val::illegal(),
+            method_cls: Val::illegal(),
             nil_cls: Val::illegal(),
+            obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
             sym_cls: Val::illegal(),
             system_cls: Val::illegal(),

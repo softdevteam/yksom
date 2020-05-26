@@ -37,8 +37,8 @@ impl Obj for Method {
         ObjType::Method
     }
 
-    fn get_class(&self, _: &mut VM) -> Val {
-        unimplemented!();
+    fn get_class(&self, vm: &mut VM) -> Val {
+        vm.method_cls
     }
 }
 
