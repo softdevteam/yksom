@@ -2,11 +2,11 @@
 VM:
   status: success
   stdout:
-    Array
+    other
 "
 
-class_load = (
+test = (
     run = (
-        Array println.
+        other new f println.
     )
 )

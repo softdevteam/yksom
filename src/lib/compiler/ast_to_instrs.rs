@@ -304,6 +304,8 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "asInteger" => Ok(MethodBody::Primitive(Primitive::AsInteger)),
                 "asString" => Ok(MethodBody::Primitive(Primitive::AsString)),
                 "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
+                "at:" => Ok(MethodBody::Primitive(Primitive::At)),
+                "at:put:" => Ok(MethodBody::Primitive(Primitive::AtPut)),
                 "atRandom" => Ok(MethodBody::Primitive(Primitive::AtRandom)),
                 "class" => Ok(MethodBody::Primitive(Primitive::Class)),
                 "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
@@ -326,6 +328,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "methods" => Ok(MethodBody::Primitive(Primitive::Methods)),
                 "name" => Ok(MethodBody::Primitive(Primitive::Name)),
                 "new" => Ok(MethodBody::Primitive(Primitive::New)),
+                "new:" => Ok(MethodBody::Primitive(Primitive::NewArray)),
                 "objectSize" => Ok(MethodBody::Primitive(Primitive::ObjectSize)),
                 "perform:" => Ok(MethodBody::Primitive(Primitive::Perform)),
                 "perform:inSuperclass:" => {
@@ -442,6 +445,14 @@ impl<'a, 'input> Compiler<'a, 'input> {
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
     fn c_expr(&mut self, vm: &mut VM, expr: &ast::Expr) -> CompileResult<usize> {
         match expr {
+            ast::Expr::Array { span, items } => {
+                let mut max_stack = max(items.len(), 1);
+                for (i, it) in items.iter().enumerate() {
+                    max_stack = max(max_stack, i + self.c_expr(vm, it)?);
+                }
+                vm.instrs_push(Instr::Array(items.len()), *span);
+                Ok(max_stack)
+            }
             ast::Expr::Assign { span, id, expr } => {
                 let (depth, var_num) = match self.find_var(*id) {
                     Some((d, v)) => (d, v),

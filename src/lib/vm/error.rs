@@ -150,6 +150,11 @@ pub enum VMErrorKind {
     DomainError,
     /// The VM is trying to exit.
     Exit,
+    /// Tried to access an out-of-bounds element.
+    IndexError {
+        tried: usize,
+        max: usize,
+    },
     /// We expected a SOM value that is an instance of `expected_cls` but at run-time got a SOM
     /// value that is an instance of `got_cls`.
     InstanceTypeError {
@@ -193,6 +198,10 @@ impl VMErrorKind {
             VMErrorKind::DivisionByZero => Ok("Division by zero".to_owned()),
             VMErrorKind::DomainError => Ok("Domain error".to_owned()),
             VMErrorKind::Exit => Ok("Exit".to_owned()),
+            VMErrorKind::IndexError { tried, max } => Ok(format!(
+                "Index {} not valid for array of length {}",
+                tried, max
+            )),
             VMErrorKind::InstanceTypeError {
                 expected_cls,
                 got_cls,

@@ -1,5 +1,6 @@
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
+    Array(usize),
     Block(usize),
     GlobalLookup(usize),
     ClosureReturn(usize),
@@ -26,6 +27,8 @@ pub enum Primitive {
     AsInteger,
     AsString,
     AsSymbol,
+    At,
+    AtPut,
     AtRandom,
     BitXor,
     Class,
@@ -59,6 +62,7 @@ pub enum Primitive {
     Name,
     NotEquals,
     New,
+    NewArray,
     ObjectSize,
     Perform,
     PerformInSuperClass,
