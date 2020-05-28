@@ -1,9 +1,0 @@
-Boolean = (
-    ifTrue: trueBlock ifFalse: falseBlock = (
-        self ifTrue: [ ^trueBlock value  ].
-        self ifFalse: [ ^falseBlock value ].
-    )
-
-    && boolean = ( ^self and: boolean )
-    || boolean = ( ^self or: boolean )
-)

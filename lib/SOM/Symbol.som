@@ -1,6 +1,0 @@
-Symbol = String (
-    asString = primitive
-    asSymbol = ( ^self )
-    "FIXME implement super keyword instead"
-    print    = ( '#' print. super print )
-)

@@ -719,6 +719,9 @@ impl VM {
             Primitive::InstVarAt => unimplemented!(),
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
+            Primitive::IsDigits => unimplemented!(),
+            Primitive::IsLetters => unimplemented!(),
+            Primitive::IsWhiteSpace => unimplemented!(),
             Primitive::Length => {
                 // Only Arrays and Strings can have this primitive installed.
                 debug_assert!(rcv.valkind() == ValKind::GCBOX);

@@ -1,8 +1,0 @@
-False = Boolean (
-    asString = ( ^'false' )
-    not = ( ^true )
-    or: block = ( ^block value )
-    and: block = ( ^false )
-    ifTrue: block = ( ^nil )
-    ifFalse: block = ( ^block value )
-)

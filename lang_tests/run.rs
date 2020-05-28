@@ -4,7 +4,7 @@ use lang_tester::LangTester;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 
-const SOM_LIBS_PATH: &'static str = "lib/SOM/";
+const SOM_LIBS_PATH: &'static str = "SOM/Smalltalk";
 
 lazy_static! {
     static ref EXPECTED: Regex = RegexBuilder::new(r#"^"(.*?)^"[ \t]*$"#)
