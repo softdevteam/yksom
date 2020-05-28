@@ -266,7 +266,7 @@ impl VM {
     /// builtin classes which do not lead to run-time instances of `Inst`.
     fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
         let (name, cls_val) = compile(self, path);
-        let cls: &Class = cls_val.downcast(self).unwrap();
+        let cls: Gc<Class> = cls_val.downcast(self).unwrap();
         if !inst_vars_allowed && cls.num_inst_vars > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
@@ -455,7 +455,7 @@ impl VM {
                     } else {
                         // We have to call `self unknownGlobal:<symbol name>`.
                         let cls_val = rcv.get_class(self);
-                        let cls: &Class = stry!(cls_val.downcast(self));
+                        let cls: Gc<Class> = stry!(cls_val.downcast(self));
                         let meth = stry!(cls.get_method(self, "unknownGlobal:"));
                         let len = self.stack.len();
                         self.current_frame().set_sp(len);
@@ -505,7 +505,7 @@ impl VM {
                             Instr::Send(_, _) => rcv.get_class(self),
                             Instr::SuperSend(_, _) => {
                                 let method_cls_val = method.class();
-                                let method_cls: &Class = stry!(method_cls_val.downcast(self));
+                                let method_cls: Gc<Class> = stry!(method_cls_val.downcast(self));
                                 method_cls.supercls(self)
                             }
                             _ => unreachable!(),
@@ -518,7 +518,7 @@ impl VM {
                             _ => {
                                 // The inline cache is empty or out of date, so store a new value in it.
                                 let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
-                                let cls: &Class = stry!(lookup_cls.downcast(self));
+                                let cls: Gc<Class> = stry!(lookup_cls.downcast(self));
                                 let meth = stry!(cls.get_method(self, &*name));
                                 self.inline_caches[cache_idx] = Some((lookup_cls, meth));
                                 meth
@@ -596,7 +596,7 @@ impl VM {
             }
             Primitive::AsString => {
                 let v = stry!(rcv.to_strval(self));
-                let str_maybe: &String_ = stry!(v.downcast(self));
+                let str_maybe: Gc<String_> = stry!(v.downcast(self));
                 let str_ = stry!(str_maybe.to_string_(self));
                 self.stack.push(str_);
                 SendReturn::Val
@@ -687,7 +687,7 @@ impl VM {
             Primitive::FullGC => todo!(),
             Primitive::Global => {
                 let name_val = self.stack.pop();
-                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                let name = stry!(String_::symbol_to_string_(self, name_val));
                 let g = self.get_global_or_nil(name.as_str());
                 self.stack.push(g);
                 SendReturn::Val
@@ -695,7 +695,7 @@ impl VM {
             Primitive::GlobalPut => {
                 let v = self.stack.pop();
                 let name_val = self.stack.pop();
-                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                let name = stry!(String_::symbol_to_string_(self, name_val));
                 self.set_global(name.as_str(), v);
                 self.stack.push(rcv);
                 SendReturn::Val
@@ -744,7 +744,7 @@ impl VM {
             }
             Primitive::Load => {
                 let name_val = self.stack.pop();
-                let name = stry!(String_::symbol_to_string_(self, &name_val));
+                let name = stry!(String_::symbol_to_string_(self, name_val));
                 match self.load_class(name.as_str()) {
                     Ok(cls) => {
                         self.stack.push(cls);
@@ -771,7 +771,7 @@ impl VM {
             }
             Primitive::Name => {
                 let v = stry!(stry!(rcv.downcast::<Class>(self)).name(self));
-                let str_: &String_ = stry!(v.downcast(self));
+                let str_: Gc<String_> = stry!(v.downcast(self));
                 let sym = stry!(str_.to_symbol(self));
                 self.stack.push(sym);
                 SendReturn::Val
@@ -815,7 +815,7 @@ impl VM {
             }
             Primitive::PrintString => {
                 let v = self.stack.pop();
-                let str_: &String_ = stry!(v.downcast(self));
+                let str_: Gc<String_> = stry!(v.downcast(self));
                 print!("{}", str_.as_str());
                 let v = self.system;
                 self.stack.push(v);
@@ -843,7 +843,7 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Superclass => {
-                let cls: &Class = stry!(rcv.downcast(self));
+                let cls: Gc<Class> = stry!(rcv.downcast(self));
                 let v = cls.supercls(self);
                 self.stack.push(v);
                 SendReturn::Val
@@ -851,7 +851,7 @@ impl VM {
             Primitive::Ticks => todo!(),
             Primitive::Time => todo!(),
             Primitive::Value(nargs) => {
-                let rcv_blk: &Block = stry!(rcv.downcast(self));
+                let rcv_blk: Gc<Block> = stry!(rcv.downcast(self));
                 let (num_vars, bytecode_off, max_stack) = {
                     let blkinfo = &self.blockinfos[rcv_blk.blockinfo_off];
                     (blkinfo.num_vars, blkinfo.bytecode_off, blkinfo.max_stack)

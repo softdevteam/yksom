@@ -2,6 +2,8 @@
 
 use std::{cell::Cell, str};
 
+use rboehm::Gc;
+
 use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},
@@ -44,7 +46,7 @@ impl Obj for String_ {
     }
 
     fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        let other_str: &String_ = other.downcast(vm)?;
+        let other_str: Gc<String_> = other.downcast(vm)?;
 
         Ok(Val::from_bool(
             vm,
@@ -85,9 +87,9 @@ impl String_ {
     /// If the value `v` represents a `String_` which is an instance of the SOM `Symbol` class (and
     /// not the SOM `String` class!), return a reference to the underlying `String_` or an
     /// `InstanceTypeError` otherwise.
-    pub fn symbol_to_string_<'a>(vm: &mut VM, v: &'a Val) -> Result<&'a String_, Box<VMError>> {
+    pub fn symbol_to_string_(vm: &mut VM, v: Val) -> Result<Gc<String_>, Box<VMError>> {
         if v.get_class(vm) == vm.sym_cls {
-            Ok(v.downcast(vm)?)
+            v.downcast(vm)
         } else {
             let got_cls = v.get_class(vm);
             Err(VMError::new(
@@ -106,7 +108,7 @@ impl String_ {
 
     /// Concatenate this string with another string and return the result.
     pub fn concatenate(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        let other_str: &String_ = other.downcast(vm)?;
+        let other_str: Gc<String_> = other.downcast(vm)?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to
         // make a new string.

@@ -27,7 +27,7 @@ impl VMError {
         eprintln!("Traceback (most recent call at bottom):");
         for (method, span) in self.backtrace.iter().rev() {
             let cls_val = method.class();
-            let cls: &Class = cls_val.downcast(vm).unwrap();
+            let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
             let cls_path = cls.path.to_str().unwrap_or("<non-UTF8 filename>");
 
             if let Ok(d) = read_to_string(&cls.path) {
@@ -208,8 +208,8 @@ impl VMErrorKind {
             } => {
                 let expected_name_val = expected_cls.downcast::<Class>(vm)?.name;
                 let got_name_val = got_cls.downcast::<Class>(vm)?.name;
-                let expected_name: &String_ = expected_name_val.downcast(vm)?;
-                let got_name: &String_ = got_name_val.downcast(vm)?;
+                let expected_name: Gc<String_> = expected_name_val.downcast(vm)?;
+                let got_name: Gc<String_> = got_name_val.downcast(vm)?;
                 Ok(format!(
                     "Expected instance of '{}' but got instance of '{}'",
                     expected_name.as_str(),

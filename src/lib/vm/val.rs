@@ -79,10 +79,10 @@ impl Val {
 
     /// If this `Val` is a `GCBox` then convert it into `ThinObj`; if this `Val` is not a `GCBox`
     /// then undefined behaviour will occur (hence why this function is `unsafe`).
-    unsafe fn val_to_tobj(&self) -> &ThinObj {
+    unsafe fn val_to_tobj(&self) -> Gc<ThinObj> {
         debug_assert_eq!(self.valkind(), ValKind::GCBOX);
         let ptr = (self.val & !(ValKind::GCBOX as usize)) as *const ThinObj;
-        &*ptr
+        Gc::from_raw(ptr)
     }
 
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
@@ -128,7 +128,7 @@ impl Val {
     pub fn downcast<T: Obj + StaticObjType + NotUnboxable>(
         &self,
         vm: &VM,
-    ) -> Result<&T, Box<VMError>> {
+    ) -> Result<Gc<T>, Box<VMError>> {
         match self.valkind() {
             ValKind::INT => Err(VMError::new(
                 vm,
@@ -155,7 +155,7 @@ impl Val {
 
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
     /// be boxed) or return `None` if the cast is not valid.
-    pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<&T> {
+    pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<Gc<T>> {
         match self.valkind() {
             ValKind::INT => None,
             ValKind::GCBOX => unsafe { self.val_to_tobj() }.downcast(),
@@ -168,7 +168,7 @@ impl Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                Ok(unsafe { Gc::from_raw(self.val_to_tobj() as *const _ as *mut _) })
+                Ok(unsafe { self.val_to_tobj() })
             }
             ValKind::INT => {
                 let i = self.as_isize(vm).unwrap();

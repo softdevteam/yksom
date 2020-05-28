@@ -179,7 +179,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             methods,
         );
         let cls_val = Val::from_obj(vm, cls);
-        let cls: &Class = cls_val.downcast(vm).unwrap();
+        let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
         for m in cls.methods.values() {
             m.set_class(vm, cls_val);
         }
