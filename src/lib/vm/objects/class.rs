@@ -102,7 +102,7 @@ impl Class {
         // This method is called during VM bootstrapping when not all objects have valid
         // references.
         if cls_val.valkind() != ValKind::ILLEGAL {
-            let cls: &Class = cls_val.downcast(vm).unwrap();
+            let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
             let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
             inst_vars.resize(cls.num_inst_vars, Val::illegal());
             self.metacls.set(cls_val);

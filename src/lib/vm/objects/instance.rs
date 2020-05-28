@@ -2,6 +2,8 @@
 
 use std::cell::UnsafeCell;
 
+use rboehm::Gc;
+
 use crate::vm::{
     core::VM,
     objects::{Class, Obj, ObjType, StaticObjType},
@@ -45,7 +47,7 @@ impl StaticObjType for Inst {
 
 impl Inst {
     pub fn new(vm: &mut VM, class: Val) -> Val {
-        let cls: &Class = class.downcast(vm).unwrap();
+        let cls: Gc<Class> = class.downcast(vm).unwrap();
         let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
         inst_vars.resize(cls.num_inst_vars, Val::illegal());
         let inst = Inst {
