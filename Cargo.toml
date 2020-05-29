@@ -19,9 +19,9 @@ path = "lang_tests/run.rs"
 harness = false
 
 [build-dependencies]
-cfgrammar = "0.7"
-lrlex = "0.7"
-lrpar = "0.7"
+cfgrammar = "0.8"
+lrlex = "0.8"
+lrpar = "0.8"
 rerun_except = "0.1"
 
 [dev-dependencies]
@@ -33,11 +33,11 @@ regex = "1.1"
 [dependencies]
 rboehm = { git = "https://github.com/softdevteam/rboehm" }
 arrayvec = "0.5"
-cfgrammar = "0.7"
+cfgrammar = "0.8"
 getopts = "0.2"
 itertools = "0.9"
-lrlex = "0.7"
-lrpar = "0.7"
+lrlex = "0.8"
+lrpar = "0.8"
 natrob = { git="https://github.com/softdevteam/natrob", features=["rboehm"] }
 num-bigint = "0.2"
 num-integer = "0.1"
