@@ -992,14 +992,12 @@ impl VM {
 
     /// Add the global `n` to the VM, returning its index. Note that global names (like strings)
     /// are reused, so indexes are also reused.
-    pub fn add_global(&mut self, s: String) -> usize {
-        // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
-        // this slightly laborious dance and double-lookup.
-        if let Some(i) = self.reverse_globals.get(&s) {
+    pub fn add_global(&mut self, s: &str) -> usize {
+        if let Some(i) = self.reverse_globals.get(s) {
             *i
         } else {
             let len = self.globals.len();
-            self.reverse_globals.insert(s, len);
+            self.reverse_globals.insert(s.to_owned(), len);
             self.globals.push(Val::illegal());
             len
         }
