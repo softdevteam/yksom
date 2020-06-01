@@ -438,7 +438,13 @@ impl<'a, 'input> Compiler<'a, 'input> {
             max_stack = max(max_stack, 1);
             vm.instrs_push(Instr::Return, span);
         } else {
-            vm.instrs_push(Instr::Return, exprs.iter().last().unwrap().span());
+            if exprs.len() == 0 {
+                let idx = vm.add_global("nil");
+                vm.instrs_push(Instr::GlobalLookup(idx), span);
+                vm.instrs_push(Instr::Return, span);
+            } else {
+                vm.instrs_push(Instr::Return, exprs.iter().last().unwrap().span());
+            }
         }
         self.vars_stack.pop();
 
@@ -638,7 +644,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                         }
                     }
                     None => {
-                        let name = self.lexer.span_str(*span).to_owned();
+                        let name = self.lexer.span_str(*span);
                         let instr = Instr::GlobalLookup(vm.add_global(name));
                         vm.instrs_push(instr, *span);
                     }
