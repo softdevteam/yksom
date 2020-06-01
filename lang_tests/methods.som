@@ -1,0 +1,16 @@
+"
+VM:
+  status: success
+  stdout:
+    2
+"
+
+methods = (
+    run = (
+        | ms |
+        ms := methods methods.
+        ms length println.
+    )
+
+    f = ( )
+)

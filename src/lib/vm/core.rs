@@ -761,7 +761,11 @@ impl VM {
                 }
                 SendReturn::Val
             }
-            Primitive::Methods => todo!(),
+            Primitive::Methods => {
+                let methods = stry!(rcv.downcast::<Class>(self)).methods(self);
+                self.stack.push(methods);
+                SendReturn::Val
+            }
             Primitive::Mod => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.modulus(self, v));

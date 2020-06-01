@@ -12,7 +12,7 @@ use rboehm::Gc;
 use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},
-    objects::{Method, Obj, ObjType, StaticObjType},
+    objects::{Array, Method, Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val, ValKind},
 };
 
@@ -25,7 +25,13 @@ pub struct Class {
     pub instrs_off: usize,
     supercls: Cell<Val>,
     pub num_inst_vars: usize,
-    pub methods: HashMap<String, Gc<Method>>,
+    /// A SOM Array of methods (though note that it is *not* guaranteed that these definitely point
+    /// to SOM `Method` instances -- anything can be stored in this array!).
+    methods: Val,
+    /// A map from method names to indexes into the methods SOM Array. Note that indexes are stored
+    /// with SOM indexing (starting from 1). We guarantee that the indexes are valid indexes for
+    /// the `methods` array.
+    methods_map: HashMap<String, usize>,
     inst_vars: UnsafeCell<Vec<Val>>,
 }
 
@@ -67,8 +73,19 @@ impl Class {
         instrs_off: usize,
         supercls: Val,
         num_inst_vars: usize,
-        methods: HashMap<String, Gc<Method>>,
+        methods: Val,
+        methods_map: HashMap<String, usize>,
     ) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            // We later use the indexes in methods_map with Array::unchecked_at, so we make sure at
+            // this point that they really are safe to use.
+            let arr = methods.downcast::<Array>(vm).unwrap();
+            for i in methods_map.values() {
+                debug_assert!(*i > 0);
+                debug_assert!(*i <= arr.length());
+            }
+        }
         let cls = Class {
             metacls: Cell::new(metacls),
             name,
@@ -77,6 +94,7 @@ impl Class {
             supercls: Cell::new(supercls),
             num_inst_vars,
             methods,
+            methods_map,
             inst_vars: UnsafeCell::new(vec![]),
         };
         cls.set_metacls(vm, metacls);
@@ -88,14 +106,20 @@ impl Class {
     }
 
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
-        self.methods.get(msg).map(|x| Ok(*x)).unwrap_or_else(|| {
-            let supercls = self.supercls(vm);
-            if supercls != vm.nil {
-                supercls.downcast::<Class>(vm)?.get_method(vm, msg)
-            } else {
-                Err(VMError::new(vm, VMErrorKind::UnknownMethod(msg.to_owned())))
+        match self.methods_map.get(msg) {
+            Some(i) => {
+                let arr = self.methods.downcast::<Array>(vm).unwrap();
+                unsafe { arr.unchecked_at(*i) }.downcast(vm)
             }
-        })
+            None => {
+                let supercls = self.supercls(vm);
+                if supercls != vm.nil {
+                    supercls.downcast::<Class>(vm)?.get_method(vm, msg)
+                } else {
+                    Err(VMError::new(vm, VMErrorKind::UnknownMethod(msg.to_owned())))
+                }
+            }
+        }
     }
 
     pub fn set_metacls(&self, vm: &VM, cls_val: Val) {
@@ -116,5 +140,16 @@ impl Class {
 
     pub fn set_supercls(&self, _: &VM, cls: Val) {
         self.supercls.set(cls);
+    }
+
+    pub fn set_methods_class(&self, vm: &VM, cls: Val) {
+        for meth_val in self.methods.downcast::<Array>(vm).unwrap().iter() {
+            let meth = meth_val.downcast::<Method>(vm).unwrap();
+            meth.set_class(vm, cls);
+        }
+    }
+
+    pub fn methods(&self, _: &VM) -> Val {
+        self.methods
     }
 }

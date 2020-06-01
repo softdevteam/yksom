@@ -15,7 +15,7 @@ use crate::{
         StorageT,
     },
     vm::{
-        objects::{BlockInfo, Class, Method, MethodBody, String_},
+        objects::{Array, BlockInfo, Class, Method, MethodBody, String_},
         val::Val,
         VM,
     },
@@ -150,12 +150,16 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
         self.vars_stack.push(inst_vars);
 
-        let mut methods = HashMap::with_capacity(ast_methods.len());
+        let mut methods = Vec::with_capacity(ast_methods.len());
+        let mut methods_map = HashMap::with_capacity(ast_methods.len());
         let mut errs = vec![];
         for astmeth in ast_methods {
             match self.c_method(vm, astmeth) {
-                Ok(m) => {
-                    methods.insert(m.name.clone(), Gc::new(m));
+                Ok(meth_val) => {
+                    methods.push(meth_val);
+                    let meth = meth_val.downcast::<Method>(vm).unwrap();
+                    // methods_map uses SOM indexing (starting from 1)
+                    methods_map.insert(meth.name.clone(), methods.len());
                 }
                 Err(mut e) => {
                     errs.extend(e.drain(..));
@@ -168,6 +172,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
 
         let name_val = String_::new_str(vm, name);
+        let methods = Array::from_vec(vm, methods);
         let cls = Class::new(
             vm,
             vm.cls_cls,
@@ -177,16 +182,15 @@ impl<'a, 'input> Compiler<'a, 'input> {
             supercls,
             ast_inst_vars.len(),
             methods,
+            methods_map,
         );
         let cls_val = Val::from_obj(vm, cls);
         let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
-        for m in cls.methods.values() {
-            m.set_class(vm, cls_val);
-        }
+        cls.set_methods_class(vm, cls_val);
         Ok(cls_val)
     }
 
-    fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<Method> {
+    fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<Val> {
         let (name, args) = match astmeth.name {
             ast::MethodName::BinaryOp(op, arg) => {
                 let arg_v = match arg {
@@ -206,7 +210,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             }
         };
         let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
-        Ok(Method::new(vm, name.1, body))
+        Ok(Val::from_obj(vm, Method::new(vm, name.1, body)))
     }
 
     fn c_body(
