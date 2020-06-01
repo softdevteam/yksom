@@ -13,7 +13,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Method {
-    pub name: String,
+    sig: Val,
     pub body: MethodBody,
     class: Cell<Val>,
 }
@@ -51,9 +51,9 @@ impl StaticObjType for Method {
 }
 
 impl Method {
-    pub fn new(vm: &VM, name: String, body: MethodBody) -> Method {
+    pub fn new(vm: &VM, sig: Val, body: MethodBody) -> Method {
         Method {
-            name,
+            sig,
             body,
             class: Cell::new(vm.nil),
         }
@@ -65,5 +65,9 @@ impl Method {
 
     pub fn set_class(&self, _: &VM, class: Val) {
         self.class.set(class);
+    }
+
+    pub fn sig(&self, _: &VM) -> Val {
+        self.sig
     }
 }

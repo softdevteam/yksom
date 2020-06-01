@@ -155,11 +155,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let mut errs = vec![];
         for astmeth in ast_methods {
             match self.c_method(vm, astmeth) {
-                Ok(meth_val) => {
+                Ok((name, meth_val)) => {
                     methods.push(meth_val);
-                    let meth = meth_val.downcast::<Method>(vm).unwrap();
                     // methods_map uses SOM indexing (starting from 1)
-                    methods_map.insert(meth.name.clone(), methods.len());
+                    methods_map.insert(name, methods.len());
                 }
                 Err(mut e) => {
                     errs.extend(e.drain(..));
@@ -190,7 +189,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         Ok(cls_val)
     }
 
-    fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<Val> {
+    fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<(String, Val)> {
         let (name, args) = match astmeth.name {
             ast::MethodName::BinaryOp(op, arg) => {
                 let arg_v = match arg {
@@ -210,7 +209,9 @@ impl<'a, 'input> Compiler<'a, 'input> {
             }
         };
         let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
-        Ok(Val::from_obj(vm, Method::new(vm, name.1, body)))
+        let sig = String_::new_sym(vm, name.1.clone());
+        let meth = Method::new(vm, sig, body);
+        Ok((name.1, Val::from_obj(vm, meth)))
     }
 
     fn c_body(
