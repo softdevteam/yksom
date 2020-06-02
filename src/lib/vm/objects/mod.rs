@@ -151,8 +151,8 @@ pub trait Obj: std::fmt::Debug {
         unreachable!();
     }
 
-    /// Is this `Val` reference equality equal to `other`? Only number types are likely to want to
-    /// override this.
+    /// Is this `Val` reference equality equal to `other`? Only immutable SOM types are likely to
+    /// want to override this.
     fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let other_tobj = other.tobj(vm)?;
         let other_data =

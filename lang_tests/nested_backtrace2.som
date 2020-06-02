@@ -3,9 +3,10 @@ VM:
   status: error
   stderr:
     Traceback (most recent call at bottom):
-      ...nested_backtrace2.som, line 29, column 12:
+      ...
+      ...nested_backtrace2.som, line 30, column 12:
           run = ( self m )
-      ...nested_backtrace2.som, line 25, column 8:
+      ...nested_backtrace2.som, line 26, column 8:
               1 == 0
                 ifTrue: [ 1 / 0 ]
                 ifFalse: [ 2 / 0 ].
@@ -15,7 +16,7 @@ VM:
           ifFalse: block = ( ^block value )
       ...Boolean.som...
               self ifFalse: [ ^falseBlock value ].
-      ...nested_backtrace2.som, line 27, column 21:
+      ...nested_backtrace2.som, line 28, column 21:
                 ifFalse: [ 2 / 0 ].
     Division by zero.
 "

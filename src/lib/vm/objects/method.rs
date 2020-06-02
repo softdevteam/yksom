@@ -6,14 +6,14 @@ use crate::{
     compiler::instrs::Primitive,
     vm::{
         core::VM,
-        objects::{Obj, ObjType, StaticObjType},
+        objects::{Obj, ObjType, StaticObjType, String_},
         val::{NotUnboxable, Val},
     },
 };
 
 #[derive(Debug)]
 pub struct Method {
-    sig: Val,
+    sig: Cell<Val>,
     pub body: MethodBody,
     class: Cell<Val>,
 }
@@ -53,7 +53,7 @@ impl StaticObjType for Method {
 impl Method {
     pub fn new(vm: &VM, sig: Val, body: MethodBody) -> Method {
         Method {
-            sig,
+            sig: Cell::new(sig),
             body,
             class: Cell::new(vm.nil),
         }
@@ -63,11 +63,19 @@ impl Method {
         self.class.get()
     }
 
+    pub fn bootstrap(&self, vm: &VM) {
+        self.sig
+            .get()
+            .downcast::<String_>(vm)
+            .unwrap()
+            .set_cls(vm.sym_cls);
+    }
+
     pub fn set_class(&self, _: &VM, class: Val) {
         self.class.set(class);
     }
 
     pub fn sig(&self, _: &VM) -> Val {
-        self.sig
+        self.sig.get()
     }
 }

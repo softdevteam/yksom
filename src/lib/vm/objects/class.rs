@@ -12,14 +12,14 @@ use rboehm::Gc;
 use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},
-    objects::{Array, Method, Obj, ObjType, StaticObjType},
+    objects::{Array, Method, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val, ValKind},
 };
 
 #[derive(Debug)]
 pub struct Class {
     metacls: Cell<Val>,
-    pub name: Val,
+    name: Cell<Val>,
     pub path: PathBuf,
     /// Offset to this class's instructions in VM::instrs.
     pub instrs_off: usize,
@@ -88,7 +88,7 @@ impl Class {
         }
         let cls = Class {
             metacls: Cell::new(metacls),
-            name,
+            name: Cell::new(name),
             path,
             instrs_off,
             supercls: Cell::new(supercls),
@@ -102,7 +102,7 @@ impl Class {
     }
 
     pub fn name(&self, _: &VM) -> Result<Val, Box<VMError>> {
-        Ok(self.name)
+        Ok(self.name.get())
     }
 
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
@@ -146,6 +146,18 @@ impl Class {
         for meth_val in self.methods.downcast::<Array>(vm).unwrap().iter() {
             let meth = meth_val.downcast::<Method>(vm).unwrap();
             meth.set_class(vm, cls);
+        }
+    }
+
+    pub fn bootstrap(&self, vm: &VM) {
+        self.name
+            .get()
+            .downcast::<String_>(vm)
+            .unwrap()
+            .set_cls(vm.sym_cls);
+        for meth_val in self.methods.downcast::<Array>(vm).unwrap().iter() {
+            let meth = meth_val.downcast::<Method>(vm).unwrap();
+            meth.bootstrap(vm);
         }
     }
 
