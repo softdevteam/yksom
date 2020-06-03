@@ -46,6 +46,10 @@ impl Obj for String_ {
     }
 
     fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+        self.equals(vm, other)
+    }
+
+    fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let other_str: Gc<String_> = other.downcast(vm)?;
 
         Ok(Val::from_bool(

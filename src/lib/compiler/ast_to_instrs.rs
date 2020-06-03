@@ -15,7 +15,7 @@ use crate::{
         StorageT,
     },
     vm::{
-        objects::{BlockInfo, Class, Method, MethodBody, String_},
+        objects::{Array, BlockInfo, Class, Method, MethodBody, String_},
         val::Val,
         VM,
     },
@@ -150,12 +150,15 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
         self.vars_stack.push(inst_vars);
 
-        let mut methods = HashMap::with_capacity(ast_methods.len());
+        let mut methods = Vec::with_capacity(ast_methods.len());
+        let mut methods_map = HashMap::with_capacity(ast_methods.len());
         let mut errs = vec![];
         for astmeth in ast_methods {
             match self.c_method(vm, astmeth) {
-                Ok(m) => {
-                    methods.insert(m.name.clone(), Gc::new(m));
+                Ok((name, meth_val)) => {
+                    methods.push(meth_val);
+                    // methods_map uses SOM indexing (starting from 1)
+                    methods_map.insert(name, methods.len());
                 }
                 Err(mut e) => {
                     errs.extend(e.drain(..));
@@ -168,6 +171,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
 
         let name_val = String_::new_str(vm, name);
+        let methods = Array::from_vec(vm, methods);
         let cls = Class::new(
             vm,
             vm.cls_cls,
@@ -177,16 +181,15 @@ impl<'a, 'input> Compiler<'a, 'input> {
             supercls,
             ast_inst_vars.len(),
             methods,
+            methods_map,
         );
         let cls_val = Val::from_obj(vm, cls);
         let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
-        for m in cls.methods.values() {
-            m.set_class(vm, cls_val);
-        }
+        cls.set_methods_class(vm, cls_val);
         Ok(cls_val)
     }
 
-    fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<Method> {
+    fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<(String, Val)> {
         let (name, args) = match astmeth.name {
             ast::MethodName::BinaryOp(op, arg) => {
                 let arg_v = match arg {
@@ -206,7 +209,9 @@ impl<'a, 'input> Compiler<'a, 'input> {
             }
         };
         let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
-        Ok(Method::new(vm, name.1, body))
+        let sig = String_::new_sym(vm, name.1.clone());
+        let meth = Method::new(vm, sig, body);
+        Ok((name.1, Val::from_obj(vm, meth)))
     }
 
     fn c_body(
@@ -319,10 +324,12 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
                 "hasGlobal:" => Ok(MethodBody::Primitive(Primitive::HasGlobal)),
                 "hashcode" => Ok(MethodBody::Primitive(Primitive::Hashcode)),
+                "holder" => Ok(MethodBody::Primitive(Primitive::Holder)),
                 "inspect" => Ok(MethodBody::Primitive(Primitive::Inspect)),
                 "instVarAt:" => Ok(MethodBody::Primitive(Primitive::InstVarAt)),
                 "instVarAt:put:" => Ok(MethodBody::Primitive(Primitive::InstVarAtPut)),
                 "instVarNamed:" => Ok(MethodBody::Primitive(Primitive::InstVarNamed)),
+                "invokeOn:with:" => Ok(MethodBody::Primitive(Primitive::InvokeOnWith)),
                 "isDigits" => Ok(MethodBody::Primitive(Primitive::IsDigits)),
                 "isLetters" => Ok(MethodBody::Primitive(Primitive::IsLetters)),
                 "isWhiteSpace" => Ok(MethodBody::Primitive(Primitive::IsWhiteSpace)),
@@ -350,6 +357,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 "printNewline" => Ok(MethodBody::Primitive(Primitive::PrintNewline)),
                 "printString:" => Ok(MethodBody::Primitive(Primitive::PrintString)),
                 "rem:" => Ok(MethodBody::Primitive(Primitive::Rem)),
+                "signature" => Ok(MethodBody::Primitive(Primitive::Signature)),
                 "sin" => Ok(MethodBody::Primitive(Primitive::Sin)),
                 "sqrt" => Ok(MethodBody::Primitive(Primitive::Sqrt)),
                 "restart" => Ok(MethodBody::Primitive(Primitive::Restart)),

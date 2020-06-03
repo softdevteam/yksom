@@ -3,9 +3,10 @@ VM:
   status: error
   stderr:
     Traceback (most recent call at bottom):
-      ...nested_backtrace1.som, line 19, column 12:
+      ...
+      ...nested_backtrace1.som, line 20, column 12:
           run = ( self m )
-      ...nested_backtrace1.som, line 16, column 18:
+      ...nested_backtrace1.som, line 17, column 18:
                 ifTrue: 1 / 0
     Division by zero.
 "

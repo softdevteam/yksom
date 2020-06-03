@@ -58,6 +58,8 @@ impl Array {
         )
     }
 
+    /// Return the item at index `idx` (using SOM indexing starting at 1) or an error if the index
+    /// is invalid.
     pub fn at(&self, vm: &VM, mut idx: usize) -> Result<Val, Box<VMError>> {
         let store = unsafe { &*self.store.get() };
         if idx > 0 && idx <= store.len() {
@@ -74,6 +76,18 @@ impl Array {
         }
     }
 
+    /// Return the item at index `idx` (using SOM indexing starting at 1). This will lead to
+    /// undefined behaviour if the index is invalid.
+    pub unsafe fn unchecked_at(&self, mut idx: usize) -> Val {
+        debug_assert!(idx > 0);
+        let store = &*self.store.get();
+        debug_assert!(idx <= store.len());
+        idx -= 1;
+        *store.get_unchecked(idx)
+    }
+
+    /// Set the item at index `idx` (using SOM indexing starting at 1) to `val` or return an error
+    /// if the index is invalid.
     pub fn at_put(&self, vm: &VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
         let store = unsafe { &mut *self.store.get() };
         if idx > 0 && idx <= store.len() {
@@ -88,6 +102,29 @@ impl Array {
                     max: store.len(),
                 },
             ))
+        }
+    }
+
+    /// Iterate over this array's values.
+    pub fn iter<'a>(&'a self) -> ArrayIterator<'a> {
+        ArrayIterator { arr: self, i: 0 }
+    }
+}
+
+pub struct ArrayIterator<'a> {
+    arr: &'a Array,
+    i: usize,
+}
+
+impl<'a> Iterator for ArrayIterator<'a> {
+    type Item = Val;
+
+    fn next(&mut self) -> Option<Val> {
+        if self.i < self.arr.length() {
+            self.i += 1;
+            Some(unsafe { self.arr.unchecked_at(self.i) })
+        } else {
+            None
         }
     }
 }

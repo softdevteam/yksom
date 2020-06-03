@@ -206,8 +206,8 @@ impl VMErrorKind {
                 expected_cls,
                 got_cls,
             } => {
-                let expected_name_val = expected_cls.downcast::<Class>(vm)?.name;
-                let got_name_val = got_cls.downcast::<Class>(vm)?.name;
+                let expected_name_val = expected_cls.downcast::<Class>(vm)?.name(vm).unwrap();
+                let got_name_val = got_cls.downcast::<Class>(vm)?.name(vm).unwrap();
                 let expected_name: Gc<String_> = expected_name_val.downcast(vm)?;
                 let got_name: Gc<String_> = got_name_val.downcast(vm)?;
                 Ok(format!(

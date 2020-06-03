@@ -10,7 +10,10 @@ use std::{
 
 use getopts::Options;
 
-use yksom::vm::{objects::Inst, VMError, VMErrorKind, VM};
+use yksom::vm::{
+    objects::{Array, String_},
+    VMError, VMErrorKind, VM,
+};
 
 use rboehm::BoehmAllocator;
 
@@ -52,20 +55,14 @@ fn main() {
     );
 
     let mut vm = VM::new(cp);
-    let cls = vm
-        .load_class(
-            src_path
-                .file_name()
-                .expect("Invalid source filename.")
-                .to_str()
-                .expect("Source filename must be valid UTF-8."),
-        )
-        .expect(&format!(
-            "Could not load class '{}'",
-            src_path.to_str().unwrap()
-        ));
-    let app = Inst::new(&mut vm, cls);
-    match vm.top_level_send(app, "run", vec![]) {
+    let system = vm.get_global_or_nil("system");
+    let src_fname = match src_path.file_name().and_then(|x| x.to_str()) {
+        Some(x) => x,
+        None => todo!(),
+    };
+    let src_fname_val = String_::new_sym(&mut vm, src_fname.to_owned());
+    let args = Array::from_vec(&mut vm, vec![src_fname_val]);
+    match vm.top_level_send(system, "initialize:", vec![args]) {
         Ok(_)
         | Err(box VMError {
             kind: VMErrorKind::Exit,

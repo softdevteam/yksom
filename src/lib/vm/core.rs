@@ -53,6 +53,7 @@ pub struct VM {
     pub false_cls: Val,
     pub int_cls: Val,
     pub metacls_cls: Val,
+    pub method_cls: Val,
     pub nil_cls: Val,
     pub obj_cls: Val,
     pub str_cls: Val,
@@ -107,8 +108,9 @@ impl VM {
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
             metacls_cls: Val::illegal(),
-            nil_cls: Val::illegal(),
+            method_cls: Val::illegal(),
             obj_cls: Val::illegal(),
+            nil_cls: Val::illegal(),
             str_cls: Val::illegal(),
             sym_cls: Val::illegal(),
             system_cls: Val::illegal(),
@@ -199,19 +201,14 @@ impl VM {
 
         self.str_cls = self.init_builtin_class("String", false);
         let str_cls = self.str_cls;
-        for c in &[obj_cls, cls_cls, nil_cls, metacls_cls, str_cls] {
+        self.sym_cls = self.init_builtin_class("Symbol", false);
+        let sym_cls = self.sym_cls;
+        for c in &[obj_cls, cls_cls, nil_cls, metacls_cls, str_cls, sym_cls] {
             let cls = c.downcast::<Class>(&self).unwrap();
-            cls.name
-                .downcast::<String_>(&self)
-                .unwrap()
-                .set_cls(str_cls);
+            cls.bootstrap(&self);
             let metacls_val = c.get_class(&mut self);
             let metacls = metacls_val.downcast::<Class>(&self).unwrap();
-            metacls
-                .name
-                .downcast::<String_>(&self)
-                .unwrap()
-                .set_cls(str_cls);
+            metacls.bootstrap(&self);
         }
         for s in &self.strings {
             s.downcast::<String_>(&self).unwrap().set_cls(str_cls);
@@ -223,7 +220,6 @@ impl VM {
     fn bootstrap_semi_delicate(mut self) -> Self {
         // Nothing in this phase must store references to any classes earlier than it in the phase.
         assert!(self.symbols.is_empty());
-        self.sym_cls = self.init_builtin_class("Symbol", false);
 
         self.array_cls = self.init_builtin_class("Array", false);
         self.block_cls = self.init_builtin_class("Block", false);
@@ -233,6 +229,7 @@ impl VM {
         self.double_cls = self.init_builtin_class("Double", false);
         self.false_cls = self.init_builtin_class("False", false);
         self.int_cls = self.init_builtin_class("Integer", false);
+        self.method_cls = self.init_builtin_class("Method", false);
         self.system_cls = self.init_builtin_class("System", false);
         self.true_cls = self.init_builtin_class("True", false);
         let v = self.false_cls;
@@ -715,10 +712,12 @@ impl VM {
             Primitive::Halt => unimplemented!(),
             Primitive::HasGlobal => todo!(),
             Primitive::Hashcode => unimplemented!(),
+            Primitive::Holder => todo!(),
             Primitive::Inspect => unimplemented!(),
             Primitive::InstVarAt => unimplemented!(),
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
+            Primitive::InvokeOnWith => todo!(),
             Primitive::IsDigits => unimplemented!(),
             Primitive::IsLetters => unimplemented!(),
             Primitive::IsWhiteSpace => unimplemented!(),
@@ -756,7 +755,11 @@ impl VM {
                 }
                 SendReturn::Val
             }
-            Primitive::Methods => todo!(),
+            Primitive::Methods => {
+                let methods = stry!(rcv.downcast::<Class>(self)).methods(self);
+                self.stack.push(methods);
+                SendReturn::Val
+            }
             Primitive::Mod => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.modulus(self, v));
@@ -830,6 +833,11 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Shr => todo!(),
+            Primitive::Signature => {
+                let meth = rcv.downcast::<Method>(self).unwrap();
+                self.stack.push(meth.sig(self));
+                SendReturn::Val
+            }
             Primitive::Sin => todo!(),
             Primitive::Sqrt => {
                 let v = stry!(rcv.sqrt(self));
@@ -1165,8 +1173,9 @@ impl VM {
             false_cls: Val::illegal(),
             int_cls: Val::illegal(),
             metacls_cls: Val::illegal(),
-            obj_cls: Val::illegal(),
+            method_cls: Val::illegal(),
             nil_cls: Val::illegal(),
+            obj_cls: Val::illegal(),
             str_cls: Val::illegal(),
             sym_cls: Val::illegal(),
             system_cls: Val::illegal(),
