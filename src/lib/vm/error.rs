@@ -177,7 +177,7 @@ pub enum VMErrorKind {
     /// An unknown global.
     UnknownGlobal(String),
     /// An unknown method.
-    UnknownMethod(String),
+    UnknownMethod(Val, String),
 }
 
 impl VMErrorKind {
@@ -225,7 +225,15 @@ impl VMErrorKind {
             VMErrorKind::PrimitiveError => Ok("Primitive Error".to_owned()),
             VMErrorKind::ShiftTooBig => Ok("Shift too big".to_owned()),
             VMErrorKind::UnknownGlobal(name) => Ok(format!("Unknown global '{}'", name)),
-            VMErrorKind::UnknownMethod(name) => Ok(format!("Unknown method '{}'", name)),
+            VMErrorKind::UnknownMethod(class_val, name) => {
+                let class_name_val = class_val.downcast::<Class>(vm)?.name(vm).unwrap();
+                let class_name = class_name_val.downcast::<String_>(vm)?;
+                Ok(format!(
+                    "Unknown method '{}' in instance of '{}'",
+                    name,
+                    class_name.as_str()
+                ))
+            }
         }
     }
 }
