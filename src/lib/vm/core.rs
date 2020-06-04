@@ -911,6 +911,12 @@ impl VM {
         self.blockinfos[idx] = blkinfo;
     }
 
+    pub fn flush_inline_caches(&mut self) {
+        for c in &mut self.inline_caches {
+            *c = None;
+        }
+    }
+
     /// Add an empty inline cache to the VM, returning its index.
     pub fn new_inline_cache(&mut self) -> usize {
         let len = self.inline_caches.len();

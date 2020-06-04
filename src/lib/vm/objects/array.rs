@@ -12,7 +12,7 @@ use crate::vm::{
 pub trait Array {
     fn at(&self, vm: &VM, idx: usize) -> Result<Val, Box<VMError>>;
     unsafe fn unchecked_at(&self, idx: usize) -> Val;
-    fn at_put(&self, vm: &VM, idx: usize, val: Val) -> Result<(), Box<VMError>>;
+    fn at_put(&self, vm: &mut VM, idx: usize, val: Val) -> Result<(), Box<VMError>>;
 }
 
 #[derive(Debug)]
@@ -78,7 +78,7 @@ impl Array for NormalArray {
 
     /// Set the item at index `idx` (using SOM indexing starting at 1) to `val` or return an error
     /// if the index is invalid.
-    fn at_put(&self, vm: &VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
+    fn at_put(&self, vm: &mut VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
         let store = unsafe { &mut *self.store.get() };
         if idx > 0 && idx <= store.len() {
             idx -= 1;
@@ -181,11 +181,12 @@ impl Array for MethodsArray {
 
     /// Set the item at index `idx` (using SOM indexing starting at 1) to `val` or return an error
     /// if the index is invalid.
-    fn at_put(&self, vm: &VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
+    fn at_put(&self, vm: &mut VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
         let store = unsafe { &mut *self.store.get() };
         if idx > 0 && idx <= store.len() {
             idx -= 1;
             *unsafe { store.get_unchecked_mut(idx) } = val;
+            vm.flush_inline_caches();
             Ok(())
         } else {
             Err(VMError::new(
