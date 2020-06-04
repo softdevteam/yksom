@@ -42,7 +42,7 @@ impl Obj for String_ {
     }
 
     fn length(&self) -> usize {
-        todo!();
+        self.s.chars().count()
     }
 
     fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {

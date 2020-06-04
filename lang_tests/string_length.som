@@ -1,0 +1,16 @@
+"
+VM:
+  status: success
+  stdout:
+    5
+    1
+    13
+"
+
+string_length = (
+    run = (
+        'hello' length println.
+        '❤' length println.
+        'hello ❤ world' length println.
+    )
+)
