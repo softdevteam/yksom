@@ -29,7 +29,7 @@ mod integers;
 mod method;
 mod string_;
 
-pub use array::NormalArray;
+pub use array::{Array, NormalArray};
 pub use block::{Block, BlockInfo};
 pub use class::Class;
 pub use double::Double;

@@ -19,7 +19,7 @@ use crate::{
     vm::{
         error::{VMError, VMErrorKind},
         objects::{
-            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
+            Array, Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
             StaticObjType, String_,
         },
         somstack::SOMStack,

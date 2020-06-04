@@ -12,7 +12,7 @@ use rboehm::Gc;
 use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},
-    objects::{Method, NormalArray, Obj, ObjType, StaticObjType, String_},
+    objects::{Array, Method, NormalArray, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val, ValKind},
 };
 
