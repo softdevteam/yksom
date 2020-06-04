@@ -128,6 +128,25 @@ impl String_ {
         Ok(String_::new_str(vm, new))
     }
 
+    pub fn substring(&self, vm: &mut VM, start: usize, end: usize) -> Result<Val, Box<VMError>> {
+        if start == 0 || end == 0 {
+            todo!();
+        }
+        if end < start {
+            todo!();
+        }
+        if start > self.s.len() || end > self.s.len() {
+            todo!();
+        }
+        let substr = self
+            .s
+            .chars()
+            .skip(start - 1)
+            .take(end - start + 1)
+            .collect::<String>();
+        Ok(String_::new_str(vm, substr))
+    }
+
     pub fn to_string_(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(String_::new_str(vm, self.s.to_string()))
     }

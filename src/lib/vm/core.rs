@@ -802,7 +802,14 @@ impl VM {
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
             Primitive::PositiveInfinity => todo!(),
-            Primitive::PrimSubstringFromTo => todo!(),
+            Primitive::PrimSubstringFromTo => {
+                let end = stry!(self.stack.pop().as_usize(self));
+                let start = stry!(self.stack.pop().as_usize(self));
+                let str_: Gc<String_> = stry!(rcv.downcast(self));
+                let substr = stry!(str_.substring(self, start, end));
+                self.stack.push(substr);
+                SendReturn::Val
+            }
             Primitive::RefEquals => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.ref_equals(self, v));
