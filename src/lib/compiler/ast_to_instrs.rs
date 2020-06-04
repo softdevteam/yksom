@@ -15,7 +15,7 @@ use crate::{
         StorageT,
     },
     vm::{
-        objects::{Array, BlockInfo, Class, Method, MethodBody, String_},
+        objects::{BlockInfo, Class, Method, MethodBody, NormalArray, String_},
         val::Val,
         VM,
     },
@@ -171,7 +171,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
 
         let name_val = String_::new_str(vm, name);
-        let methods = Array::from_vec(vm, methods);
+        let methods = NormalArray::from_vec(vm, methods);
         let cls = Class::new(
             vm,
             vm.cls_cls,

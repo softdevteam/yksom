@@ -10,11 +10,11 @@ use crate::vm::{
 };
 
 #[derive(Debug)]
-pub struct Array {
+pub struct NormalArray {
     store: UnsafeCell<Vec<Val>>,
 }
 
-impl Obj for Array {
+impl Obj for NormalArray {
     fn dyn_objtype(&self) -> ObjType {
         ObjType::Array
     }
@@ -29,21 +29,21 @@ impl Obj for Array {
     }
 }
 
-impl NotUnboxable for Array {}
+impl NotUnboxable for NormalArray {}
 
-impl StaticObjType for Array {
+impl StaticObjType for NormalArray {
     fn static_objtype() -> ObjType {
         ObjType::Array
     }
 }
 
-impl Array {
+impl NormalArray {
     pub fn new(vm: &mut VM, len: usize) -> Val {
         let mut store = Vec::with_capacity(len);
         store.resize(len, vm.nil);
         Val::from_obj(
             vm,
-            Array {
+            NormalArray {
                 store: UnsafeCell::new(store),
             },
         )
@@ -52,7 +52,7 @@ impl Array {
     pub fn from_vec(vm: &mut VM, store: Vec<Val>) -> Val {
         Val::from_obj(
             vm,
-            Array {
+            NormalArray {
                 store: UnsafeCell::new(store),
             },
         )
@@ -106,17 +106,17 @@ impl Array {
     }
 
     /// Iterate over this array's values.
-    pub fn iter<'a>(&'a self) -> ArrayIterator<'a> {
-        ArrayIterator { arr: self, i: 0 }
+    pub fn iter<'a>(&'a self) -> NormalArrayIterator<'a> {
+        NormalArrayIterator { arr: self, i: 0 }
     }
 }
 
-pub struct ArrayIterator<'a> {
-    arr: &'a Array,
+pub struct NormalArrayIterator<'a> {
+    arr: &'a NormalArray,
     i: usize,
 }
 
-impl<'a> Iterator for ArrayIterator<'a> {
+impl<'a> Iterator for NormalArrayIterator<'a> {
     type Item = Val;
 
     fn next(&mut self) -> Option<Val> {

@@ -12,7 +12,7 @@ use rboehm::Gc;
 use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},
-    objects::{Array, Method, Obj, ObjType, StaticObjType, String_},
+    objects::{Method, NormalArray, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val, ValKind},
 };
 
@@ -80,7 +80,7 @@ impl Class {
         {
             // We later use the indexes in methods_map with Array::unchecked_at, so we make sure at
             // this point that they really are safe to use.
-            let arr = methods.downcast::<Array>(vm).unwrap();
+            let arr = methods.downcast::<NormalArray>(vm).unwrap();
             for i in methods_map.values() {
                 debug_assert!(*i > 0);
                 debug_assert!(*i <= arr.length());
@@ -108,7 +108,7 @@ impl Class {
     pub fn get_method(&self, vm: &VM, msg: &str) -> Result<Gc<Method>, Box<VMError>> {
         match self.methods_map.get(msg) {
             Some(i) => {
-                let arr = self.methods.downcast::<Array>(vm).unwrap();
+                let arr = self.methods.downcast::<NormalArray>(vm).unwrap();
                 unsafe { arr.unchecked_at(*i) }.downcast(vm)
             }
             None => {
@@ -143,7 +143,7 @@ impl Class {
     }
 
     pub fn set_methods_class(&self, vm: &VM, cls: Val) {
-        for meth_val in self.methods.downcast::<Array>(vm).unwrap().iter() {
+        for meth_val in self.methods.downcast::<NormalArray>(vm).unwrap().iter() {
             let meth = meth_val.downcast::<Method>(vm).unwrap();
             meth.set_class(vm, cls);
         }
@@ -155,7 +155,7 @@ impl Class {
             .downcast::<String_>(vm)
             .unwrap()
             .set_cls(vm.sym_cls);
-        for meth_val in self.methods.downcast::<Array>(vm).unwrap().iter() {
+        for meth_val in self.methods.downcast::<NormalArray>(vm).unwrap().iter() {
             let meth = meth_val.downcast::<Method>(vm).unwrap();
             meth.bootstrap(vm);
         }
