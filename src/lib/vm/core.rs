@@ -19,7 +19,7 @@ use crate::{
     vm::{
         error::{VMError, VMErrorKind},
         objects::{
-            Array, Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
+            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
             StaticObjType, String_,
         },
         somstack::SOMStack,
@@ -606,14 +606,16 @@ impl VM {
             Primitive::As32BitSignedValue => todo!(),
             Primitive::As32BitUnsignedValue => todo!(),
             Primitive::At => {
-                let arr = stry!(rcv.downcast::<NormalArray>(self));
+                let rcv_tobj = stry!(rcv.tobj(self));
+                let arr = stry!(rcv_tobj.to_array());
                 let idx = stry!(self.stack.pop().as_usize(self));
                 let v = stry!(arr.at(self, idx));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::AtPut => {
-                let arr = stry!(rcv.downcast::<NormalArray>(self));
+                let rcv_tobj = stry!(rcv.tobj(self));
+                let arr = stry!(rcv_tobj.to_array());
                 let v = self.stack.pop();
                 let idx = stry!(self.stack.pop().as_usize(self));
                 stry!(arr.at_put(self, idx, v));
