@@ -25,6 +25,7 @@ pub struct Class {
     pub instrs_off: usize,
     supercls: Cell<Val>,
     pub num_inst_vars: usize,
+    pub inst_vars_map: HashMap<String, usize>,
     /// A SOM Array of methods (though note that it is *not* guaranteed that these definitely point
     /// to SOM `Method` instances -- anything can be stored in this array!).
     methods: Val,
@@ -72,7 +73,7 @@ impl Class {
         path: PathBuf,
         instrs_off: usize,
         supercls: Val,
-        num_inst_vars: usize,
+        inst_vars_map: HashMap<String, usize>,
         methods: Val,
         methods_map: HashMap<String, usize>,
     ) -> Self {
@@ -92,7 +93,8 @@ impl Class {
             path,
             instrs_off,
             supercls: Cell::new(supercls),
-            num_inst_vars,
+            num_inst_vars: inst_vars_map.len(),
+            inst_vars_map,
             methods,
             methods_map,
             inst_vars: UnsafeCell::new(vec![]),
