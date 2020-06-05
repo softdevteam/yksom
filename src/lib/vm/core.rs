@@ -344,7 +344,6 @@ impl VM {
         }
     }
 
-    /// This function should only be called via the `send_args_on_stack!` macro.
     fn send_args_on_stack(&mut self, rcv: Val, method: Gc<Method>, nargs: usize) -> SendReturn {
         match method.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
@@ -383,6 +382,8 @@ impl VM {
             }};
         }
 
+        // Inside this function, one should use this macro instead of calling `send_args_on_stack`
+        // directly.
         macro_rules! send_args_on_stack {
             ($send_rcv:expr, $send_method:expr, $nargs:expr) => {{
                 match self.send_args_on_stack($send_rcv, $send_method, $nargs) {
@@ -808,7 +809,14 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::ObjectSize => unimplemented!(),
-            Primitive::Perform => unimplemented!(),
+            Primitive::Perform => {
+                let sig_val = self.stack.pop();
+                let sig = stry!(String_::symbol_to_string_(self, sig_val));
+                let cls_val = rcv.get_class(self);
+                let cls = stry!(cls_val.downcast::<Class>(self));
+                let meth = stry!(cls.get_method(self, sig.as_str()));
+                self.send_args_on_stack(rcv, meth, 0)
+            }
             Primitive::PerformInSuperClass => unimplemented!(),
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
