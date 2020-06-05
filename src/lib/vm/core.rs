@@ -331,7 +331,7 @@ impl VM {
                 for a in args {
                     self.stack.push(a);
                 }
-                let frame = Frame::new(self, true, rcv, None, num_vars, nargs);
+                let frame = Frame::new(self, None, rcv, None, num_vars, nargs);
                 self.frames.push(frame);
                 let r = self.exec_user(rcv, meth, bytecode_off);
                 self.frame_pop();
@@ -356,7 +356,7 @@ impl VM {
                 if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
-                let nframe = Frame::new(self, true, rcv, None, num_vars, nargs);
+                let nframe = Frame::new(self, None, rcv, None, num_vars, nargs);
                 self.frames.push(nframe);
                 let r = self.exec_user(rcv, method, bytecode_off);
                 self.frame_pop();
@@ -440,7 +440,13 @@ impl VM {
                             return SendReturn::ClosureReturn(frame_depth);
                         }
                     }
-                    panic!("Return from escaped block");
+                    let cls_val = rcv.get_class(self);
+                    let cls: Gc<Class> = stry!(cls_val.downcast(self));
+                    let meth = stry!(cls.get_method(self, "escapedBlock:"));
+                    let blk = self.current_frame().block.unwrap();
+                    self.stack.push(blk);
+                    send_args_on_stack!(rcv, meth, 1);
+                    pc += 1;
                 }
                 Instr::Double(i) => {
                     let v = Double::new(self, i);
@@ -872,7 +878,7 @@ impl VM {
                 }
                 let frame = Frame::new(
                     self,
-                    false,
+                    Some(rcv),
                     rcv,
                     Some(rcv_blk.parent_closure),
                     num_vars,
@@ -1066,13 +1072,14 @@ pub struct Frame {
     /// Stack pointer. Note that this is updated lazily (i.e. it might not be accurate at all
     /// points, but it is guaranteed to be correct over function calls).
     sp: usize,
+    block: Option<Val>,
     closure: Gc<Closure>,
 }
 
 impl Frame {
     fn new(
         vm: &mut VM,
-        is_method: bool,
+        block: Option<Val>,
         self_val: Val,
         parent_closure: Option<Gc<Closure>>,
         num_vars: usize,
@@ -1081,7 +1088,7 @@ impl Frame {
         let mut vars = Vec::with_capacity(num_vars);
         vars.resize_with(num_vars, Val::illegal);
 
-        if is_method {
+        if block.is_none() {
             vars[0] = self_val;
             for i in 0..num_args {
                 vars[num_args - i] = vm.stack.pop();
@@ -1100,6 +1107,7 @@ impl Frame {
 
         Frame {
             sp: 0,
+            block,
             closure: Gc::new(Closure::new(parent_closure, vars)),
         }
     }
@@ -1220,7 +1228,7 @@ mod tests {
         vm.stack.push(v);
         let v = Val::from_isize(&mut vm, 44);
         vm.stack.push(v);
-        let f = Frame::new(&mut vm, true, selfv, None, 3, 2);
+        let f = Frame::new(&mut vm, None, selfv, None, 3, 2);
         assert_eq!(f.var_lookup(0, 0).as_isize(&mut vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).as_isize(&mut vm).unwrap(), 43);
         assert_eq!(f.var_lookup(0, 2).as_isize(&mut vm).unwrap(), 44);
