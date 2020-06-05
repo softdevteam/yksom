@@ -29,7 +29,7 @@ mod integers;
 mod method;
 mod string_;
 
-pub use array::Array;
+pub use array::{Array, MethodsArray, NormalArray};
 pub use block::{Block, BlockInfo};
 pub use class::Class;
 pub use double::Double;
@@ -81,6 +81,12 @@ pub trait Obj: std::fmt::Debug {
     fn dyn_objtype(&self) -> ObjType;
     /// What class is this object an instance of?
     fn get_class(&self, vm: &mut VM) -> Val;
+
+    /// If (and only if) this object implements the [Array] trait then return a reference to this
+    /// object as an [Array] trait object.
+    fn to_array(&self) -> Result<&dyn Array, Box<VMError>> {
+        todo!();
+    }
 
     /// Convert this object to a `Val` that represents a SOM string.
     fn to_strval(&self, _: &mut VM) -> Result<Val, Box<VMError>> {

@@ -9,12 +9,18 @@ use crate::vm::{
     val::{NotUnboxable, Val},
 };
 
+pub trait Array {
+    fn at(&self, vm: &VM, idx: usize) -> Result<Val, Box<VMError>>;
+    unsafe fn unchecked_at(&self, idx: usize) -> Val;
+    fn at_put(&self, vm: &mut VM, idx: usize, val: Val) -> Result<(), Box<VMError>>;
+}
+
 #[derive(Debug)]
-pub struct Array {
+pub struct NormalArray {
     store: UnsafeCell<Vec<Val>>,
 }
 
-impl Obj for Array {
+impl Obj for NormalArray {
     fn dyn_objtype(&self) -> ObjType {
         ObjType::Array
     }
@@ -23,44 +29,28 @@ impl Obj for Array {
         vm.array_cls
     }
 
+    fn to_array(&self) -> Result<&dyn Array, Box<VMError>> {
+        Ok(self)
+    }
+
     fn length(&self) -> usize {
         let store = unsafe { &*self.store.get() };
         store.len()
     }
 }
 
-impl NotUnboxable for Array {}
+impl NotUnboxable for NormalArray {}
 
-impl StaticObjType for Array {
+impl StaticObjType for NormalArray {
     fn static_objtype() -> ObjType {
         ObjType::Array
     }
 }
 
-impl Array {
-    pub fn new(vm: &mut VM, len: usize) -> Val {
-        let mut store = Vec::with_capacity(len);
-        store.resize(len, vm.nil);
-        Val::from_obj(
-            vm,
-            Array {
-                store: UnsafeCell::new(store),
-            },
-        )
-    }
-
-    pub fn from_vec(vm: &mut VM, store: Vec<Val>) -> Val {
-        Val::from_obj(
-            vm,
-            Array {
-                store: UnsafeCell::new(store),
-            },
-        )
-    }
-
+impl Array for NormalArray {
     /// Return the item at index `idx` (using SOM indexing starting at 1) or an error if the index
     /// is invalid.
-    pub fn at(&self, vm: &VM, mut idx: usize) -> Result<Val, Box<VMError>> {
+    fn at(&self, vm: &VM, mut idx: usize) -> Result<Val, Box<VMError>> {
         let store = unsafe { &*self.store.get() };
         if idx > 0 && idx <= store.len() {
             idx -= 1;
@@ -78,7 +68,7 @@ impl Array {
 
     /// Return the item at index `idx` (using SOM indexing starting at 1). This will lead to
     /// undefined behaviour if the index is invalid.
-    pub unsafe fn unchecked_at(&self, mut idx: usize) -> Val {
+    unsafe fn unchecked_at(&self, mut idx: usize) -> Val {
         debug_assert!(idx > 0);
         let store = &*self.store.get();
         debug_assert!(idx <= store.len());
@@ -88,7 +78,7 @@ impl Array {
 
     /// Set the item at index `idx` (using SOM indexing starting at 1) to `val` or return an error
     /// if the index is invalid.
-    pub fn at_put(&self, vm: &VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
+    fn at_put(&self, vm: &mut VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
         let store = unsafe { &mut *self.store.get() };
         if idx > 0 && idx <= store.len() {
             idx -= 1;
@@ -104,19 +94,134 @@ impl Array {
             ))
         }
     }
+}
 
-    /// Iterate over this array's values.
-    pub fn iter<'a>(&'a self) -> ArrayIterator<'a> {
-        ArrayIterator { arr: self, i: 0 }
+impl NormalArray {
+    pub fn new(vm: &mut VM, len: usize) -> Val {
+        let mut store = Vec::with_capacity(len);
+        store.resize(len, vm.nil);
+        Val::from_obj(
+            vm,
+            NormalArray {
+                store: UnsafeCell::new(store),
+            },
+        )
+    }
+
+    pub fn from_vec(vm: &mut VM, store: Vec<Val>) -> Val {
+        Val::from_obj(
+            vm,
+            NormalArray {
+                store: UnsafeCell::new(store),
+            },
+        )
     }
 }
 
-pub struct ArrayIterator<'a> {
-    arr: &'a Array,
+#[derive(Debug)]
+pub struct MethodsArray {
+    store: UnsafeCell<Vec<Val>>,
+}
+
+impl Obj for MethodsArray {
+    fn dyn_objtype(&self) -> ObjType {
+        ObjType::Array
+    }
+
+    fn get_class(&self, vm: &mut VM) -> Val {
+        vm.array_cls
+    }
+
+    fn to_array(&self) -> Result<&dyn Array, Box<VMError>> {
+        Ok(self)
+    }
+
+    fn length(&self) -> usize {
+        let store = unsafe { &*self.store.get() };
+        store.len()
+    }
+}
+
+impl NotUnboxable for MethodsArray {}
+
+impl StaticObjType for MethodsArray {
+    fn static_objtype() -> ObjType {
+        ObjType::Array
+    }
+}
+
+impl Array for MethodsArray {
+    /// Return the item at index `idx` (using SOM indexing starting at 1) or an error if the index
+    /// is invalid.
+    fn at(&self, vm: &VM, mut idx: usize) -> Result<Val, Box<VMError>> {
+        let store = unsafe { &*self.store.get() };
+        if idx > 0 && idx <= store.len() {
+            idx -= 1;
+            Ok(*unsafe { store.get_unchecked(idx) })
+        } else {
+            Err(VMError::new(
+                vm,
+                VMErrorKind::IndexError {
+                    tried: idx,
+                    max: store.len(),
+                },
+            ))
+        }
+    }
+
+    /// Return the item at index `idx` (using SOM indexing starting at 1). This will lead to
+    /// undefined behaviour if the index is invalid.
+    unsafe fn unchecked_at(&self, mut idx: usize) -> Val {
+        debug_assert!(idx > 0);
+        let store = &*self.store.get();
+        debug_assert!(idx <= store.len());
+        idx -= 1;
+        *store.get_unchecked(idx)
+    }
+
+    /// Set the item at index `idx` (using SOM indexing starting at 1) to `val` or return an error
+    /// if the index is invalid.
+    fn at_put(&self, vm: &mut VM, mut idx: usize, val: Val) -> Result<(), Box<VMError>> {
+        let store = unsafe { &mut *self.store.get() };
+        if idx > 0 && idx <= store.len() {
+            idx -= 1;
+            *unsafe { store.get_unchecked_mut(idx) } = val;
+            vm.flush_inline_caches();
+            Ok(())
+        } else {
+            Err(VMError::new(
+                vm,
+                VMErrorKind::IndexError {
+                    tried: idx,
+                    max: store.len(),
+                },
+            ))
+        }
+    }
+}
+
+impl MethodsArray {
+    pub fn from_vec(vm: &mut VM, store: Vec<Val>) -> Val {
+        Val::from_obj(
+            vm,
+            MethodsArray {
+                store: UnsafeCell::new(store),
+            },
+        )
+    }
+
+    /// Iterate over this array's values.
+    pub fn iter<'a>(&'a self) -> MethodsArrayIterator<'a> {
+        MethodsArrayIterator { arr: self, i: 0 }
+    }
+}
+
+pub struct MethodsArrayIterator<'a> {
+    arr: &'a MethodsArray,
     i: usize,
 }
 
-impl<'a> Iterator for ArrayIterator<'a> {
+impl<'a> Iterator for MethodsArrayIterator<'a> {
     type Item = Val;
 
     fn next(&mut self) -> Option<Val> {

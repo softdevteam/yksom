@@ -11,7 +11,7 @@ use std::{
 use getopts::Options;
 
 use yksom::vm::{
-    objects::{Array, String_},
+    objects::{NormalArray, String_},
     VMError, VMErrorKind, VM,
 };
 
@@ -61,7 +61,7 @@ fn main() {
         None => todo!(),
     };
     let src_fname_val = String_::new_sym(&mut vm, src_fname.to_owned());
-    let args = Array::from_vec(&mut vm, vec![src_fname_val]);
+    let args = NormalArray::from_vec(&mut vm, vec![src_fname_val]);
     match vm.top_level_send(system, "initialize:", vec![args]) {
         Ok(_)
         | Err(box VMError {

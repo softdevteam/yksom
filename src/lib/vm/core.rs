@@ -19,8 +19,8 @@ use crate::{
     vm::{
         error::{VMError, VMErrorKind},
         objects::{
-            Array, Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, StaticObjType,
-            String_,
+            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
+            StaticObjType, String_,
         },
         somstack::SOMStack,
         val::{Val, ValKind},
@@ -406,7 +406,7 @@ impl VM {
             match instr {
                 Instr::Array(num_items) => {
                     let items = self.stack.split_off(self.stack.len() - num_items);
-                    let arr = Array::from_vec(self, items);
+                    let arr = NormalArray::from_vec(self, items);
                     self.stack.push(arr);
                     pc += 1;
                 }
@@ -606,14 +606,16 @@ impl VM {
             Primitive::As32BitSignedValue => todo!(),
             Primitive::As32BitUnsignedValue => todo!(),
             Primitive::At => {
-                let arr = stry!(rcv.downcast::<Array>(self));
+                let rcv_tobj = stry!(rcv.tobj(self));
+                let arr = stry!(rcv_tobj.to_array());
                 let idx = stry!(self.stack.pop().as_usize(self));
                 let v = stry!(arr.at(self, idx));
                 self.stack.push(v);
                 SendReturn::Val
             }
             Primitive::AtPut => {
-                let arr = stry!(rcv.downcast::<Array>(self));
+                let rcv_tobj = stry!(rcv.tobj(self));
+                let arr = stry!(rcv_tobj.to_array());
                 let v = self.stack.pop();
                 let idx = stry!(self.stack.pop().as_usize(self));
                 stry!(arr.at_put(self, idx, v));
@@ -786,7 +788,7 @@ impl VM {
             }
             Primitive::NewArray => {
                 let len = stry!(self.stack.pop().as_usize(self));
-                let v = Array::new(self, len);
+                let v = NormalArray::new(self, len);
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -907,6 +909,12 @@ impl VM {
     /// Update the `BlockInfo` at index `idx` to `blkinfo`.
     pub fn set_blockinfo(&mut self, idx: usize, blkinfo: BlockInfo) {
         self.blockinfos[idx] = blkinfo;
+    }
+
+    pub fn flush_inline_caches(&mut self) {
+        for c in &mut self.inline_caches {
+            *c = None;
+        }
     }
 
     /// Add an empty inline cache to the VM, returning its index.
