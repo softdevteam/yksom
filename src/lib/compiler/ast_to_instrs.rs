@@ -440,7 +440,9 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
         // Blocks return the value of the last statement, but methods return `self`.
         if is_method {
-            vm.instrs_push(Instr::Pop, span);
+            if exprs.len() > 0 {
+                vm.instrs_push(Instr::Pop, span);
+            }
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
             vm.instrs_push(Instr::VarLookup(0, 0), span);
             max_stack = max(max_stack, 1);
