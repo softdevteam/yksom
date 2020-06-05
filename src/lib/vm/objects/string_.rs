@@ -50,12 +50,11 @@ impl Obj for String_ {
     }
 
     fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        let other_str: Gc<String_> = other.downcast(vm)?;
-
-        Ok(Val::from_bool(
-            vm,
-            (self.cls == other_str.cls) && (self.s == other_str.s),
-        ))
+        let b = match other.downcast::<String_>(vm) {
+            Ok(other_str) => (self.cls == other_str.cls) && (self.s == other_str.s),
+            Err(_) => false,
+        };
+        Ok(Val::from_bool(vm, b))
     }
 }
 
