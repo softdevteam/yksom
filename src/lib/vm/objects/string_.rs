@@ -42,7 +42,7 @@ impl Obj for String_ {
     }
 
     fn length(&self) -> usize {
-        todo!();
+        self.s.chars().count()
     }
 
     fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
@@ -50,12 +50,11 @@ impl Obj for String_ {
     }
 
     fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        let other_str: Gc<String_> = other.downcast(vm)?;
-
-        Ok(Val::from_bool(
-            vm,
-            (self.cls == other_str.cls) && (self.s == other_str.s),
-        ))
+        let b = match other.downcast::<String_>(vm) {
+            Ok(other_str) => (self.cls == other_str.cls) && (self.s == other_str.s),
+            Err(_) => false,
+        };
+        Ok(Val::from_bool(vm, b))
     }
 }
 
@@ -126,6 +125,25 @@ impl String_ {
         new.push_str(&self.s);
         new.push_str(&other_str.s);
         Ok(String_::new_str(vm, new))
+    }
+
+    pub fn substring(&self, vm: &mut VM, start: usize, end: usize) -> Result<Val, Box<VMError>> {
+        if start == 0 || end == 0 {
+            todo!();
+        }
+        if end < start {
+            todo!();
+        }
+        if start > self.s.len() || end > self.s.len() {
+            todo!();
+        }
+        let substr = self
+            .s
+            .chars()
+            .skip(start - 1)
+            .take(end - start + 1)
+            .collect::<String>();
+        Ok(String_::new_str(vm, substr))
     }
 
     pub fn to_string_(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {

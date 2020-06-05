@@ -114,10 +114,14 @@ impl Class {
             None => {
                 let supercls = self.supercls(vm);
                 if supercls != vm.nil {
-                    supercls.downcast::<Class>(vm)?.get_method(vm, msg)
-                } else {
-                    Err(VMError::new(vm, VMErrorKind::UnknownMethod(msg.to_owned())))
+                    if let Ok(m) = supercls.downcast::<Class>(vm)?.get_method(vm, msg) {
+                        return Ok(m);
+                    }
                 }
+                Err(VMError::new(
+                    vm,
+                    VMErrorKind::UnknownMethod(Val::recover(self), msg.to_owned()),
+                ))
             }
         }
     }

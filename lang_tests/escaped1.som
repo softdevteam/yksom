@@ -1,9 +1,8 @@
 "
 VM:
   status: error
-  stderr:
-    ...Return from escaped block...
-    ...
+  stdout:
+    ERROR: Block has escaped and cannot be executed
 "
 
 escaped1 = (

@@ -58,7 +58,7 @@ impl Block {
         num_params: usize,
     ) -> Val {
         let blockn_cls = match num_params {
-            0 => vm.block_cls,
+            0 => vm.block1_cls,
             1 => vm.block2_cls,
             2 => vm.block3_cls,
             _ => unimplemented!(),
