@@ -45,6 +45,7 @@ pub struct VM {
     classpath: Vec<PathBuf>,
     pub array_cls: Val,
     pub block_cls: Val,
+    pub block1_cls: Val,
     pub block2_cls: Val,
     pub block3_cls: Val,
     pub bool_cls: Val,
@@ -100,9 +101,10 @@ impl VM {
             classpath,
             array_cls: Val::illegal(),
             block_cls: Val::illegal(),
-            bool_cls: Val::illegal(),
+            block1_cls: Val::illegal(),
             block2_cls: Val::illegal(),
             block3_cls: Val::illegal(),
+            bool_cls: Val::illegal(),
             cls_cls: Val::illegal(),
             double_cls: Val::illegal(),
             false_cls: Val::illegal(),
@@ -223,6 +225,7 @@ impl VM {
 
         self.array_cls = self.init_builtin_class("Array", false);
         self.block_cls = self.init_builtin_class("Block", false);
+        self.block1_cls = self.init_builtin_class("Block1", false);
         self.block2_cls = self.init_builtin_class("Block2", false);
         self.block3_cls = self.init_builtin_class("Block3", false);
         self.bool_cls = self.init_builtin_class("Boolean", false);
@@ -1165,6 +1168,7 @@ impl VM {
             classpath: vec![],
             array_cls: Val::illegal(),
             block_cls: Val::illegal(),
+            block1_cls: Val::illegal(),
             block2_cls: Val::illegal(),
             block3_cls: Val::illegal(),
             bool_cls: Val::illegal(),
