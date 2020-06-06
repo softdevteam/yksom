@@ -63,14 +63,21 @@ fn main() {
     let src_fname_val = String_::new_sym(&mut vm, src_fname.to_owned());
     let args = NormalArray::from_vec(&mut vm, vec![src_fname_val]);
     match vm.top_level_send(system, "initialize:", vec![args]) {
-        Ok(_)
-        | Err(box VMError {
-            kind: VMErrorKind::Exit,
-            ..
-        }) => (),
+        Ok(_) => (),
         Err(e) => {
-            e.console_print(&vm);
-            process::exit(1);
+            let code = if let box VMError {
+                kind: VMErrorKind::Exit(code),
+                ..
+            } = e
+            {
+                code
+            } else {
+                1
+            };
+            if code != 0 {
+                e.console_print(&vm);
+            }
+            process::exit(code);
         }
     }
 }

@@ -677,7 +677,7 @@ impl VM {
                 // have to craft a special error message below to capture this.
                 if let Some(c) = c_val.as_isize(self) {
                     if let Ok(c) = i32::try_from(c) {
-                        process::exit(c);
+                        return SendReturn::Err(VMError::new(self, VMErrorKind::Exit(c)));
                     }
                 }
                 if c_val.get_class(self) == self.int_cls {

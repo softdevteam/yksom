@@ -149,7 +149,7 @@ pub enum VMErrorKind {
     /// A value which is mathematically undefined.
     DomainError,
     /// The VM is trying to exit.
-    Exit,
+    Exit(i32),
     /// Tried to access an out-of-bounds element.
     IndexError {
         tried: usize,
@@ -197,7 +197,7 @@ impl VMErrorKind {
             }
             VMErrorKind::DivisionByZero => Ok("Division by zero".to_owned()),
             VMErrorKind::DomainError => Ok("Domain error".to_owned()),
-            VMErrorKind::Exit => Ok("Exit".to_owned()),
+            VMErrorKind::Exit(code) => Ok(format!("exit({})", code)),
             VMErrorKind::IndexError { tried, max } => Ok(format!(
                 "Index {} not valid for array of length {}",
                 tried, max
