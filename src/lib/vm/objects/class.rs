@@ -118,10 +118,7 @@ impl Class {
                         return Ok(m);
                     }
                 }
-                Err(VMError::new(
-                    vm,
-                    VMErrorKind::UnknownMethod(Val::recover(self), msg.to_owned()),
-                ))
+                Err(VMError::new(vm, VMErrorKind::UnknownMethod))
             }
         }
     }

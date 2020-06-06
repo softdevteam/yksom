@@ -526,8 +526,29 @@ impl VM {
                                 // The inline cache is empty or out of date, so store a new value in it.
                                 let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
                                 let cls: Gc<Class> = stry!(lookup_cls.downcast(self));
-                                let meth = stry!(cls.get_method(self, &*name));
-                                self.inline_caches[cache_idx] = Some((lookup_cls, meth));
+                                let meth = match cls.get_method(self, &*name) {
+                                    Ok(m) => {
+                                        self.inline_caches[cache_idx] = Some((lookup_cls, m));
+                                        m
+                                    }
+                                    Err(box VMError {
+                                        kind: VMErrorKind::UnknownMethod,
+                                        ..
+                                    }) => {
+                                        let meth = cls
+                                            .get_method(self, "doesNotUnderstand:arguments:")
+                                            .unwrap();
+                                        let items = self.stack.split_off(self.stack.len() - nargs);
+                                        let arr = NormalArray::from_vec(self, items);
+                                        let sig = String_::new_sym(self, (&*name).to_owned());
+                                        self.stack.push(sig);
+                                        self.stack.push(arr);
+                                        send_args_on_stack!(rcv, meth, 2);
+                                        pc += 1;
+                                        continue;
+                                    }
+                                    Err(e) => stry!(Err(e)),
+                                };
                                 meth
                             }
                         };
@@ -819,8 +840,22 @@ impl VM {
                 let sig = stry!(String_::symbol_to_string_(self, sig_val));
                 let cls_val = rcv.get_class(self);
                 let cls = stry!(cls_val.downcast::<Class>(self));
-                let meth = stry!(cls.get_method(self, sig.as_str()));
-                self.send_args_on_stack(rcv, meth, 0)
+                match cls.get_method(self, sig.as_str()) {
+                    Ok(m) => self.send_args_on_stack(rcv, m, 0),
+                    Err(box VMError {
+                        kind: VMErrorKind::UnknownMethod,
+                        ..
+                    }) => {
+                        let meth = cls
+                            .get_method(self, "doesNotUnderstand:arguments:")
+                            .unwrap();
+                        self.stack.push(sig_val);
+                        let arr = NormalArray::new(self, 0);
+                        self.stack.push(arr);
+                        self.send_args_on_stack(rcv, meth, 2)
+                    }
+                    Err(e) => return SendReturn::Err(e),
+                }
             }
             Primitive::PerformInSuperClass => unimplemented!(),
             Primitive::PerformWithArguments => unimplemented!(),
