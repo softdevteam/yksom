@@ -511,7 +511,7 @@ impl VM {
                         let lookup_cls = match instr {
                             Instr::Send(_, _) => rcv.get_class(self),
                             Instr::SuperSend(_, _) => {
-                                let method_cls_val = method.class();
+                                let method_cls_val = method.holder();
                                 let method_cls: Gc<Class> = stry!(method_cls_val.downcast(self));
                                 method_cls.supercls(self)
                             }
@@ -724,7 +724,12 @@ impl VM {
             Primitive::Halt => unimplemented!(),
             Primitive::HasGlobal => todo!(),
             Primitive::Hashcode => unimplemented!(),
-            Primitive::Holder => todo!(),
+            Primitive::Holder => {
+                let meth = stry!(rcv.downcast::<Method>(self));
+                let cls = meth.holder();
+                self.stack.push(cls);
+                SendReturn::Val
+            }
             Primitive::Inspect => unimplemented!(),
             Primitive::InstVarAt => unimplemented!(),
             Primitive::InstVarAtPut => unimplemented!(),

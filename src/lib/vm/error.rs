@@ -26,7 +26,7 @@ impl VMError {
     pub fn console_print(&self, vm: &VM) {
         eprintln!("Traceback (most recent call at bottom):");
         for (method, span) in self.backtrace.iter().rev() {
-            let cls_val = method.class();
+            let cls_val = method.holder();
             let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
             let cls_path = cls.path.to_str().unwrap_or("<non-UTF8 filename>");
 
