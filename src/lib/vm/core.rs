@@ -861,7 +861,12 @@ impl VM {
                 self.stack.push(meth.sig(self));
                 SendReturn::Val
             }
-            Primitive::Sin => todo!(),
+            Primitive::Sin => {
+                let dbl = rcv.downcast::<Double>(self).unwrap();
+                let v = dbl.sin(self);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Sqrt => {
                 let v = stry!(rcv.sqrt(self));
                 self.stack.push(v);

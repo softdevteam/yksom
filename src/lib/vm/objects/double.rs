@@ -207,4 +207,8 @@ impl Double {
             todo!();
         }
     }
+
+    pub fn sin(&self, vm: &mut VM) -> Val {
+        Double::new(vm, self.val.sin())
+    }
 }
