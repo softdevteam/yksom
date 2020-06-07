@@ -649,7 +649,12 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::Cos => todo!(),
+            Primitive::Cos => {
+                let dbl = rcv.downcast::<Double>(self).unwrap();
+                let v = dbl.cos(self);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Div => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.div(self, v));

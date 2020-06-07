@@ -208,6 +208,10 @@ impl Double {
         }
     }
 
+    pub fn cos(&self, vm: &mut VM) -> Val {
+        Double::new(vm, self.val.cos())
+    }
+
     pub fn sin(&self, vm: &mut VM) -> Val {
         Double::new(vm, self.val.sin())
     }
