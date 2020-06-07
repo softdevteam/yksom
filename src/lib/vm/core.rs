@@ -817,7 +817,11 @@ impl VM {
             Primitive::PerformInSuperClass => unimplemented!(),
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
-            Primitive::PositiveInfinity => todo!(),
+            Primitive::PositiveInfinity => {
+                let dbl = Double::new(self, f64::INFINITY);
+                self.stack.push(dbl);
+                SendReturn::Val
+            }
             Primitive::PrimSubstringFromTo => {
                 let end = stry!(self.stack.pop().as_usize(self));
                 let start = stry!(self.stack.pop().as_usize(self));
