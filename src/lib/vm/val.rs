@@ -204,6 +204,11 @@ impl Val {
         }
     }
 
+    #[cfg(target_pointer_width = "64")]
+    pub fn from_u64(vm: &mut VM, i: u64) -> Val {
+        Val::from_usize(vm, i as usize)
+    }
+
     /// If `v == true`, return a `Val` representing `vm.true_`, otherwise return a `Val`
     /// representing `vm.false_`.
     pub fn from_bool(vm: &VM, v: bool) -> Val {
@@ -290,6 +295,22 @@ impl Val {
                 Ok(String_::new_str(vm, s))
             }
             ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
+            ValKind::ILLEGAL => unreachable!(),
+        }
+    }
+
+    /// Produce a new `Val` which adds `other` to this.
+    pub fn hashcode(&self, vm: &mut VM) -> Val {
+        match self.valkind() {
+            ValKind::INT => {
+                // Integer.som (not very sensibly) defines hashing an integer to be the integer
+                // itself.
+                unreachable!()
+            }
+            ValKind::GCBOX => {
+                let hc = self.tobj(vm).unwrap().hashcode();
+                Val::from_u64(vm, hc)
+            }
             ValKind::ILLEGAL => unreachable!(),
         }
     }

@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::cell::Cell;
+use std::{cell::Cell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 use crate::{
     compiler::instrs::Primitive,
@@ -39,6 +39,12 @@ impl Obj for Method {
 
     fn get_class(&self, vm: &mut VM) -> Val {
         vm.method_cls
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_usize(self as *const _ as usize);
+        hasher.finish()
     }
 }
 

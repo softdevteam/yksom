@@ -1,6 +1,11 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::{cell::Cell, str};
+use std::{
+    cell::Cell,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    str,
+};
 
 use rboehm::Gc;
 
@@ -39,6 +44,12 @@ impl Obj for String_ {
                 s: self.s.clone(),
             },
         ))
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.s.hash(&mut s);
+        s.finish()
     }
 
     fn length(&self) -> usize {
