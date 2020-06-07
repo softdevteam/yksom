@@ -843,7 +843,12 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Rem => todo!(),
-            Primitive::Round => todo!(),
+            Primitive::Round => {
+                let dbl = rcv.downcast::<Double>(self).unwrap();
+                let v = dbl.round(self);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Shl => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.shl(self, v));
