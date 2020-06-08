@@ -929,7 +929,12 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::Rem => todo!(),
+            Primitive::Rem => {
+                let v = self.stack.pop();
+                let v = stry!(rcv.remainder(self, v));
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Round => {
                 let dbl = rcv.downcast::<Double>(self).unwrap();
                 let v = dbl.round(self);

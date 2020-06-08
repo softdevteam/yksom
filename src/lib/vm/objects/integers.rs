@@ -172,6 +172,10 @@ impl Obj for ArbInt {
         }
     }
 
+    fn remainder(&self, _vm: &mut VM, _other: Val) -> Result<Val, Box<VMError>> {
+        todo!();
+    }
+
     fn shl(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs < 0 {
