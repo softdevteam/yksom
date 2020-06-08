@@ -178,7 +178,11 @@ StringConst -> Result<Expr, ()>:
     | "#" BinOp { Ok(Expr::Symbol($2?)) }
     ;
 Array -> Result<Expr, ()>:
-      "#" "(" ArrayList ")" { Ok(Expr::Array { span: $span, items: $3? }) };
+      "#" "(" ArrayListOpt ")" { Ok(Expr::Array { span: $span, items: $3? }) };
+ArrayListOpt -> Result<Vec<Expr>, ()>:
+      ArrayList { $1 }
+    | { Ok(vec![]) }
+    ;
 ArrayList -> Result<Vec<Expr>, ()>:
       Literal { Ok(vec![$1?]) }
     | ArrayList Literal { flattenr($1, $2) }
