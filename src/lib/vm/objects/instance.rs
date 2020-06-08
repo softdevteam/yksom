@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::cell::UnsafeCell;
+use std::{cell::UnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 use rboehm::Gc;
 
@@ -34,6 +34,12 @@ impl Obj for Inst {
     fn inst_var_set(&self, n: usize, v: Val) {
         let inst_vars = unsafe { &mut *self.inst_vars.get() };
         inst_vars[n] = v;
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_usize(self as *const _ as usize);
+        hasher.finish()
     }
 }
 

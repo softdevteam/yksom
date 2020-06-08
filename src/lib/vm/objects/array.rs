@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::cell::UnsafeCell;
+use std::{cell::UnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 use crate::vm::{
     core::VM,
@@ -31,6 +31,12 @@ impl Obj for NormalArray {
 
     fn to_array(&self) -> Result<&dyn Array, Box<VMError>> {
         Ok(self)
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_usize(self as *const _ as usize);
+        hasher.finish()
     }
 
     fn length(&self) -> usize {
@@ -134,6 +140,12 @@ impl Obj for MethodsArray {
 
     fn to_array(&self) -> Result<&dyn Array, Box<VMError>> {
         Ok(self)
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_usize(self as *const _ as usize);
+        hasher.finish()
     }
 
     fn length(&self) -> usize {

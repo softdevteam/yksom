@@ -108,6 +108,11 @@ pub trait Obj: std::fmt::Debug {
         unreachable!();
     }
 
+    /// What is this object's hashcode?
+    fn hashcode(&self) -> u64 {
+        unreachable!();
+    }
+
     /// Produce a new `Val` which adds `other` to this.
     fn add(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();

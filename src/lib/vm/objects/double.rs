@@ -1,5 +1,7 @@
 #![allow(clippy::new_ret_no_self)]
 
+use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
 
@@ -30,6 +32,12 @@ impl Obj for Double {
     fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         let mut buf = ryu::Buffer::new();
         Ok(String_::new_str(vm, buf.format(self.val).to_owned()))
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_u64(self.val.to_bits());
+        hasher.finish()
     }
 
     fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {

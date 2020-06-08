@@ -753,7 +753,11 @@ impl VM {
             }
             Primitive::Halt => unimplemented!(),
             Primitive::HasGlobal => todo!(),
-            Primitive::Hashcode => unimplemented!(),
+            Primitive::Hashcode => {
+                let hc = rcv.hashcode(self);
+                self.stack.push(hc);
+                SendReturn::Val
+            }
             Primitive::Holder => {
                 let meth = stry!(rcv.downcast::<Method>(self));
                 let cls = meth.holder();

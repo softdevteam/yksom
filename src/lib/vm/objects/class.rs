@@ -2,7 +2,8 @@
 
 use std::{
     cell::{Cell, UnsafeCell},
-    collections::HashMap,
+    collections::hash_map::{DefaultHasher, HashMap},
+    hash::Hasher,
     path::PathBuf,
     str,
 };
@@ -54,6 +55,12 @@ impl Obj for Class {
     fn inst_var_set(&self, n: usize, v: Val) {
         let inst_vars = unsafe { &mut *self.inst_vars.get() };
         inst_vars[n] = v;
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_usize(self as *const _ as usize);
+        hasher.finish()
     }
 }
 

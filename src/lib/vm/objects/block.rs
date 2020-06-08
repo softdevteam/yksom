@@ -1,5 +1,7 @@
 #![allow(clippy::new_ret_no_self)]
 
+use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+
 use rboehm::Gc;
 
 use crate::vm::{
@@ -37,6 +39,12 @@ impl Obj for Block {
 
     fn get_class(&self, _: &mut VM) -> Val {
         self.blockn_cls
+    }
+
+    fn hashcode(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_usize(self as *const _ as usize);
+        hasher.finish()
     }
 }
 
