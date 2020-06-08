@@ -723,7 +723,10 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::FromString => todo!(),
-            Primitive::FullGC => todo!(),
+            Primitive::FullGC => {
+                self.stack.push(self.false_);
+                SendReturn::Val
+            }
             Primitive::Global => {
                 let name_val = self.stack.pop();
                 let name = stry!(String_::symbol_to_string_(self, name_val));
