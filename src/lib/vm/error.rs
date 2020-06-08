@@ -26,7 +26,7 @@ impl VMError {
     pub fn console_print(&self, vm: &VM) {
         eprintln!("Traceback (most recent call at bottom):");
         for (method, span) in self.backtrace.iter().rev() {
-            let cls_val = method.class();
+            let cls_val = method.holder();
             let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
             let cls_path = cls.path.to_str().unwrap_or("<non-UTF8 filename>");
 
@@ -149,7 +149,7 @@ pub enum VMErrorKind {
     /// A value which is mathematically undefined.
     DomainError,
     /// The VM is trying to exit.
-    Exit,
+    Exit(i32),
     /// Tried to access an out-of-bounds element.
     IndexError {
         tried: usize,
@@ -177,7 +177,7 @@ pub enum VMErrorKind {
     /// An unknown global.
     UnknownGlobal(String),
     /// An unknown method.
-    UnknownMethod(Val, String),
+    UnknownMethod,
 }
 
 impl VMErrorKind {
@@ -197,7 +197,7 @@ impl VMErrorKind {
             }
             VMErrorKind::DivisionByZero => Ok("Division by zero".to_owned()),
             VMErrorKind::DomainError => Ok("Domain error".to_owned()),
-            VMErrorKind::Exit => Ok("Exit".to_owned()),
+            VMErrorKind::Exit(code) => Ok(format!("exit({})", code)),
             VMErrorKind::IndexError { tried, max } => Ok(format!(
                 "Index {} not valid for array of length {}",
                 tried, max
@@ -225,15 +225,7 @@ impl VMErrorKind {
             VMErrorKind::PrimitiveError => Ok("Primitive Error".to_owned()),
             VMErrorKind::ShiftTooBig => Ok("Shift too big".to_owned()),
             VMErrorKind::UnknownGlobal(name) => Ok(format!("Unknown global '{}'", name)),
-            VMErrorKind::UnknownMethod(class_val, name) => {
-                let class_name_val = class_val.downcast::<Class>(vm)?.name(vm).unwrap();
-                let class_name = class_name_val.downcast::<String_>(vm)?;
-                Ok(format!(
-                    "Unknown method '{}' in instance of '{}'",
-                    name,
-                    class_name.as_str()
-                ))
-            }
+            VMErrorKind::UnknownMethod => Ok("Unknown method".to_owned()),
         }
     }
 }

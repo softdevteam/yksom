@@ -1,10 +1,7 @@
 "
 VM:
   status: error
-  stderr:
-    Traceback ...
-    ...
-    Unknown method '+' in instance of 'binary_super'.
+  stdout: ERROR: Method + not found in class binary_super
 "
 
 binary_super = (

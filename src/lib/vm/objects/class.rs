@@ -118,10 +118,7 @@ impl Class {
                         return Ok(m);
                     }
                 }
-                Err(VMError::new(
-                    vm,
-                    VMErrorKind::UnknownMethod(Val::recover(self), msg.to_owned()),
-                ))
+                Err(VMError::new(vm, VMErrorKind::UnknownMethod))
             }
         }
     }
@@ -149,7 +146,7 @@ impl Class {
     pub fn set_methods_class(&self, vm: &VM, cls: Val) {
         for meth_val in self.methods.downcast::<MethodsArray>(vm).unwrap().iter() {
             let meth = meth_val.downcast::<Method>(vm).unwrap();
-            meth.set_class(vm, cls);
+            meth.set_holder(vm, cls);
         }
     }
 

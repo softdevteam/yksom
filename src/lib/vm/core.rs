@@ -344,7 +344,6 @@ impl VM {
         }
     }
 
-    /// This function should only be called via the `send_args_on_stack!` macro.
     fn send_args_on_stack(&mut self, rcv: Val, method: Gc<Method>, nargs: usize) -> SendReturn {
         match method.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
@@ -383,6 +382,8 @@ impl VM {
             }};
         }
 
+        // Inside this function, one should use this macro instead of calling `send_args_on_stack`
+        // directly.
         macro_rules! send_args_on_stack {
             ($send_rcv:expr, $send_method:expr, $nargs:expr) => {{
                 match self.send_args_on_stack($send_rcv, $send_method, $nargs) {
@@ -510,7 +511,7 @@ impl VM {
                         let lookup_cls = match instr {
                             Instr::Send(_, _) => rcv.get_class(self),
                             Instr::SuperSend(_, _) => {
-                                let method_cls_val = method.class();
+                                let method_cls_val = method.holder();
                                 let method_cls: Gc<Class> = stry!(method_cls_val.downcast(self));
                                 method_cls.supercls(self)
                             }
@@ -525,8 +526,29 @@ impl VM {
                                 // The inline cache is empty or out of date, so store a new value in it.
                                 let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
                                 let cls: Gc<Class> = stry!(lookup_cls.downcast(self));
-                                let meth = stry!(cls.get_method(self, &*name));
-                                self.inline_caches[cache_idx] = Some((lookup_cls, meth));
+                                let meth = match cls.get_method(self, &*name) {
+                                    Ok(m) => {
+                                        self.inline_caches[cache_idx] = Some((lookup_cls, m));
+                                        m
+                                    }
+                                    Err(box VMError {
+                                        kind: VMErrorKind::UnknownMethod,
+                                        ..
+                                    }) => {
+                                        let meth = cls
+                                            .get_method(self, "doesNotUnderstand:arguments:")
+                                            .unwrap();
+                                        let items = self.stack.split_off(self.stack.len() - nargs);
+                                        let arr = NormalArray::from_vec(self, items);
+                                        let sig = String_::new_sym(self, (&*name).to_owned());
+                                        self.stack.push(sig);
+                                        self.stack.push(arr);
+                                        send_args_on_stack!(rcv, meth, 2);
+                                        pc += 1;
+                                        continue;
+                                    }
+                                    Err(e) => stry!(Err(e)),
+                                };
                                 meth
                             }
                         };
@@ -676,7 +698,7 @@ impl VM {
                 // have to craft a special error message below to capture this.
                 if let Some(c) = c_val.as_isize(self) {
                     if let Ok(c) = i32::try_from(c) {
-                        process::exit(c);
+                        return SendReturn::Err(VMError::new(self, VMErrorKind::Exit(c)));
                     }
                 }
                 if c_val.get_class(self) == self.int_cls {
@@ -723,7 +745,12 @@ impl VM {
             Primitive::Halt => unimplemented!(),
             Primitive::HasGlobal => todo!(),
             Primitive::Hashcode => unimplemented!(),
-            Primitive::Holder => todo!(),
+            Primitive::Holder => {
+                let meth = stry!(rcv.downcast::<Method>(self));
+                let cls = meth.holder();
+                self.stack.push(cls);
+                SendReturn::Val
+            }
             Primitive::Inspect => unimplemented!(),
             Primitive::InstVarAt => unimplemented!(),
             Primitive::InstVarAtPut => unimplemented!(),
@@ -808,7 +835,28 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::ObjectSize => unimplemented!(),
-            Primitive::Perform => unimplemented!(),
+            Primitive::Perform => {
+                let sig_val = self.stack.pop();
+                let sig = stry!(String_::symbol_to_string_(self, sig_val));
+                let cls_val = rcv.get_class(self);
+                let cls = stry!(cls_val.downcast::<Class>(self));
+                match cls.get_method(self, sig.as_str()) {
+                    Ok(m) => self.send_args_on_stack(rcv, m, 0),
+                    Err(box VMError {
+                        kind: VMErrorKind::UnknownMethod,
+                        ..
+                    }) => {
+                        let meth = cls
+                            .get_method(self, "doesNotUnderstand:arguments:")
+                            .unwrap();
+                        self.stack.push(sig_val);
+                        let arr = NormalArray::new(self, 0);
+                        self.stack.push(arr);
+                        self.send_args_on_stack(rcv, meth, 2)
+                    }
+                    Err(e) => return SendReturn::Err(e),
+                }
+            }
             Primitive::PerformInSuperClass => unimplemented!(),
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),

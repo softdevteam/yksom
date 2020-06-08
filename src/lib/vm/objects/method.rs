@@ -15,7 +15,7 @@ use crate::{
 pub struct Method {
     sig: Cell<Val>,
     pub body: MethodBody,
-    class: Cell<Val>,
+    holder: Cell<Val>,
 }
 
 #[derive(Debug)]
@@ -55,12 +55,16 @@ impl Method {
         Method {
             sig: Cell::new(sig),
             body,
-            class: Cell::new(vm.nil),
+            holder: Cell::new(vm.nil),
         }
     }
 
-    pub fn class(&self) -> Val {
-        self.class.get()
+    pub fn holder(&self) -> Val {
+        self.holder.get()
+    }
+
+    pub fn set_holder(&self, _: &VM, class: Val) {
+        self.holder.set(class);
     }
 
     pub fn bootstrap(&self, vm: &VM) {
@@ -69,10 +73,6 @@ impl Method {
             .downcast::<String_>(vm)
             .unwrap()
             .set_cls(vm.sym_cls);
-    }
-
-    pub fn set_class(&self, _: &VM, class: Val) {
-        self.class.set(class);
     }
 
     pub fn sig(&self, _: &VM) -> Val {
