@@ -161,6 +161,8 @@ pub enum VMErrorKind {
         expected_cls: Val,
         got_cls: Val,
     },
+    /// Tried to convert an invalid string to a number.
+    InvalidInteger(String),
     /// Tried to access a global before it being initialised.
     InvalidSymbol,
     /// Tried to do a shl or shr with a value below zero.
@@ -215,6 +217,9 @@ impl VMErrorKind {
                     expected_name.as_str(),
                     got_name.as_str()
                 ))
+            }
+            VMErrorKind::InvalidInteger(s) => {
+                Ok(format!("'{}' cannot be converted to an Integer", s))
             }
             VMErrorKind::InvalidSymbol => Ok("Invalid symbol".to_owned()),
             VMErrorKind::NegativeShift => Ok("Negative shift".to_owned()),

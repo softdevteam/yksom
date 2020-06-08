@@ -6,9 +6,11 @@ use std::{
     convert::TryFrom,
     path::{Path, PathBuf},
     process,
+    str::FromStr,
 };
 
 use lrpar::Span;
+use num_bigint::BigInt;
 use rboehm::Gc;
 
 use crate::{
@@ -19,7 +21,7 @@ use crate::{
     vm::{
         error::{VMError, VMErrorKind},
         objects::{
-            Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
+            ArbInt, Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
             StaticObjType, String_,
         },
         somstack::SOMStack,
@@ -722,7 +724,24 @@ impl VM {
                 self.stack.push(fields);
                 SendReturn::Val
             }
-            Primitive::FromString => todo!(),
+            Primitive::FromString => {
+                let str_ = stry!(self.stack.pop().downcast::<String_>(self));
+                let s = str_.as_str();
+                let v = match s.parse::<isize>() {
+                    Ok(i) => Val::from_isize(self, i),
+                    Err(_) => match BigInt::from_str(s) {
+                        Ok(i) => ArbInt::new(self, i),
+                        Err(_) => {
+                            return SendReturn::Err(VMError::new(
+                                self,
+                                VMErrorKind::InvalidInteger(s.to_owned()),
+                            ))
+                        }
+                    },
+                };
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::FullGC => {
                 self.stack.push(self.false_);
                 SendReturn::Val
