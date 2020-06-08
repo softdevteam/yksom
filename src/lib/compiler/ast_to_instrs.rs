@@ -25,7 +25,7 @@ pub struct Compiler<'a, 'input> {
     lexer: &'a dyn NonStreamingLexer<'input, StorageT>,
     path: &'a Path,
     /// The stack of variables at the current point of evaluation.
-    vars_stack: Vec<HashMap<&'a str, usize>>,
+    vars_stack: Vec<HashMap<String, usize>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
     /// in a closure -- and, if so, how many nested closures we are inside at the current point of
     /// evaluation.
@@ -49,8 +49,8 @@ impl<'a, 'input> Compiler<'a, 'input> {
         };
 
         let name = lexer.span_str(astcls.name).to_owned();
-        let (supercls, supercls_meta) = if name != "Object" {
-            let supercls = if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
+        let (supercls_val, supercls_meta_val) = if name != "Object" {
+            let supercls_val = if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
                 match vm.load_class(n) {
                     Ok(cls) => cls,
                     Err(()) => todo!(),
@@ -58,7 +58,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             } else {
                 vm.obj_cls
             };
-            (supercls, supercls.get_class(vm))
+            (supercls_val, supercls_val.get_class(vm))
         } else {
             (vm.nil, vm.nil)
         };
@@ -69,7 +69,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             vm,
             lexer,
             name.clone(),
-            supercls,
+            supercls_val,
             &astcls.inst_vars,
             &astcls.methods,
         ) {
@@ -85,7 +85,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             vm,
             lexer,
             format!("{} class", &name),
-            supercls_meta,
+            supercls_meta_val,
             &astcls.class_inst_vars,
             &astcls.class_methods,
         ) {
@@ -138,15 +138,28 @@ impl<'a, 'input> Compiler<'a, 'input> {
         vm: &mut VM,
         lexer: &'a dyn NonStreamingLexer<StorageT>,
         name: String,
-        supercls: Val,
+        supercls_val: Val,
         ast_inst_vars: &[Span],
         ast_methods: &[ast::Method],
     ) -> CompileResult<Val> {
         let instrs_off = vm.instrs_len();
-        let mut inst_vars = HashMap::with_capacity(ast_inst_vars.len());
+        let mut inst_vars = if supercls_val != vm.nil {
+            let supercls = supercls_val.downcast::<Class>(vm).unwrap();
+            let mut inst_vars =
+                HashMap::with_capacity(supercls.num_inst_vars + ast_inst_vars.len());
+            inst_vars.extend(
+                supercls
+                    .inst_vars_map
+                    .iter()
+                    .map(|(k, v)| (k.to_owned(), *v)),
+            );
+            inst_vars
+        } else {
+            HashMap::with_capacity(ast_inst_vars.len())
+        };
         for var in ast_inst_vars {
             let vars_len = inst_vars.len();
-            inst_vars.insert(lexer.span_str(*var), vars_len);
+            inst_vars.insert(lexer.span_str(*var).to_owned(), vars_len);
         }
         self.vars_stack.push(inst_vars);
 
@@ -165,6 +178,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 }
             }
         }
+        let inst_vars_map = self.vars_stack[0]
+            .iter()
+            .map(|(k, v)| (k.to_string(), *v))
+            .collect::<HashMap<String, usize>>();
         self.vars_stack.pop();
         if !errs.is_empty() {
             return Err(errs);
@@ -178,8 +195,8 @@ impl<'a, 'input> Compiler<'a, 'input> {
             name_val,
             self.path.to_path_buf(),
             instrs_off,
-            supercls,
-            ast_inst_vars.len(),
+            supercls_val,
+            inst_vars_map,
             methods,
             methods_map,
         );
@@ -398,13 +415,13 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let mut vars = HashMap::new();
         if is_method {
             // The VM assumes that the first variable of a method is "self".
-            vars.insert("self", 0);
+            vars.insert("self".to_owned(), 0);
         }
 
         let mut process_var = |var_sp: Span| {
             let vars_len = vars.len();
-            let var_str = self.lexer.span_str(var_sp);
-            match vars.entry(var_str) {
+            let var_str = self.lexer.span_str(var_sp).to_owned();
+            match vars.entry(var_str.clone()) {
                 hash_map::Entry::Occupied(_) => Err(vec![(
                     var_sp,
                     format!("Variable '{}' shadows another of the same name", var_str),
@@ -580,13 +597,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
                 let send_off = vm.add_send((mn, msglist.len()));
-                let instr = match receiver {
-                    box ast::Expr::UnaryMsg {
-                        receiver: box ast::Expr::VarLookup(span),
-                        ..
-                    } if self.lexer.span_str(*span) == "super" => todo!(),
-                    _ => Instr::Send(send_off, vm.new_inline_cache()),
-                };
+                let instr = Instr::Send(send_off, vm.new_inline_cache());
                 vm.instrs_push(instr, *span);
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
