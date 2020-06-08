@@ -717,7 +717,11 @@ impl VM {
                     ))
                 }
             }
-            Primitive::Fields => todo!(),
+            Primitive::Fields => {
+                let fields = stry!(rcv.downcast::<Class>(self)).fields(self);
+                self.stack.push(fields);
+                SendReturn::Val
+            }
             Primitive::FromString => todo!(),
             Primitive::FullGC => todo!(),
             Primitive::Global => {

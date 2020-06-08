@@ -12,7 +12,7 @@ use rboehm::Gc;
 use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},
-    objects::{Array, Method, MethodsArray, Obj, ObjType, StaticObjType, String_},
+    objects::{Array, Method, MethodsArray, NormalArray, Obj, ObjType, StaticObjType, String_},
     val::{NotUnboxable, Val, ValKind},
 };
 
@@ -162,6 +162,15 @@ impl Class {
             let meth = meth_val.downcast::<Method>(vm).unwrap();
             meth.bootstrap(vm);
         }
+    }
+
+    pub fn fields(&self, vm: &mut VM) -> Val {
+        let field_strs = self
+            .inst_vars_map
+            .keys()
+            .map(|k| String_::new_sym(vm, k.clone()))
+            .collect();
+        NormalArray::from_vec(vm, field_strs)
     }
 
     pub fn methods(&self, _: &VM) -> Val {
