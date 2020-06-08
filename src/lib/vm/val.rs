@@ -422,6 +422,25 @@ impl Val {
         self.tobj(vm).unwrap().mul(vm, other)
     }
 
+    /// Produce a new `Val` which performs a mod operation on this with `other`.
+    pub fn remainder(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                match lhs.checked_rem(rhs) {
+                    Some(i) => return Ok(Val::from_isize(vm, i)),
+                    None => return Err(VMError::new(vm, VMErrorKind::RemainderError)),
+                }
+            } else if let Some(_) = other.try_downcast::<ArbInt>(vm) {
+                todo!();
+            } else if let Some(_) = other.try_downcast::<Double>(vm) {
+                todo!();
+            }
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
+        }
+        self.tobj(vm).unwrap().remainder(vm, other)
+    }
+
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
     pub fn shl(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {

@@ -174,6 +174,8 @@ pub enum VMErrorKind {
     },
     /// Something went wrong when trying to execute a primitive.
     PrimitiveError,
+    /// Tried to calculate a remainder that was a divide by zero or resulted in overflow.
+    RemainderError,
     /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
     ShiftTooBig,
     /// An unknown global.
@@ -228,6 +230,7 @@ impl VMErrorKind {
                 got.as_str()
             )),
             VMErrorKind::PrimitiveError => Ok("Primitive Error".to_owned()),
+            VMErrorKind::RemainderError => Ok("Division by zero or overflow".to_owned()),
             VMErrorKind::ShiftTooBig => Ok("Shift too big".to_owned()),
             VMErrorKind::UnknownGlobal(name) => Ok(format!("Unknown global '{}'", name)),
             VMErrorKind::UnknownMethod => Ok("Unknown method".to_owned()),

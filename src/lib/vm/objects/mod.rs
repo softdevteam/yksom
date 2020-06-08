@@ -142,6 +142,11 @@ pub trait Obj: std::fmt::Debug {
         unreachable!();
     }
 
+    /// Produce a new `Val` which returns the remainder of dividing this with `other`.
+    fn remainder(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+        unreachable!();
+    }
+
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
     fn shl(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
