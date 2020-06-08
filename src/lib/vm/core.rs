@@ -671,7 +671,12 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::Cos => todo!(),
+            Primitive::Cos => {
+                let dbl = rcv.downcast::<Double>(self).unwrap();
+                let v = dbl.cos(self);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Div => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.div(self, v));
@@ -860,7 +865,11 @@ impl VM {
             Primitive::PerformInSuperClass => unimplemented!(),
             Primitive::PerformWithArguments => unimplemented!(),
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
-            Primitive::PositiveInfinity => todo!(),
+            Primitive::PositiveInfinity => {
+                let dbl = Double::new(self, f64::INFINITY);
+                self.stack.push(dbl);
+                SendReturn::Val
+            }
             Primitive::PrimSubstringFromTo => {
                 let end = stry!(self.stack.pop().as_usize(self));
                 let start = stry!(self.stack.pop().as_usize(self));
@@ -891,7 +900,12 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Rem => todo!(),
-            Primitive::Round => todo!(),
+            Primitive::Round => {
+                let dbl = rcv.downcast::<Double>(self).unwrap();
+                let v = dbl.round(self);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Shl => {
                 let v = self.stack.pop();
                 let v = stry!(rcv.shl(self, v));
@@ -904,7 +918,12 @@ impl VM {
                 self.stack.push(meth.sig(self));
                 SendReturn::Val
             }
-            Primitive::Sin => todo!(),
+            Primitive::Sin => {
+                let dbl = rcv.downcast::<Double>(self).unwrap();
+                let v = dbl.sin(self);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Sqrt => {
                 let v = stry!(rcv.sqrt(self));
                 self.stack.push(v);

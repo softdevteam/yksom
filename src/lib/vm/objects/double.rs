@@ -197,4 +197,22 @@ impl Double {
             todo!();
         }
     }
+
+    pub fn round(&self, vm: &mut VM) -> Val {
+        // This could be done more efficiently in the common case that self.val will fit in an
+        // isize.
+        if let Some(bi) = BigInt::from_f64(self.val.round()) {
+            ArbInt::new(vm, bi)
+        } else {
+            todo!();
+        }
+    }
+
+    pub fn cos(&self, vm: &mut VM) -> Val {
+        Double::new(vm, self.val.cos())
+    }
+
+    pub fn sin(&self, vm: &mut VM) -> Val {
+        Double::new(vm, self.val.sin())
+    }
 }
