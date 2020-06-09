@@ -636,8 +636,34 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::As32BitSignedValue => todo!(),
-            Primitive::As32BitUnsignedValue => todo!(),
+            Primitive::As32BitSignedValue => {
+                let i = if let Some(i) = rcv.as_isize(self) {
+                    i as i32 as isize
+                } else {
+                    rcv.downcast::<ArbInt>(self)
+                        .unwrap()
+                        .bigint()
+                        .to_u32_digits()
+                        .1[0] as i32 as isize
+                };
+                let v = Val::from_isize(self, i as isize);
+                self.stack.push(v);
+                SendReturn::Val
+            }
+            Primitive::As32BitUnsignedValue => {
+                let i = if let Some(i) = rcv.as_isize(self) {
+                    i as u32
+                } else {
+                    rcv.downcast::<ArbInt>(self)
+                        .unwrap()
+                        .bigint()
+                        .to_u32_digits()
+                        .1[0] as u32
+                };
+                let v = Val::from_isize(self, i as isize);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::At => {
                 let rcv_tobj = stry!(rcv.tobj(self));
                 let arr = stry!(rcv_tobj.to_array());
