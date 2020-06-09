@@ -153,6 +153,15 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     .iter()
                     .map(|(k, v)| (k.to_owned(), *v)),
             );
+            for var in ast_inst_vars {
+                let n = lexer.span_str(*var);
+                if inst_vars.contains_key(n) {
+                    return Err(vec![(
+                        *var,
+                        format!("Field '{}' is already defined in a superclass.", n),
+                    )]);
+                }
+            }
             inst_vars
         } else {
             HashMap::with_capacity(ast_inst_vars.len())
