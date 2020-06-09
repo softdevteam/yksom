@@ -168,7 +168,21 @@ impl<'a, 'input> Compiler<'a, 'input> {
         };
         for var in ast_inst_vars {
             let vars_len = inst_vars.len();
-            inst_vars.insert(lexer.span_str(*var).to_owned(), vars_len);
+            let n = lexer.span_str(*var).to_owned();
+            match inst_vars.entry(n) {
+                hash_map::Entry::Occupied(_) => {
+                    return Err(vec![(
+                        *var,
+                        format!(
+                            "Field '{}' has already been defined in this class.",
+                            self.lexer.span_str(*var)
+                        ),
+                    )])
+                }
+                hash_map::Entry::Vacant(e) => {
+                    e.insert(vars_len);
+                }
+            }
         }
         self.vars_stack.push(inst_vars);
 
