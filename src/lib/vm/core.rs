@@ -919,7 +919,44 @@ impl VM {
                 }
             }
             Primitive::PerformInSuperClass => unimplemented!(),
-            Primitive::PerformWithArguments => unimplemented!(),
+            Primitive::PerformWithArguments => {
+                let args_tobj = stry!(self.stack.pop().tobj(self));
+                let args = stry!(args_tobj.to_array());
+                let sig_val = self.stack.pop();
+                let sig = stry!(String_::symbol_to_string_(self, sig_val));
+                let cls_val = rcv.get_class(self);
+                let cls = stry!(cls_val.downcast::<Class>(self));
+                match cls.get_method(self, sig.as_str()) {
+                    Ok(m) => {
+                        if args_tobj.length() != m.num_params() {
+                            return SendReturn::Err(VMError::new(
+                                self,
+                                VMErrorKind::WrongNumberOfArgs {
+                                    wanted: m.num_params(),
+                                    got: args_tobj.length(),
+                                },
+                            ));
+                        }
+                        for v in args.iter() {
+                            self.stack.push(v);
+                        }
+                        self.send_args_on_stack(rcv, m, args_tobj.length())
+                    }
+                    Err(box VMError {
+                        kind: VMErrorKind::UnknownMethod,
+                        ..
+                    }) => {
+                        let meth = cls
+                            .get_method(self, "doesNotUnderstand:arguments:")
+                            .unwrap();
+                        self.stack.push(sig_val);
+                        let arr = NormalArray::new(self, 0);
+                        self.stack.push(arr);
+                        self.send_args_on_stack(rcv, meth, 2)
+                    }
+                    Err(e) => return SendReturn::Err(e),
+                }
+            }
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
             Primitive::PositiveInfinity => {
                 let dbl = Double::new(self, f64::INFINITY);

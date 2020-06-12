@@ -248,9 +248,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 ((pairs[0].0, name), args)
             }
         };
+        let args_len = args.len();
         let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
         let sig = String_::new_sym(vm, name.1.clone());
-        let meth = Method::new(vm, sig, body);
+        let meth = Method::new(vm, sig, args_len, body);
         Ok((name.1, Val::from_obj(vm, meth)))
     }
 

@@ -182,6 +182,11 @@ pub enum VMErrorKind {
     UnknownGlobal(String),
     /// An unknown method.
     UnknownMethod,
+    /// Tried calling a method with the wrong number of arguments.
+    WrongNumberOfArgs {
+        wanted: usize,
+        got: usize,
+    },
 }
 
 impl VMErrorKind {
@@ -234,6 +239,10 @@ impl VMErrorKind {
             VMErrorKind::ShiftTooBig => Ok("Shift too big".to_owned()),
             VMErrorKind::UnknownGlobal(name) => Ok(format!("Unknown global '{}'", name)),
             VMErrorKind::UnknownMethod => Ok("Unknown method".to_owned()),
+            VMErrorKind::WrongNumberOfArgs { wanted, got } => Ok(format!(
+                "Tried passing {} arguments to a function that requires {}",
+                got, wanted
+            )),
         }
     }
 }
