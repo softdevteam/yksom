@@ -93,13 +93,15 @@ pub trait Obj: std::fmt::Debug {
         unreachable!();
     }
 
-    /// Lookup an instance variable in this object.
-    fn inst_var_lookup(&self, _: usize) -> Val {
+    /// Lookup an instance variable in this object. If `usize` exceeds the number of instance
+    /// variables this will lead to undefined behaviour.
+    unsafe fn unchecked_inst_var_get(&self, _: usize) -> Val {
         unreachable!();
     }
 
-    /// Set an instance variable in this object.
-    fn inst_var_set(&self, _: usize, _: Val) {
+    /// Set an instance variable in this object. If `usize` exceeds the number of instance
+    /// variables this will lead to undefined behaviour.
+    unsafe fn unchecked_inst_var_set(&self, _: usize, _: Val) {
         unreachable!();
     }
 

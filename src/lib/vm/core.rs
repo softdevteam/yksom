@@ -487,12 +487,12 @@ impl VM {
                 }
                 Instr::InstVarLookup(n) => {
                     let inst = stry!(rcv.tobj(self));
-                    self.stack.push(inst.inst_var_lookup(n));
+                    self.stack.push(unsafe { inst.unchecked_inst_var_get(n) });
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst = stry!(rcv.tobj(self));
-                    inst.inst_var_set(n, self.stack.peek());
+                    unsafe { inst.unchecked_inst_var_set(n, self.stack.peek()) };
                     pc += 1;
                 }
                 Instr::Int(i) => {
