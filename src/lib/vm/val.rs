@@ -349,15 +349,27 @@ impl Val {
 
     /// Produce a new `Val` which divides `other` from this.
     pub fn div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        debug_assert_eq!(ValKind::INT as usize, 0);
-        if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
-            if other.val != 0 {
-                return Ok(Val {
-                    val: (self.val / other.val) * (1 << TAG_BITSIZE),
-                });
-            } else {
-                return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                if rhs == 0 {
+                    return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
+                } else {
+                    return Ok(Val::from_isize(vm, lhs / rhs));
+                }
+            } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
+                return Ok(ArbInt::new(
+                    vm,
+                    BigInt::from_isize(lhs).unwrap() / rhs.bigint(),
+                ));
+            } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                if rhs.double() == 0f64 {
+                    return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
+                } else {
+                    return Ok(Val::from_isize(vm, ((lhs as f64) / rhs.double()) as isize));
+                }
             }
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
         self.tobj(vm).unwrap().div(vm, other)
     }

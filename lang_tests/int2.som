@@ -8,6 +8,8 @@ VM:
     1
     20
     4
+    -2
+    -2
 "
 
 int2 = (
@@ -18,5 +20,7 @@ int2 = (
         (1 - (1 - 1)) println.
         (2 + 3 * 4) println.
         (20 / 5) println.
+        (4 / -2) println.
+        (-4 / 2) println.
     )
 )
