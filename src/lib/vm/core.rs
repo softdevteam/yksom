@@ -899,17 +899,29 @@ impl VM {
             }
             Primitive::ObjectSize => unimplemented!(),
             Primitive::Perform => {
-                let args = NormalArray::new(self, 0);
+                let args_val = NormalArray::new(self, 0);
                 let sig_val = self.stack.pop();
-                self.perform(rcv, sig_val, args)
+                let cls_val = rcv.get_class(self);
+                self.perform(rcv, cls_val, sig_val, args_val)
             }
-            Primitive::PerformInSuperClass => unimplemented!(),
+            Primitive::PerformInSuperClass => {
+                let args_val = NormalArray::new(self, 0);
+                let cls_val = self.stack.pop();
+                let sig_val = self.stack.pop();
+                self.perform(rcv, cls_val, sig_val, args_val)
+            }
             Primitive::PerformWithArguments => {
                 let args_val = self.stack.pop();
                 let sig_val = self.stack.pop();
-                self.perform(rcv, sig_val, args_val)
+                let cls_val = rcv.get_class(self);
+                self.perform(rcv, cls_val, sig_val, args_val)
             }
-            Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
+            Primitive::PerformWithArgumentsInSuperClass => {
+                let cls_val = self.stack.pop();
+                let args_val = self.stack.pop();
+                let sig_val = self.stack.pop();
+                self.perform(rcv, cls_val, sig_val, args_val)
+            }
             Primitive::PositiveInfinity => {
                 let dbl = Double::new(self, f64::INFINITY);
                 self.stack.push(dbl);
@@ -1018,7 +1030,7 @@ impl VM {
         }
     }
 
-    fn perform(&mut self, rcv: Val, sig_val: Val, args_val: Val) -> SendReturn {
+    fn perform(&mut self, rcv: Val, cls_val: Val, sig_val: Val, args_val: Val) -> SendReturn {
         macro_rules! stry {
             ($elem:expr) => {{
                 let e = $elem;
@@ -1032,7 +1044,6 @@ impl VM {
         let args_tobj = stry!(args_val.tobj(self));
         let args = stry!(args_tobj.to_array());
         let sig = stry!(String_::symbol_to_string_(self, sig_val));
-        let cls_val = rcv.get_class(self);
         let cls = stry!(cls_val.downcast::<Class>(self));
         match cls.get_method(self, sig.as_str()) {
             Ok(m) => {
