@@ -193,6 +193,27 @@ impl Obj for ArbInt {
         }
     }
 
+    fn shr(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(rhs) = other.as_isize(vm) {
+            if rhs < 0 {
+                Err(VMError::new(vm, VMErrorKind::NegativeShift))
+            } else {
+                let rhs_i =
+                    usize::try_from(rhs).map_err(|_| VMError::new(vm, VMErrorKind::ShiftTooBig))?;
+                if self.val.is_positive() {
+                    Ok(ArbInt::new(vm, &self.val >> rhs_i))
+                } else {
+                    todo!();
+                }
+            }
+        } else if other.try_downcast::<ArbInt>(vm).is_some() {
+            Err(VMError::new(vm, VMErrorKind::ShiftTooBig))
+        } else {
+            let got = other.dyn_objtype(vm);
+            Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
+        }
+    }
+
     fn sqrt(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         if self.val < Zero::zero() {
             Err(VMError::new(vm, VMErrorKind::DomainError))
