@@ -899,65 +899,15 @@ impl VM {
             }
             Primitive::ObjectSize => unimplemented!(),
             Primitive::Perform => {
+                let args = NormalArray::new(self, 0);
                 let sig_val = self.stack.pop();
-                let sig = stry!(String_::symbol_to_string_(self, sig_val));
-                let cls_val = rcv.get_class(self);
-                let cls = stry!(cls_val.downcast::<Class>(self));
-                match cls.get_method(self, sig.as_str()) {
-                    Ok(m) => self.send_args_on_stack(rcv, m),
-                    Err(box VMError {
-                        kind: VMErrorKind::UnknownMethod,
-                        ..
-                    }) => {
-                        let meth = cls
-                            .get_method(self, "doesNotUnderstand:arguments:")
-                            .unwrap();
-                        self.stack.push(sig_val);
-                        let arr = NormalArray::new(self, 0);
-                        self.stack.push(arr);
-                        self.send_args_on_stack(rcv, meth)
-                    }
-                    Err(e) => return SendReturn::Err(e),
-                }
+                self.perform(rcv, sig_val, args)
             }
             Primitive::PerformInSuperClass => unimplemented!(),
             Primitive::PerformWithArguments => {
-                let args_tobj = stry!(self.stack.pop().tobj(self));
-                let args = stry!(args_tobj.to_array());
+                let args_val = self.stack.pop();
                 let sig_val = self.stack.pop();
-                let sig = stry!(String_::symbol_to_string_(self, sig_val));
-                let cls_val = rcv.get_class(self);
-                let cls = stry!(cls_val.downcast::<Class>(self));
-                match cls.get_method(self, sig.as_str()) {
-                    Ok(m) => {
-                        if args_tobj.length() != m.num_params() {
-                            return SendReturn::Err(VMError::new(
-                                self,
-                                VMErrorKind::WrongNumberOfArgs {
-                                    wanted: m.num_params(),
-                                    got: args_tobj.length(),
-                                },
-                            ));
-                        }
-                        for v in args.iter() {
-                            self.stack.push(v);
-                        }
-                        self.send_args_on_stack(rcv, m)
-                    }
-                    Err(box VMError {
-                        kind: VMErrorKind::UnknownMethod,
-                        ..
-                    }) => {
-                        let meth = cls
-                            .get_method(self, "doesNotUnderstand:arguments:")
-                            .unwrap();
-                        self.stack.push(sig_val);
-                        let arr = NormalArray::new(self, 0);
-                        self.stack.push(arr);
-                        self.send_args_on_stack(rcv, meth)
-                    }
-                    Err(e) => return SendReturn::Err(e),
-                }
+                self.perform(rcv, sig_val, args_val)
             }
             Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
             Primitive::PositiveInfinity => {
@@ -1065,6 +1015,54 @@ impl VM {
                 self.frame_pop();
                 r
             }
+        }
+    }
+
+    fn perform(&mut self, rcv: Val, sig_val: Val, args_val: Val) -> SendReturn {
+        macro_rules! stry {
+            ($elem:expr) => {{
+                let e = $elem;
+                match e {
+                    Ok(o) => o,
+                    Err(e) => return SendReturn::Err(e),
+                }
+            }};
+        }
+
+        let args_tobj = stry!(args_val.tobj(self));
+        let args = stry!(args_tobj.to_array());
+        let sig = stry!(String_::symbol_to_string_(self, sig_val));
+        let cls_val = rcv.get_class(self);
+        let cls = stry!(cls_val.downcast::<Class>(self));
+        match cls.get_method(self, sig.as_str()) {
+            Ok(m) => {
+                if args_tobj.length() != m.num_params() {
+                    return SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::WrongNumberOfArgs {
+                            wanted: m.num_params(),
+                            got: args_tobj.length(),
+                        },
+                    ));
+                }
+                for v in args.iter() {
+                    self.stack.push(v);
+                }
+                self.send_args_on_stack(rcv, m)
+            }
+            Err(box VMError {
+                kind: VMErrorKind::UnknownMethod,
+                ..
+            }) => {
+                let meth = cls
+                    .get_method(self, "doesNotUnderstand:arguments:")
+                    .unwrap();
+                self.stack.push(sig_val);
+                let arr = NormalArray::new(self, 0);
+                self.stack.push(arr);
+                self.send_args_on_stack(rcv, meth)
+            }
+            Err(e) => return SendReturn::Err(e),
         }
     }
 
