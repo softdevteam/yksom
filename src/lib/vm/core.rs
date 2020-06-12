@@ -815,7 +815,13 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Inspect => unimplemented!(),
-            Primitive::InstVarAt => unimplemented!(),
+            Primitive::InstVarAt => {
+                let n = stry!(self.stack.pop().as_usize(self));
+                let inst = stry!(rcv.tobj(self));
+                let v = stry!(inst.inst_var_at(self, n));
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::InstVarAtPut => unimplemented!(),
             Primitive::InstVarNamed => unimplemented!(),
             Primitive::InvokeOnWith => todo!(),

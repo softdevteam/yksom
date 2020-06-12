@@ -41,7 +41,11 @@ pub use string_::String_;
 use natrob::narrowable_rboehm;
 use rboehm::Gc;
 
-use crate::vm::{core::VM, error::VMError, val::Val};
+use crate::vm::{
+    core::VM,
+    error::{VMError, VMErrorKind},
+    val::Val,
+};
 
 /// The SOM type of objects.
 #[derive(Debug, PartialEq)]
@@ -91,6 +95,26 @@ pub trait Obj: std::fmt::Debug {
     /// Convert this object to a `Val` that represents a SOM string.
     fn to_strval(&self, _: &mut VM) -> Result<Val, Box<VMError>> {
         unreachable!();
+    }
+
+    /// How many instance variables does this object contain?
+    fn num_inst_vars(&self) -> usize {
+        unreachable!();
+    }
+
+    /// Return the instance variable at `i` (using SOM indexing).
+    fn inst_var_at(&self, vm: &VM, i: usize) -> Result<Val, Box<VMError>> {
+        if i > 0 && i <= self.num_inst_vars() {
+            Ok(unsafe { self.unchecked_inst_var_get(i - 1) })
+        } else {
+            Err(VMError::new(
+                vm,
+                VMErrorKind::IndexError {
+                    tried: i,
+                    max: self.num_inst_vars(),
+                },
+            ))
+        }
     }
 
     /// Lookup an instance variable in this object. If `usize` exceeds the number of instance
