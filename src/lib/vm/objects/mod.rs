@@ -117,6 +117,21 @@ pub trait Obj: std::fmt::Debug {
         }
     }
 
+    /// Return the instance variable at `i` (using SOM indexing).
+    fn inst_var_at_put(&self, vm: &VM, i: usize, v: Val) -> Result<(), Box<VMError>> {
+        if i > 0 && i <= self.num_inst_vars() {
+            Ok(unsafe { self.unchecked_inst_var_set(i - 1, v) })
+        } else {
+            Err(VMError::new(
+                vm,
+                VMErrorKind::IndexError {
+                    tried: i,
+                    max: self.num_inst_vars(),
+                },
+            ))
+        }
+    }
+
     /// Lookup an instance variable in this object. If `usize` exceeds the number of instance
     /// variables this will lead to undefined behaviour.
     unsafe fn unchecked_inst_var_get(&self, _: usize) -> Val {

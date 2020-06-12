@@ -822,7 +822,14 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::InstVarAtPut => unimplemented!(),
+            Primitive::InstVarAtPut => {
+                let v = self.stack.pop();
+                let n = stry!(self.stack.pop().as_usize(self));
+                let inst = stry!(rcv.tobj(self));
+                stry!(inst.inst_var_at_put(self, n, v));
+                self.stack.push(rcv);
+                SendReturn::Val
+            }
             Primitive::InstVarNamed => unimplemented!(),
             Primitive::InvokeOnWith => todo!(),
             Primitive::IsDigits => unimplemented!(),
