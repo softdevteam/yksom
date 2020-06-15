@@ -14,6 +14,7 @@ use crate::{
 #[derive(Debug)]
 pub struct Method {
     sig: Cell<Val>,
+    num_params: usize,
     pub body: MethodBody,
     holder: Cell<Val>,
 }
@@ -57,9 +58,10 @@ impl StaticObjType for Method {
 }
 
 impl Method {
-    pub fn new(vm: &VM, sig: Val, body: MethodBody) -> Method {
+    pub fn new(vm: &VM, sig: Val, num_params: usize, body: MethodBody) -> Method {
         Method {
             sig: Cell::new(sig),
+            num_params,
             body,
             holder: Cell::new(vm.nil),
         }
@@ -67,6 +69,10 @@ impl Method {
 
     pub fn holder(&self) -> Val {
         self.holder.get()
+    }
+
+    pub fn num_params(&self) -> usize {
+        self.num_params
     }
 
     pub fn set_holder(&self, _: &VM, class: Val) {

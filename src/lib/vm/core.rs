@@ -329,11 +329,13 @@ impl VM {
                 if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
-                let nargs = args.len();
+                if args.len() != meth.num_params() {
+                    panic!("Passed the wrong number of parameters.");
+                }
                 for a in args {
                     self.stack.push(a);
                 }
-                let frame = Frame::new(self, None, rcv, None, num_vars, nargs);
+                let frame = Frame::new(self, None, rcv, None, num_vars, meth.num_params());
                 self.frames.push(frame);
                 let r = self.exec_user(rcv, meth, bytecode_off);
                 self.frame_pop();
@@ -346,7 +348,7 @@ impl VM {
         }
     }
 
-    fn send_args_on_stack(&mut self, rcv: Val, method: Gc<Method>, nargs: usize) -> SendReturn {
+    fn send_args_on_stack(&mut self, rcv: Val, method: Gc<Method>) -> SendReturn {
         match method.body {
             MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
             MethodBody::User {
@@ -357,7 +359,7 @@ impl VM {
                 if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
-                let nframe = Frame::new(self, None, rcv, None, num_vars, nargs);
+                let nframe = Frame::new(self, None, rcv, None, num_vars, method.num_params());
                 self.frames.push(nframe);
                 let r = self.exec_user(rcv, method, bytecode_off);
                 self.frame_pop();
@@ -387,8 +389,8 @@ impl VM {
         // Inside this function, one should use this macro instead of calling `send_args_on_stack`
         // directly.
         macro_rules! send_args_on_stack {
-            ($send_rcv:expr, $send_method:expr, $nargs:expr) => {{
-                match self.send_args_on_stack($send_rcv, $send_method, $nargs) {
+            ($send_rcv:expr, $send_method:expr) => {{
+                match self.send_args_on_stack($send_rcv, $send_method) {
                     SendReturn::ClosureReturn(d) => {
                         if d > 0 {
                             return SendReturn::ClosureReturn(d - 1);
@@ -448,7 +450,7 @@ impl VM {
                     let meth = stry!(cls.get_method(self, "escapedBlock:"));
                     let blk = self.current_frame().block.unwrap();
                     self.stack.push(blk);
-                    send_args_on_stack!(rcv, meth, 1);
+                    send_args_on_stack!(rcv, meth);
                     pc += 1;
                 }
                 Instr::Double(i) => {
@@ -479,7 +481,7 @@ impl VM {
                         };
                         let v = String_::new_sym(self, name);
                         self.stack.push(v);
-                        send_args_on_stack!(rcv, meth, 1);
+                        send_args_on_stack!(rcv, meth);
                     }
                     pc += 1;
                 }
@@ -545,7 +547,7 @@ impl VM {
                                         let sig = String_::new_sym(self, (&*name).to_owned());
                                         self.stack.push(sig);
                                         self.stack.push(arr);
-                                        send_args_on_stack!(rcv, meth, 2);
+                                        send_args_on_stack!(rcv, meth);
                                         pc += 1;
                                         continue;
                                     }
@@ -565,7 +567,7 @@ impl VM {
 
                     let len = self.stack.len() - nargs;
                     self.current_frame().set_sp(len);
-                    send_args_on_stack!(send_rcv, meth, nargs);
+                    send_args_on_stack!(send_rcv, meth);
                     pc += 1;
                 }
                 Instr::String(string_off) => {
@@ -897,30 +899,29 @@ impl VM {
             }
             Primitive::ObjectSize => unimplemented!(),
             Primitive::Perform => {
+                let args_val = NormalArray::new(self, 0);
                 let sig_val = self.stack.pop();
-                let sig = stry!(String_::symbol_to_string_(self, sig_val));
                 let cls_val = rcv.get_class(self);
-                let cls = stry!(cls_val.downcast::<Class>(self));
-                match cls.get_method(self, sig.as_str()) {
-                    Ok(m) => self.send_args_on_stack(rcv, m, 0),
-                    Err(box VMError {
-                        kind: VMErrorKind::UnknownMethod,
-                        ..
-                    }) => {
-                        let meth = cls
-                            .get_method(self, "doesNotUnderstand:arguments:")
-                            .unwrap();
-                        self.stack.push(sig_val);
-                        let arr = NormalArray::new(self, 0);
-                        self.stack.push(arr);
-                        self.send_args_on_stack(rcv, meth, 2)
-                    }
-                    Err(e) => return SendReturn::Err(e),
-                }
+                self.perform(rcv, cls_val, sig_val, args_val)
             }
-            Primitive::PerformInSuperClass => unimplemented!(),
-            Primitive::PerformWithArguments => unimplemented!(),
-            Primitive::PerformWithArgumentsInSuperClass => unimplemented!(),
+            Primitive::PerformInSuperClass => {
+                let args_val = NormalArray::new(self, 0);
+                let cls_val = self.stack.pop();
+                let sig_val = self.stack.pop();
+                self.perform(rcv, cls_val, sig_val, args_val)
+            }
+            Primitive::PerformWithArguments => {
+                let args_val = self.stack.pop();
+                let sig_val = self.stack.pop();
+                let cls_val = rcv.get_class(self);
+                self.perform(rcv, cls_val, sig_val, args_val)
+            }
+            Primitive::PerformWithArgumentsInSuperClass => {
+                let cls_val = self.stack.pop();
+                let args_val = self.stack.pop();
+                let sig_val = self.stack.pop();
+                self.perform(rcv, cls_val, sig_val, args_val)
+            }
             Primitive::PositiveInfinity => {
                 let dbl = Double::new(self, f64::INFINITY);
                 self.stack.push(dbl);
@@ -1031,6 +1032,53 @@ impl VM {
                 self.frame_pop();
                 r
             }
+        }
+    }
+
+    fn perform(&mut self, rcv: Val, cls_val: Val, sig_val: Val, args_val: Val) -> SendReturn {
+        macro_rules! stry {
+            ($elem:expr) => {{
+                let e = $elem;
+                match e {
+                    Ok(o) => o,
+                    Err(e) => return SendReturn::Err(e),
+                }
+            }};
+        }
+
+        let args_tobj = stry!(args_val.tobj(self));
+        let args = stry!(args_tobj.to_array());
+        let sig = stry!(String_::symbol_to_string_(self, sig_val));
+        let cls = stry!(cls_val.downcast::<Class>(self));
+        match cls.get_method(self, sig.as_str()) {
+            Ok(m) => {
+                if args_tobj.length() != m.num_params() {
+                    return SendReturn::Err(VMError::new(
+                        self,
+                        VMErrorKind::WrongNumberOfArgs {
+                            wanted: m.num_params(),
+                            got: args_tobj.length(),
+                        },
+                    ));
+                }
+                for v in args.iter() {
+                    self.stack.push(v);
+                }
+                self.send_args_on_stack(rcv, m)
+            }
+            Err(box VMError {
+                kind: VMErrorKind::UnknownMethod,
+                ..
+            }) => {
+                let meth = cls
+                    .get_method(self, "doesNotUnderstand:arguments:")
+                    .unwrap();
+                self.stack.push(sig_val);
+                let arr = NormalArray::new(self, 0);
+                self.stack.push(arr);
+                self.send_args_on_stack(rcv, meth)
+            }
+            Err(e) => return SendReturn::Err(e),
         }
     }
 
