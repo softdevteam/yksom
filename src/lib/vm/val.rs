@@ -10,7 +10,7 @@ use std::{
 
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
-use num_traits::{FromPrimitive, ToPrimitive, Zero};
+use num_traits::{FromPrimitive, ToPrimitive};
 use rboehm::{self, Gc};
 
 use super::{
@@ -384,9 +384,7 @@ impl Val {
                     return Ok(Double::new(vm, (lhs as f64) / (rhs as f64)));
                 }
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                if Zero::is_zero(rhs.bigint()) {
-                    return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
-                } else if let Some(i) = rhs.bigint().to_f64() {
+                if let Some(i) = rhs.bigint().to_f64() {
                     return Ok(Double::new(vm, (lhs as f64) / i));
                 } else {
                     return Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble));
