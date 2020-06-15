@@ -973,7 +973,12 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::Shr => todo!(),
+            Primitive::Shr => {
+                let v = self.stack.pop();
+                let v = stry!(rcv.shr(self, v));
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::Signature => {
                 let meth = rcv.downcast::<Method>(self).unwrap();
                 self.stack.push(meth.sig(self));

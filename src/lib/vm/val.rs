@@ -476,6 +476,28 @@ impl Val {
         self.tobj(vm).unwrap().shl(vm, other)
     }
 
+    /// Produce a new `Val` which shifts `self` `other` bits to the right, treating `self` as if it
+    /// did not have a sign bit.
+    pub fn shr(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+        if let Some(lhs) = self.as_isize(vm) {
+            if let Some(rhs) = other.as_isize(vm) {
+                if rhs < 0 {
+                    return Err(VMError::new(vm, VMErrorKind::NegativeShift));
+                } else {
+                    let rhs_i = u32::try_from(rhs)
+                        .map_err(|_| VMError::new(vm, VMErrorKind::ShiftTooBig))?;
+                    return Ok(Val::from_isize(vm, ((lhs as usize) >> rhs_i) as isize));
+                }
+            }
+            if other.try_downcast::<ArbInt>(vm).is_some() {
+                return Err(VMError::new(vm, VMErrorKind::ShiftTooBig));
+            }
+            let got = other.dyn_objtype(vm);
+            return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
+        }
+        self.tobj(vm).unwrap().shr(vm, other)
+    }
+
     /// Produces a new `Val` which is the square root of this.
     pub fn sqrt(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {

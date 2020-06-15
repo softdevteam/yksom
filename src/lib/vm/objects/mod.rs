@@ -152,6 +152,12 @@ pub trait Obj: std::fmt::Debug {
         unreachable!();
     }
 
+    /// Produce a new `Val` which shifts `self` `other` bits to the right, treating `self` as if it
+    /// did not have a sign bit.
+    fn shr(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+        unreachable!();
+    }
+
     /// Produces a new `Val` which is the square root of this.
     fn sqrt(&self, _: &mut VM) -> Result<Val, Box<VMError>> {
         unreachable!();
