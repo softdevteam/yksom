@@ -26,13 +26,17 @@ impl Obj for Inst {
         self.class
     }
 
-    fn inst_var_lookup(&self, n: usize) -> Val {
-        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+    fn num_inst_vars(&self) -> usize {
+        unsafe { &*self.inst_vars.get() }.len()
+    }
+
+    unsafe fn unchecked_inst_var_get(&self, n: usize) -> Val {
+        let inst_vars = &mut *self.inst_vars.get();
         inst_vars[n]
     }
 
-    fn inst_var_set(&self, n: usize, v: Val) {
-        let inst_vars = unsafe { &mut *self.inst_vars.get() };
+    unsafe fn unchecked_inst_var_set(&self, n: usize, v: Val) {
+        let inst_vars = &mut *self.inst_vars.get();
         inst_vars[n] = v;
     }
 

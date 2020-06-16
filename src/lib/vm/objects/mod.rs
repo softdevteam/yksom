@@ -41,7 +41,11 @@ pub use string_::String_;
 use natrob::narrowable_rboehm;
 use rboehm::Gc;
 
-use crate::vm::{core::VM, error::VMError, val::Val};
+use crate::vm::{
+    core::VM,
+    error::{VMError, VMErrorKind},
+    val::Val,
+};
 
 /// The SOM type of objects.
 #[derive(Debug, PartialEq)]
@@ -93,13 +97,50 @@ pub trait Obj: std::fmt::Debug {
         unreachable!();
     }
 
-    /// Lookup an instance variable in this object.
-    fn inst_var_lookup(&self, _: usize) -> Val {
+    /// How many instance variables does this object contain?
+    fn num_inst_vars(&self) -> usize {
         unreachable!();
     }
 
-    /// Set an instance variable in this object.
-    fn inst_var_set(&self, _: usize, _: Val) {
+    /// Return the instance variable at `i` (using SOM indexing).
+    fn inst_var_at(&self, vm: &VM, i: usize) -> Result<Val, Box<VMError>> {
+        if i > 0 && i <= self.num_inst_vars() {
+            Ok(unsafe { self.unchecked_inst_var_get(i - 1) })
+        } else {
+            Err(VMError::new(
+                vm,
+                VMErrorKind::IndexError {
+                    tried: i,
+                    max: self.num_inst_vars(),
+                },
+            ))
+        }
+    }
+
+    /// Return the instance variable at `i` (using SOM indexing).
+    fn inst_var_at_put(&self, vm: &VM, i: usize, v: Val) -> Result<(), Box<VMError>> {
+        if i > 0 && i <= self.num_inst_vars() {
+            Ok(unsafe { self.unchecked_inst_var_set(i - 1, v) })
+        } else {
+            Err(VMError::new(
+                vm,
+                VMErrorKind::IndexError {
+                    tried: i,
+                    max: self.num_inst_vars(),
+                },
+            ))
+        }
+    }
+
+    /// Lookup an instance variable in this object. If `usize` exceeds the number of instance
+    /// variables this will lead to undefined behaviour.
+    unsafe fn unchecked_inst_var_get(&self, _: usize) -> Val {
+        unreachable!();
+    }
+
+    /// Set an instance variable in this object. If `usize` exceeds the number of instance
+    /// variables this will lead to undefined behaviour.
+    unsafe fn unchecked_inst_var_set(&self, _: usize, _: Val) {
         unreachable!();
     }
 

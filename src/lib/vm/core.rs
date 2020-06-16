@@ -487,12 +487,12 @@ impl VM {
                 }
                 Instr::InstVarLookup(n) => {
                     let inst = stry!(rcv.tobj(self));
-                    self.stack.push(inst.inst_var_lookup(n));
+                    self.stack.push(unsafe { inst.unchecked_inst_var_get(n) });
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst = stry!(rcv.tobj(self));
-                    inst.inst_var_set(n, self.stack.peek());
+                    unsafe { inst.unchecked_inst_var_set(n, self.stack.peek()) };
                     pc += 1;
                 }
                 Instr::Int(i) => {
@@ -815,8 +815,21 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Inspect => unimplemented!(),
-            Primitive::InstVarAt => unimplemented!(),
-            Primitive::InstVarAtPut => unimplemented!(),
+            Primitive::InstVarAt => {
+                let n = stry!(self.stack.pop().as_usize(self));
+                let inst = stry!(rcv.tobj(self));
+                let v = stry!(inst.inst_var_at(self, n));
+                self.stack.push(v);
+                SendReturn::Val
+            }
+            Primitive::InstVarAtPut => {
+                let v = self.stack.pop();
+                let n = stry!(self.stack.pop().as_usize(self));
+                let inst = stry!(rcv.tobj(self));
+                stry!(inst.inst_var_at_put(self, n, v));
+                self.stack.push(rcv);
+                SendReturn::Val
+            }
             Primitive::InstVarNamed => unimplemented!(),
             Primitive::InvokeOnWith => todo!(),
             Primitive::IsDigits => unimplemented!(),
