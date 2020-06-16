@@ -840,7 +840,10 @@ impl VM {
                 stry!(self.str_is(rcv, |x| x.is_alphabetic()));
                 SendReturn::Val
             }
-            Primitive::IsWhiteSpace => unimplemented!(),
+            Primitive::IsWhiteSpace => {
+                stry!(self.str_is(rcv, |x| x.is_whitespace()));
+                SendReturn::Val
+            }
             Primitive::Length => {
                 // Only Arrays and Strings can have this primitive installed.
                 debug_assert!(rcv.valkind() == ValKind::GCBOX);
