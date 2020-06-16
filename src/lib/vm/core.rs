@@ -832,7 +832,10 @@ impl VM {
             }
             Primitive::InstVarNamed => unimplemented!(),
             Primitive::InvokeOnWith => todo!(),
-            Primitive::IsDigits => unimplemented!(),
+            Primitive::IsDigits => {
+                stry!(self.str_is(rcv, |x| x.is_ascii_digit()));
+                SendReturn::Val
+            }
             Primitive::IsLetters => unimplemented!(),
             Primitive::IsWhiteSpace => unimplemented!(),
             Primitive::Length => {
@@ -1093,6 +1096,22 @@ impl VM {
             }
             Err(e) => return SendReturn::Err(e),
         }
+    }
+
+    /// Does every character in the SOM string in `rcv` satisfy the condition `f`? Pushes true/false onto the SOM
+    /// stack. Note that empty strings are considered not to satisfy the condition by definition.
+    pub fn str_is<F>(&mut self, rcv: Val, f: F) -> Result<(), Box<VMError>>
+    where
+        F: Fn(char) -> bool,
+    {
+        let str_val = rcv.downcast::<String_>(self)?;
+        let str_ = str_val.as_str();
+        if !str_.is_empty() && str_.chars().all(f) {
+            self.stack.push(self.true_);
+        } else {
+            self.stack.push(self.false_);
+        }
+        Ok(())
     }
 
     fn current_frame(&mut self) -> &mut Frame {
