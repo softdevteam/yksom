@@ -836,7 +836,10 @@ impl VM {
                 stry!(self.str_is(rcv, |x| x.is_ascii_digit()));
                 SendReturn::Val
             }
-            Primitive::IsLetters => unimplemented!(),
+            Primitive::IsLetters => {
+                stry!(self.str_is(rcv, |x| x.is_alphabetic()));
+                SendReturn::Val
+            }
             Primitive::IsWhiteSpace => unimplemented!(),
             Primitive::Length => {
                 // Only Arrays and Strings can have this primitive installed.
