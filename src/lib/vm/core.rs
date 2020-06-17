@@ -4,14 +4,17 @@ use std::{
     cell::UnsafeCell,
     collections::HashMap,
     convert::TryFrom,
+    mem::size_of,
     path::{Path, PathBuf},
     process,
     str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use lrpar::Span;
 use num_bigint::BigInt;
 use rboehm::Gc;
+use static_assertions::const_assert;
 
 use crate::{
     compiler::{
@@ -1030,7 +1033,22 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::Ticks => todo!(),
+            Primitive::Ticks => {
+                match SystemTime::now().duration_since(UNIX_EPOCH) {
+                    Ok(d) => {
+                        let t = d.as_micros();
+                        const_assert!(size_of::<usize>() <= size_of::<u128>());
+                        if t > usize::max_value() as u128 {
+                            todo!();
+                        } else {
+                            let v = Val::from_usize(self, t as usize);
+                            self.stack.push(v);
+                        }
+                    }
+                    Err(_) => todo!(),
+                }
+                SendReturn::Val
+            }
             Primitive::Time => todo!(),
             Primitive::Value(nargs) => {
                 let rcv_blk: Gc<Block> = stry!(rcv.downcast(self));
