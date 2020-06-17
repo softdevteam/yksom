@@ -774,7 +774,7 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::FullGC => {
-                self.stack.push(self.false_);
+                self.stack.push(self.true_);
                 SendReturn::Val
             }
             Primitive::Global => {
