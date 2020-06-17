@@ -44,6 +44,7 @@ num-integer = "0.1"
 num_enum = "0.4"
 num-traits = "0.2"
 ryu = "1.0"
+static_assertions = "1.1"
 termion = "1.5"
 
 # The main reason for customising the profile.* sections is to force unwind=abort.
