@@ -677,7 +677,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
                             '0' => '\0',
                             x => {
                                 return Err(vec![(
-                                    Span::new(span.start() + i - c.len_utf8(), span.start() + i + next_c.len_utf8()),
+                                    Span::new(
+                                        span.start() + i - c.len_utf8(),
+                                        span.start() + i + next_c.len_utf8(),
+                                    ),
                                     format!("Unknown escape sequence '\\{}'", x),
                                 )]);
                             }
