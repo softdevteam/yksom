@@ -656,11 +656,38 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 Ok(max_stack)
             }
             ast::Expr::String(span) => {
-                // XXX are there string escaping rules we need to take account of?
                 let s_orig = self.lexer.span_str(*span);
-                // Strip off the beginning/end quotes.
-                let s = s_orig[1..s_orig.len() - 1].to_owned();
-                let instr = Instr::String(vm.add_string(s));
+                let mut new_s = String::new();
+                // Start by ignoring the beginning quote.
+                let mut i = '\"'.len_utf8();
+                // End by ignoring the beginning quote.
+                while i < s_orig.len() - '\"'.len_utf8() {
+                    let mut c = s_orig[i..].chars().next().unwrap();
+                    if c == '\\' {
+                        i += c.len_utf8();
+                        let next_c = s_orig[i..].chars().next().unwrap();
+                        c = match next_c {
+                            't' => '\t',
+                            'b' => '\x08',
+                            'n' => '\n',
+                            'r' => '\r',
+                            'f' => '\x0C',
+                            '\'' => '\'',
+                            '\\' => '\\',
+                            '0' => '\0',
+                            x => {
+                                return Err(vec![(
+                                    Span::new(span.start() + i - c.len_utf8(), span.start() + i + next_c.len_utf8()),
+                                    format!("Unknown escape sequence '\\{}'", x),
+                                )]);
+                            }
+                        };
+                    }
+                    new_s.push(c);
+                    i += c.len_utf8();
+                }
+
+                let instr = Instr::String(vm.add_string(new_s));
                 vm.instrs_push(instr, *span);
                 Ok(1)
             }
