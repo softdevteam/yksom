@@ -142,12 +142,18 @@ impl Obj for ArbInt {
 
     fn modulus(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
-            Ok(ArbInt::new(vm, &self.val % rhs))
+            Ok(ArbInt::new(vm, ((&self.val % rhs) + rhs) % rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-            Ok(ArbInt::new(vm, &self.val % &rhs.val))
+            Ok(ArbInt::new(
+                vm,
+                ((&self.val % &rhs.val) + &rhs.val) % &rhs.val,
+            ))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             match self.val.to_f64() {
-                Some(i) => Ok(Double::new(vm, i % rhs.double())),
+                Some(i) => {
+                    let rhs = rhs.double();
+                    Ok(Double::new(vm, ((i % rhs) + rhs) % rhs))
+                }
                 None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
             }
         } else {
