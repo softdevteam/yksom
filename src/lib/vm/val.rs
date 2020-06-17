@@ -406,12 +406,14 @@ impl Val {
     pub fn modulus(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(lhs) = self.as_isize(vm) {
             if let Some(rhs) = other.as_isize(vm) {
-                return Ok(Val::from_isize(vm, lhs % rhs));
+                if rhs == 0 {
+                    return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
+                }
+                return Ok(Val::from_isize(vm, ((lhs % rhs) + rhs) % rhs));
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
-                return Ok(ArbInt::new(
-                    vm,
-                    BigInt::from_isize(lhs).unwrap() % rhs.bigint(),
-                ));
+                let lhs = BigInt::from_isize(lhs).unwrap();
+                let rhs = rhs.bigint();
+                return Ok(ArbInt::new(vm, ((lhs % rhs) + rhs) % rhs));
             } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
                 return Ok(Double::new(vm, (lhs as f64) % rhs.double()));
             }
