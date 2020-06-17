@@ -6,8 +6,12 @@ VM:
     true
     true
     true
+    true
+    true
+    true
+    true
     false
-    false
+    true
 "
 
 obj2 = (
@@ -18,5 +22,10 @@ obj2 = (
         (1.0 == 1.0) println.
         (1.0 == 1) println.
         (1 == 1.0) println.
+
+        (1.0 = 1.0) println.
+        (1 = 1.0) println.
+        (1 = 1.1) println.
+        (1.0 = 1) println.
     )
 )
