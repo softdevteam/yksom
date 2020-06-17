@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     process,
     str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
+    time::Instant,
 };
 
 use lrpar::Span;
@@ -92,6 +92,7 @@ pub struct VM {
     symbols: Vec<Val>,
     reverse_symbols: HashMap<String, usize>,
     frames: Vec<Frame>,
+    time_at_start: Instant,
 }
 
 impl VM {
@@ -140,6 +141,7 @@ impl VM {
             symbols: Vec::new(),
             reverse_symbols: HashMap::new(),
             frames: Vec::new(),
+            time_at_start: Instant::now(),
         };
 
         // These two phases must be executed in the correct order.
@@ -1034,16 +1036,14 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::Ticks => {
-                match SystemTime::now().duration_since(UNIX_EPOCH) {
-                    Ok(d) => {
-                        let t = d.as_micros();
-                        const_assert!(size_of::<usize>() <= size_of::<u128>());
-                        if t > usize::max_value() as u128 {
-                            todo!();
-                        } else {
-                            let v = Val::from_usize(self, t as usize);
-                            self.stack.push(v);
-                        }
+                const_assert!(size_of::<usize>() <= size_of::<u128>());
+                let t = Instant::now()
+                    .duration_since(self.time_at_start)
+                    .as_micros();
+                match usize::try_from(t) {
+                    Ok(t) => {
+                        let v = Val::from_usize(self, t as usize);
+                        self.stack.push(v);
                     }
                     Err(_) => todo!(),
                 }
@@ -1462,6 +1462,7 @@ impl VM {
             symbols: Vec::new(),
             reverse_symbols: HashMap::new(),
             frames: Vec::new(),
+            time_at_start: Instant::now(),
         }
     }
 }
