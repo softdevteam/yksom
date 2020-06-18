@@ -26,7 +26,12 @@ fn usage(prog: &str) -> ! {
         .file_name()
         .map(|x| x.to_str().unwrap_or("yksom"))
         .unwrap_or("yksom");
-    writeln!(&mut stderr(), "Usage: {} [-h] --cp <path> <file.som>", leaf).ok();
+    writeln!(
+        &mut stderr(),
+        "Usage: {} [-h] --cp <path> <file.som> [-- <arg_1> [... <arg_n>]]",
+        leaf
+    )
+    .ok();
     process::exit(1)
 }
 
@@ -38,7 +43,7 @@ fn main() {
         .optflag("h", "help", "")
         .parse(&args[1..])
         .unwrap_or_else(|_| usage(prog));
-    if matches.opt_present("h") || matches.free.len() != 1 {
+    if matches.opt_present("h") || matches.free.is_empty() {
         usage(prog);
     }
 
@@ -61,7 +66,15 @@ fn main() {
         None => todo!(),
     };
     let src_fname_val = String_::new_sym(&mut vm, src_fname.to_owned());
-    let args = NormalArray::from_vec(&mut vm, vec![src_fname_val]);
+    let mut args_vec = vec![src_fname_val];
+    args_vec.extend(
+        matches
+            .free
+            .iter()
+            .skip(1)
+            .map(|x| String_::new_str(&mut vm, x.to_owned())),
+    );
+    let args = NormalArray::from_vec(&mut vm, args_vec);
     match vm.top_level_send(system, "initialize:", vec![args]) {
         Ok(_) => (),
         Err(e) => {
