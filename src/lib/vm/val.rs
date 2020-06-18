@@ -577,6 +577,8 @@ macro_rules! binop_all {
                 if let Some(lhs) = self.as_isize(vm) {
                     if let Some(rhs) = other.as_isize(vm) {
                         Ok(Val::from_bool(vm, lhs $op rhs))
+                    } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
+                        Ok(Val::from_bool(vm, (lhs as f64) $op rhs.double()))
                     } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                         Ok(Val::from_bool(vm,
                             &BigInt::from_isize(lhs).unwrap() $op rhs.bigint()))
