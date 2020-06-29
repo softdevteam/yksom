@@ -26,3 +26,6 @@ fi
 
 cargo test
 cargo test --release
+
+cargo run -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
+cargo run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
