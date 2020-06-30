@@ -535,7 +535,7 @@ impl VM {
                                 // The inline cache is empty or out of date, so store a new value in it.
                                 let name = unsafe { self.sends.get_unchecked(send_idx) }.0;
                                 let cls: Gc<Class> = stry!(lookup_cls.downcast(self));
-                                let meth = match cls.get_method(self, &*name) {
+                                match cls.get_method(self, &*name) {
                                     Ok(m) => {
                                         self.inline_caches[cache_idx] = Some((lookup_cls, m));
                                         m
@@ -557,8 +557,7 @@ impl VM {
                                         continue;
                                     }
                                     Err(e) => stry!(Err(e)),
-                                };
-                                meth
+                                }
                             }
                         };
                         (rcv, nargs, meth)
@@ -1118,7 +1117,7 @@ impl VM {
                 self.stack.push(arr);
                 self.send_args_on_stack(rcv, meth)
             }
-            Err(e) => return SendReturn::Err(e),
+            Err(e) => SendReturn::Err(e),
         }
     }
 
@@ -1221,7 +1220,7 @@ impl VM {
             *i
         } else {
             let len = self.sends.len();
-            self.reverse_sends.insert(send.clone(), len);
+            self.reverse_sends.insert(send, len);
             self.sends.push(send);
             len
         }

@@ -442,9 +442,9 @@ impl Val {
                     Some(i) => return Ok(Val::from_isize(vm, i)),
                     None => return Err(VMError::new(vm, VMErrorKind::RemainderError)),
                 }
-            } else if let Some(_) = other.try_downcast::<ArbInt>(vm) {
+            } else if other.try_downcast::<ArbInt>(vm).is_some() {
                 todo!();
-            } else if let Some(_) = other.try_downcast::<Double>(vm) {
+            } else if other.try_downcast::<Double>(vm).is_some() {
                 todo!();
             }
             let got = other.dyn_objtype(vm);
