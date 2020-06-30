@@ -481,21 +481,19 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
         // Blocks return the value of the last statement, but methods return `self`.
         if is_method {
-            if exprs.len() > 0 {
+            if !exprs.is_empty() {
                 vm.instrs_push(Instr::Pop, span);
             }
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
             vm.instrs_push(Instr::VarLookup(0, 0), span);
             max_stack = max(max_stack, 1);
             vm.instrs_push(Instr::Return, span);
+        } else if exprs.is_empty() {
+            let idx = vm.add_global("nil");
+            vm.instrs_push(Instr::GlobalLookup(idx), span);
+            vm.instrs_push(Instr::Return, span);
         } else {
-            if exprs.len() == 0 {
-                let idx = vm.add_global("nil");
-                vm.instrs_push(Instr::GlobalLookup(idx), span);
-                vm.instrs_push(Instr::Return, span);
-            } else {
-                vm.instrs_push(Instr::Return, exprs.iter().last().unwrap().span());
-            }
+            vm.instrs_push(Instr::Return, exprs.iter().last().unwrap().span());
         }
         self.vars_stack.pop();
 
@@ -699,7 +697,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 let s_orig = self.lexer.span_str(*span);
                 // Strip off the beginning/end quotes.
                 let s = s_orig[1..s_orig.len() - 1].to_owned();
-                let instr = Instr::Symbol(vm.add_symbol(s.to_owned()));
+                let instr = Instr::Symbol(vm.add_symbol(s));
                 vm.instrs_push(instr, *span);
                 Ok(1)
             }

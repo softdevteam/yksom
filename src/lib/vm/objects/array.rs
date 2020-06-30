@@ -23,7 +23,7 @@ pub trait Array {
     fn at_put(&self, vm: &mut VM, idx: usize, val: Val) -> Result<(), Box<VMError>>;
 
     /// Iterate over this array's values.
-    fn iter<'a>(&'a self) -> ArrayIterator<'a>;
+    fn iter(&self) -> ArrayIterator<'_>;
 }
 
 #[derive(Debug)]
@@ -106,7 +106,7 @@ impl Array for NormalArray {
         }
     }
 
-    fn iter<'a>(&'a self) -> ArrayIterator<'a> {
+    fn iter(&self) -> ArrayIterator<'_> {
         ArrayIterator {
             arr: self,
             len: self.length(),
@@ -218,7 +218,7 @@ impl Array for MethodsArray {
         }
     }
 
-    fn iter<'a>(&'a self) -> ArrayIterator<'a> {
+    fn iter(&self) -> ArrayIterator<'_> {
         ArrayIterator {
             arr: self,
             len: self.length(),

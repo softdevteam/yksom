@@ -1,6 +1,5 @@
 use std::{
     alloc::{alloc, dealloc, Layout},
-    mem::forget,
     ptr,
 };
 
@@ -43,10 +42,7 @@ impl SOMStack {
     /// this function will lead to undefined behaviour.
     pub fn peek(&self) -> Val {
         debug_assert!(!self.is_empty());
-        let v = unsafe { ptr::read(self.storage.add(self.len - 1)) };
-        let v2 = v;
-        forget(v);
-        v2
+        unsafe { ptr::read(self.storage.add(self.len - 1)) }
     }
 
     /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
