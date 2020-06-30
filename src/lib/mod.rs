@@ -14,7 +14,6 @@
 #![feature(allocator_api)]
 #![feature(box_patterns)]
 #![feature(coerce_unsized)]
-#![feature(specialization)]
 #![feature(unsize)]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::float_cmp)]
