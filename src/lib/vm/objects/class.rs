@@ -9,6 +9,7 @@ use std::{
 };
 
 use rboehm::Gc;
+use smartstring::alias::String as SmartString;
 
 use crate::vm::{
     core::VM,
@@ -26,14 +27,14 @@ pub struct Class {
     pub instrs_off: usize,
     supercls: Cell<Val>,
     pub num_inst_vars: usize,
-    pub inst_vars_map: HashMap<String, usize>,
+    pub inst_vars_map: HashMap<SmartString, usize>,
     /// A SOM Array of methods (though note that it is *not* guaranteed that these definitely point
     /// to SOM `Method` instances -- anything can be stored in this array!).
     methods: Val,
     /// A map from method names to indexes into the methods SOM Array. Note that indexes are stored
     /// with SOM indexing (starting from 1). We guarantee that the indexes are valid indexes for
     /// the `methods` array.
-    methods_map: HashMap<String, usize>,
+    methods_map: HashMap<SmartString, usize>,
     inst_vars: UnsafeCell<Vec<Val>>,
 }
 
@@ -80,9 +81,9 @@ impl Class {
         path: PathBuf,
         instrs_off: usize,
         supercls: Val,
-        inst_vars_map: HashMap<String, usize>,
+        inst_vars_map: HashMap<SmartString, usize>,
         methods: Val,
-        methods_map: HashMap<String, usize>,
+        methods_map: HashMap<SmartString, usize>,
     ) -> Self {
         #[cfg(debug_assertions)]
         {

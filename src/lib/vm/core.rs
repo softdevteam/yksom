@@ -14,6 +14,7 @@ use std::{
 use lrpar::Span;
 use num_bigint::BigInt;
 use rboehm::Gc;
+use smartstring::alias::String as SmartString;
 use static_assertions::const_assert;
 
 use crate::{
@@ -74,23 +75,23 @@ pub struct VM {
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
     globals: Vec<Val>,
-    reverse_globals: HashMap<String, usize>,
+    reverse_globals: HashMap<SmartString, usize>,
     inline_caches: Vec<Option<(Val, Gc<Method>)>>,
     /// `instrs` and `instr_span`s are always the same length: they are separated only because we
     /// rarely access `instr_spans`.
     instrs: Vec<Instr>,
     instr_spans: Vec<Span>,
-    sends: Vec<(Gc<String>, usize)>,
+    sends: Vec<(Gc<SmartString>, usize)>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
-    reverse_sends: HashMap<(Gc<String>, usize), usize>,
+    reverse_sends: HashMap<(Gc<SmartString>, usize), usize>,
     stack: SOMStack,
     strings: Vec<Val>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
-    reverse_strings: HashMap<String, usize>,
+    reverse_strings: HashMap<SmartString, usize>,
     symbols: Vec<Val>,
-    reverse_symbols: HashMap<String, usize>,
+    reverse_symbols: HashMap<SmartString, usize>,
     frames: Vec<Frame>,
     time_at_start: Instant,
 }
@@ -483,6 +484,7 @@ impl VM {
                                 .map(|(n, _)| n)
                                 .unwrap()
                                 .to_string()
+                                .into()
                         };
                         let v = String_::new_sym(self, name);
                         self.stack.push(v);
@@ -766,7 +768,7 @@ impl VM {
                         Err(_) => {
                             return SendReturn::Err(VMError::new(
                                 self,
-                                VMErrorKind::InvalidInteger(s.to_owned()),
+                                VMErrorKind::InvalidInteger(SmartString::from(s)),
                             ))
                         }
                     },
@@ -1212,7 +1214,7 @@ impl VM {
 
     /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
     /// are also reused.
-    pub fn add_send(&mut self, send: (String, usize)) -> usize {
+    pub fn add_send(&mut self, send: (SmartString, usize)) -> usize {
         // We want to avoid `clone`ing `send` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
         let send = (Gc::new(send.0), send.1);
@@ -1228,7 +1230,7 @@ impl VM {
 
     /// Add the string `s` to the VM, returning its index. Note that strings are reused, so indexes
     /// are also reused.
-    pub fn add_string(&mut self, s: String) -> usize {
+    pub fn add_string(&mut self, s: SmartString) -> usize {
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
         if let Some(i) = self.reverse_strings.get(&s) {
@@ -1244,7 +1246,7 @@ impl VM {
 
     /// Add the symbol `s` to the VM, returning its index. Note that symbols are reused, so indexes
     /// are also reused.
-    pub fn add_symbol(&mut self, s: String) -> usize {
+    pub fn add_symbol(&mut self, s: SmartString) -> usize {
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
         if let Some(i) = self.reverse_symbols.get(&s) {
@@ -1265,7 +1267,7 @@ impl VM {
             *i
         } else {
             let len = self.globals.len();
-            self.reverse_globals.insert(s.to_owned(), len);
+            self.reverse_globals.insert(SmartString::from(s), len);
             self.globals.push(Val::illegal());
             len
         }
@@ -1312,7 +1314,7 @@ impl VM {
             self.globals[*i] = v;
         } else {
             self.reverse_globals
-                .insert(name.to_owned(), self.globals.len());
+                .insert(SmartString::from(name), self.globals.len());
             self.globals.push(v);
         }
     }
