@@ -59,7 +59,7 @@ impl Inst {
     pub fn new(vm: &mut VM, class: Val) -> Val {
         let cls: Gc<Class> = class.downcast(vm).unwrap();
         let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
-        inst_vars.resize(cls.num_inst_vars, Val::illegal());
+        inst_vars.resize(cls.num_inst_vars, vm.nil);
         let inst = Inst {
             class,
             inst_vars: UnsafeCell::new(inst_vars),
