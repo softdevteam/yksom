@@ -630,10 +630,12 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 ids,
             } => {
                 let max_stack = self.c_expr(vm, receiver)?;
-                for id in ids {
+                for (i, id) in ids.iter().enumerate() {
                     let send_off = vm.add_send((self.lexer.span_str(*id).to_string(), 0));
                     let instr = match receiver {
-                        box ast::Expr::VarLookup(span) if self.lexer.span_str(*span) == "super" => {
+                        box ast::Expr::VarLookup(span)
+                            if i == 0 && self.lexer.span_str(*span) == "super" =>
+                        {
                             Instr::SuperSend(send_off, vm.new_inline_cache())
                         }
                         _ => Instr::Send(send_off, vm.new_inline_cache()),
