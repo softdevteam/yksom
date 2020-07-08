@@ -64,23 +64,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             (vm.nil, vm.nil)
         };
 
-        // Create the "main" class.
         let mut errs = vec![];
-        let cls = match compiler.c_class(
-            vm,
-            lexer,
-            name.clone(),
-            supercls_val,
-            &astcls.inst_vars,
-            &astcls.methods,
-        ) {
-            Ok(c) => Some(c),
-            Err(e) => {
-                errs.extend(e);
-                None
-            }
-        };
-
         // Create the metaclass (i.e. for a class C, this creates a class called "C class").
         let metacls = match compiler.c_class(
             vm,
@@ -89,6 +73,22 @@ impl<'a, 'input> Compiler<'a, 'input> {
             supercls_meta_val,
             &astcls.class_inst_vars,
             &astcls.class_methods,
+        ) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                errs.extend(e);
+                None
+            }
+        };
+
+        // Create the "main" class.
+        let cls = match compiler.c_class(
+            vm,
+            lexer,
+            name.clone(),
+            supercls_val,
+            &astcls.inst_vars,
+            &astcls.methods,
         ) {
             Ok(c) => Some(c),
             Err(e) => {
@@ -147,7 +147,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let mut inst_vars = if supercls_val != vm.nil {
             let supercls = supercls_val.downcast::<Class>(vm).unwrap();
             let mut inst_vars =
-                HashMap::with_capacity(supercls.num_inst_vars + ast_inst_vars.len());
+                HashMap::with_capacity(supercls.inst_vars_map.len() + ast_inst_vars.len());
             inst_vars.extend(
                 supercls
                     .inst_vars_map

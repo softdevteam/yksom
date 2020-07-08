@@ -7,7 +7,7 @@ use rboehm::Gc;
 use crate::vm::{
     core::VM,
     objects::{Class, Obj, ObjType, StaticObjType},
-    val::{NotUnboxable, Val},
+    val::{NotUnboxable, Val, ValKind},
 };
 
 /// An instance of a user class.
@@ -32,11 +32,14 @@ impl Obj for Inst {
 
     unsafe fn unchecked_inst_var_get(&self, n: usize) -> Val {
         let inst_vars = &mut *self.inst_vars.get();
+        debug_assert!(n < inst_vars.len());
+        debug_assert!(inst_vars[n].valkind() != ValKind::ILLEGAL);
         inst_vars[n]
     }
 
     unsafe fn unchecked_inst_var_set(&self, n: usize, v: Val) {
         let inst_vars = &mut *self.inst_vars.get();
+        debug_assert!(n < inst_vars.len());
         inst_vars[n] = v;
     }
 
@@ -58,8 +61,8 @@ impl StaticObjType for Inst {
 impl Inst {
     pub fn new(vm: &mut VM, class: Val) -> Val {
         let cls: Gc<Class> = class.downcast(vm).unwrap();
-        let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
-        inst_vars.resize(cls.num_inst_vars, vm.nil);
+        let mut inst_vars = Vec::with_capacity(cls.inst_vars_map.len());
+        inst_vars.resize(cls.inst_vars_map.len(), vm.nil);
         let inst = Inst {
             class,
             inst_vars: UnsafeCell::new(inst_vars),

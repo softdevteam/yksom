@@ -275,7 +275,7 @@ impl VM {
     fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
         let (name, cls_val) = compile(self, path);
         let cls: Gc<Class> = cls_val.downcast(self).unwrap();
-        if !inst_vars_allowed && cls.num_inst_vars > 0 {
+        if !inst_vars_allowed && cls.inst_vars_map.len() > 0 {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
         self.set_global(&name, cls_val);
