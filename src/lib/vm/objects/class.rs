@@ -26,7 +26,6 @@ pub struct Class {
     /// Offset to this class's instructions in VM::instrs.
     pub instrs_off: usize,
     supercls: Cell<Val>,
-    pub num_inst_vars: usize,
     pub inst_vars_map: HashMap<SmartString, usize>,
     /// A SOM Array of methods (though note that it is *not* guaranteed that these definitely point
     /// to SOM `Method` instances -- anything can be stored in this array!).
@@ -48,12 +47,19 @@ impl Obj for Class {
         self.metacls.get()
     }
 
+    fn num_inst_vars(&self) -> usize {
+        let inst_vars = unsafe { &*self.inst_vars.get() };
+        inst_vars.len()
+    }
+
     unsafe fn unchecked_inst_var_get(&self, n: usize) -> Val {
+        debug_assert!(n < self.num_inst_vars());
         let inst_vars = &mut *self.inst_vars.get();
         inst_vars[n]
     }
 
     unsafe fn unchecked_inst_var_set(&self, n: usize, v: Val) {
+        debug_assert!(n < self.num_inst_vars());
         let inst_vars = &mut *self.inst_vars.get();
         inst_vars[n] = v;
     }
@@ -101,7 +107,6 @@ impl Class {
             path,
             instrs_off,
             supercls: Cell::new(supercls),
-            num_inst_vars: inst_vars_map.len(),
             inst_vars_map,
             methods,
             methods_map,
@@ -138,8 +143,8 @@ impl Class {
         // references.
         if cls_val.valkind() != ValKind::ILLEGAL {
             let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
-            let mut inst_vars = Vec::with_capacity(cls.num_inst_vars);
-            inst_vars.resize(cls.num_inst_vars, Val::illegal());
+            let mut inst_vars = Vec::with_capacity(cls.inst_vars_map.len());
+            inst_vars.resize(cls.inst_vars_map.len(), vm.nil);
             self.metacls.set(cls_val);
             *unsafe { &mut *self.inst_vars.get() } = inst_vars;
         }
