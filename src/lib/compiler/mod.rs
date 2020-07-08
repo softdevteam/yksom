@@ -38,7 +38,7 @@ pub fn compile(vm: &mut VM, path: &Path) -> (String, Val) {
                     process::exit(1);
                 });
             if errs.is_empty() {
-                (name, cls)
+                (name.into(), cls)
             } else {
                 process::exit(1);
             }

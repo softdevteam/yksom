@@ -8,6 +8,7 @@ use std::{
 };
 
 use rboehm::Gc;
+use smartstring::alias::String as SmartString;
 
 use crate::vm::{
     core::VM,
@@ -19,7 +20,7 @@ use crate::vm::{
 #[derive(Debug)]
 pub struct String_ {
     cls: Cell<Val>,
-    s: String,
+    s: SmartString,
 }
 
 impl Obj for String_ {
@@ -31,7 +32,7 @@ impl Obj for String_ {
         debug_assert!(
             self.cls.get().valkind() != crate::vm::val::ValKind::ILLEGAL,
             "{}",
-            self.s
+            self.s.as_str()
         );
         self.cls.get()
     }
@@ -78,7 +79,7 @@ impl StaticObjType for String_ {
 }
 
 impl String_ {
-    pub fn new_str(vm: &mut VM, s: String) -> Val {
+    pub fn new_str(vm: &mut VM, s: SmartString) -> Val {
         Val::from_obj(
             vm,
             String_ {
@@ -88,7 +89,7 @@ impl String_ {
         )
     }
 
-    pub fn new_sym(vm: &mut VM, s: String) -> Val {
+    pub fn new_sym(vm: &mut VM, s: SmartString) -> Val {
         Val::from_obj(
             vm,
             String_ {
@@ -132,10 +133,10 @@ impl String_ {
             return Ok(Val::recover(self));
         }
 
-        let mut new = String::with_capacity(self.s.len() + other_str.s.len());
+        let mut new = String::new();
         new.push_str(&self.s);
         new.push_str(&other_str.s);
-        Ok(String_::new_str(vm, new))
+        Ok(String_::new_str(vm, new.into()))
     }
 
     pub fn substring(&self, vm: &mut VM, start: usize, end: usize) -> Result<Val, Box<VMError>> {
@@ -153,16 +154,17 @@ impl String_ {
             .chars()
             .skip(start - 1)
             .take(end - start + 1)
-            .collect::<String>();
+            .collect::<String>()
+            .into();
         Ok(String_::new_str(vm, substr))
     }
 
     pub fn to_string_(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(String_::new_str(vm, self.s.to_string()))
+        Ok(String_::new_str(vm, self.s.clone()))
     }
 
     pub fn to_symbol(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(String_::new_sym(vm, self.s.to_string()))
+        Ok(String_::new_sym(vm, self.s.clone()))
     }
 
     pub fn set_cls(&self, cls: Val) {

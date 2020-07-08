@@ -2,6 +2,7 @@ use std::{fs::read_to_string, io::stderr};
 
 use lrpar::Span;
 use rboehm::Gc;
+use smartstring::alias::String as SmartString;
 use termion::{is_tty, style};
 
 use crate::vm::{
@@ -103,7 +104,7 @@ impl VMError {
             }
         }
         match self.kind.to_string(vm) {
-            Ok(s) => eprintln!("{}.", s),
+            Ok(s) => eprintln!("{}.", s.as_str()),
             Err(_) => {
                 // We could do something more clever here, but it's not clear that it's worth it.
                 eprintln!("<Fatal error when running error handler>")
@@ -162,7 +163,7 @@ pub enum VMErrorKind {
         got_cls: Val,
     },
     /// Tried to convert an invalid string to a number.
-    InvalidInteger(String),
+    InvalidInteger(SmartString),
     /// Tried to access a global before it being initialised.
     InvalidSymbol,
     /// Tried to do a shl or shr with a value below zero.
@@ -179,7 +180,7 @@ pub enum VMErrorKind {
     /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
     ShiftTooBig,
     /// An unknown global.
-    UnknownGlobal(String),
+    UnknownGlobal(SmartString),
     /// An unknown method.
     UnknownMethod,
     /// Tried calling a method with the wrong number of arguments.
@@ -225,9 +226,10 @@ impl VMErrorKind {
                     got_name.as_str()
                 ))
             }
-            VMErrorKind::InvalidInteger(s) => {
-                Ok(format!("'{}' cannot be converted to an Integer", s))
-            }
+            VMErrorKind::InvalidInteger(s) => Ok(format!(
+                "'{}' cannot be converted to an Integer",
+                s.as_str()
+            )),
             VMErrorKind::InvalidSymbol => Ok("Invalid symbol".to_owned()),
             VMErrorKind::NegativeShift => Ok("Negative shift".to_owned()),
             VMErrorKind::NotANumber { got } => Ok(format!(
@@ -237,7 +239,7 @@ impl VMErrorKind {
             VMErrorKind::PrimitiveError => Ok("Primitive Error".to_owned()),
             VMErrorKind::RemainderError => Ok("Division by zero or overflow".to_owned()),
             VMErrorKind::ShiftTooBig => Ok("Shift too big".to_owned()),
-            VMErrorKind::UnknownGlobal(name) => Ok(format!("Unknown global '{}'", name)),
+            VMErrorKind::UnknownGlobal(name) => Ok(format!("Unknown global '{}'", name.as_str())),
             VMErrorKind::UnknownMethod => Ok("Unknown method".to_owned()),
             VMErrorKind::WrongNumberOfArgs { wanted, got } => Ok(format!(
                 "Tried passing {} arguments to a function that requires {}",
