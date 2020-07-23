@@ -4,6 +4,7 @@ use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
+use rboehm::Gc;
 use smartstring::alias::String as SmartString;
 
 use crate::vm::{
@@ -22,15 +23,15 @@ pub struct Double {
 impl NotUnboxable for Double {}
 
 impl Obj for Double {
-    fn dyn_objtype(&self) -> ObjType {
+    fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::Double
     }
 
-    fn get_class(&self, vm: &mut VM) -> Val {
+    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val {
         vm.double_cls
     }
 
-    fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
+    fn to_strval(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
         let mut buf = ryu::Buffer::new();
         Ok(String_::new_str(
             vm,
@@ -38,13 +39,13 @@ impl Obj for Double {
         ))
     }
 
-    fn hashcode(&self) -> u64 {
+    fn hashcode(self: Gc<Self>) -> u64 {
         let mut hasher = DefaultHasher::new();
         hasher.write_u64(self.val.to_bits());
         hasher.finish()
     }
 
-    fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn add(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val + (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -60,7 +61,7 @@ impl Obj for Double {
         }
     }
 
-    fn double_div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn double_div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
@@ -88,7 +89,7 @@ impl Obj for Double {
         }
     }
 
-    fn modulus(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn modulus(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val % (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -104,7 +105,7 @@ impl Obj for Double {
         }
     }
 
-    fn mul(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn mul(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val * (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -120,11 +121,11 @@ impl Obj for Double {
         }
     }
 
-    fn sqrt(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
+    fn sqrt(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(Double::new(vm, self.val.sqrt()))
     }
 
-    fn sub(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn sub(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val - (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -140,11 +141,11 @@ impl Obj for Double {
         }
     }
 
-    fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn ref_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         self.equals(vm, other)
     }
 
-    fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if let Some(rhs) = other.as_isize(vm) {
             self.val == (rhs as f64)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
@@ -161,7 +162,7 @@ impl Obj for Double {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn less_than(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn less_than(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if let Some(rhs) = other.as_isize(vm) {
             self.val < (rhs as f64)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {

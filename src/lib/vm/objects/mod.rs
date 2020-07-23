@@ -82,28 +82,28 @@ impl ObjType {
 #[narrowable_rboehm(ThinObj)]
 pub trait Obj: std::fmt::Debug {
     /// What `ObjType` does this `Val` represent?
-    fn dyn_objtype(&self) -> ObjType;
+    fn dyn_objtype(self: Gc<Self>) -> ObjType;
     /// What class is this object an instance of?
-    fn get_class(&self, vm: &mut VM) -> Val;
+    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val;
 
     /// If (and only if) this object implements the [Array] trait then return a reference to this
     /// object as an [Array] trait object.
-    fn to_array(&self) -> Result<&dyn Array, Box<VMError>> {
+    fn to_array(self: Gc<Self>) -> Result<Gc<dyn Array>, Box<VMError>> {
         todo!();
     }
 
     /// Convert this object to a `Val` that represents a SOM string.
-    fn to_strval(&self, _: &mut VM) -> Result<Val, Box<VMError>> {
+    fn to_strval(self: Gc<Self>, _: &mut VM) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// How many instance variables does this object contain?
-    fn num_inst_vars(&self) -> usize {
+    fn num_inst_vars(self: Gc<Self>) -> usize {
         unreachable!();
     }
 
     /// Return the instance variable at `i` (using SOM indexing).
-    fn inst_var_at(&self, vm: &VM, i: usize) -> Result<Val, Box<VMError>> {
+    fn inst_var_at(self: Gc<Self>, vm: &VM, i: usize) -> Result<Val, Box<VMError>> {
         if i > 0 && i <= self.num_inst_vars() {
             Ok(unsafe { self.unchecked_inst_var_get(i - 1) })
         } else {
@@ -118,7 +118,7 @@ pub trait Obj: std::fmt::Debug {
     }
 
     /// Return the instance variable at `i` (using SOM indexing).
-    fn inst_var_at_put(&self, vm: &VM, i: usize, v: Val) -> Result<(), Box<VMError>> {
+    fn inst_var_at_put(self: Gc<Self>, vm: &VM, i: usize, v: Val) -> Result<(), Box<VMError>> {
         if i > 0 && i <= self.num_inst_vars() {
             unsafe { self.unchecked_inst_var_set(i - 1, v) };
             Ok(())
@@ -135,125 +135,125 @@ pub trait Obj: std::fmt::Debug {
 
     /// Lookup an instance variable in this object. If `usize` exceeds the number of instance
     /// variables this will lead to undefined behaviour.
-    unsafe fn unchecked_inst_var_get(&self, _: usize) -> Val {
+    unsafe fn unchecked_inst_var_get(self: Gc<Self>, _: usize) -> Val {
         unreachable!();
     }
 
     /// Set an instance variable in this object. If `usize` exceeds the number of instance
     /// variables this will lead to undefined behaviour.
-    unsafe fn unchecked_inst_var_set(&self, _: usize, _: Val) {
+    unsafe fn unchecked_inst_var_set(self: Gc<Self>, _: usize, _: Val) {
         unreachable!();
     }
 
     /// What is this object's length?
-    fn length(&self) -> usize {
+    fn length(self: Gc<Self>) -> usize {
         unreachable!();
     }
 
     /// What is this object's hashcode?
-    fn hashcode(&self) -> u64 {
+    fn hashcode(self: Gc<Self>) -> u64 {
         unreachable!();
     }
 
     /// Produce a new `Val` which adds `other` to this.
-    fn add(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn add(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which performs a bitwise and with `other` and this.
-    fn and(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn and(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which divides `other` from this.
-    fn div(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn div(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
-    fn double_div(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn double_div(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
-    fn modulus(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn modulus(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
-    fn mul(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn mul(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which returns the remainder of dividing this with `other`.
-    fn remainder(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn remainder(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
-    fn shl(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn shl(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the right, treating `self` as if it
     /// did not have a sign bit.
-    fn shr(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn shr(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produces a new `Val` which is the square root of this.
-    fn sqrt(&self, _: &mut VM) -> Result<Val, Box<VMError>> {
+    fn sqrt(self: Gc<Self>, _: &mut VM) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which subtracts `other` from this.
-    fn sub(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn sub(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Produce a new `Val` which performs a bitwise xor with `other` and this
-    fn xor(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn xor(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Is this `Val` reference equality equal to `other`? Only immutable SOM types are likely to
     /// want to override this.
-    fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn ref_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let other_tobj = other.tobj(vm)?;
         let other_data =
             unsafe { std::mem::transmute::<&dyn Obj, (*const u8, usize)>(&**other_tobj).0 };
         Ok(Val::from_bool(
             vm,
-            (self as *const _ as *const u8) == other_data,
+            (Gc::into_raw(self) as *const _ as *const u8) == other_data,
         ))
     }
 
     /// Does this `Val` equal `other`?
-    fn equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn equals(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Does this `Val` not equal `other`?
-    fn not_equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn not_equals(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Is this `Val` greater than `other`?
-    fn greater_than(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn greater_than(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Is this `Val` greater than or equal to `other`?
-    fn greater_than_equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn greater_than_equals(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Is this `Val` less than `other`?
-    fn less_than(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn less_than(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 
     /// Is this `Val` less than or equal to `other`?
-    fn less_than_equals(&self, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
+    fn less_than_equals(self: Gc<Self>, _: &mut VM, _: Val) -> Result<Val, Box<VMError>> {
         unreachable!();
     }
 }

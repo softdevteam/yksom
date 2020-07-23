@@ -12,8 +12,10 @@
 
 #![feature(alloc_layout_extra)]
 #![feature(allocator_api)]
+#![feature(arbitrary_self_types)]
 #![feature(box_patterns)]
 #![feature(coerce_unsized)]
+#![feature(dispatch_from_dyn)]
 #![feature(unsize)]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::float_cmp)]
