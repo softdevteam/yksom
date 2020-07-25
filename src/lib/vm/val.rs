@@ -88,9 +88,9 @@ impl Val {
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
     /// then turned into an actual object with `tobj`: failure to follow these steps will result in
     /// undefined behaviour.
-    pub fn recover(obj: &dyn Obj) -> Self {
+    pub fn recover<T: Obj + 'static>(obj: Gc<T>) -> Self {
         unsafe {
-            let ptr = Gc::into_raw(ThinObj::recover(obj));
+            let ptr = Gc::into_raw(ThinObj::recover_gc(obj));
             Val {
                 val: transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize),
             }
@@ -144,7 +144,7 @@ impl Val {
                         vm,
                         VMErrorKind::BuiltinTypeError {
                             expected: T::static_objtype(),
-                            got: tobj.deref().dyn_objtype(),
+                            got: tobj.deref().as_gc().dyn_objtype(),
                         },
                     )
                 })
@@ -274,7 +274,7 @@ impl Val {
     pub fn dyn_objtype(&self, vm: &mut VM) -> ObjType {
         match self.valkind() {
             ValKind::INT => ObjType::Int,
-            ValKind::GCBOX => self.tobj(vm).unwrap().dyn_objtype(),
+            ValKind::GCBOX => self.tobj(vm).unwrap().as_gc().dyn_objtype(),
             ValKind::ILLEGAL => unreachable!(),
         }
     }
@@ -283,7 +283,7 @@ impl Val {
     pub fn get_class(&self, vm: &mut VM) -> Val {
         match self.valkind() {
             ValKind::INT => vm.int_cls,
-            ValKind::GCBOX => self.tobj(vm).unwrap().get_class(vm),
+            ValKind::GCBOX => self.tobj(vm).unwrap().as_gc().get_class(vm),
             ValKind::ILLEGAL => unreachable!(),
         }
     }
@@ -294,7 +294,7 @@ impl Val {
                 let s = self.as_isize(vm).unwrap().to_string();
                 Ok(String_::new_str(vm, s.into()))
             }
-            ValKind::GCBOX => self.tobj(vm).unwrap().to_strval(vm),
+            ValKind::GCBOX => self.tobj(vm).unwrap().as_gc().to_strval(vm),
             ValKind::ILLEGAL => unreachable!(),
         }
     }
@@ -308,7 +308,7 @@ impl Val {
                 unreachable!()
             }
             ValKind::GCBOX => {
-                let hc = self.tobj(vm).unwrap().hashcode();
+                let hc = self.tobj(vm).unwrap().as_gc().hashcode();
                 Val::from_u64(vm, hc)
             }
             ValKind::ILLEGAL => unreachable!(),
@@ -323,7 +323,7 @@ impl Val {
                 return Ok(Val { val });
             }
         }
-        self.tobj(vm).unwrap().add(vm, other)
+        self.tobj(vm).unwrap().as_gc().add(vm, other)
     }
 
     /// Produce a new `Val` which performs a bitwise and operation with `other` and this.
@@ -344,7 +344,7 @@ impl Val {
                 VMErrorKind::BuiltinTypeError { expected, got },
             ));
         }
-        self.tobj(vm).unwrap().and(vm, other)
+        self.tobj(vm).unwrap().as_gc().and(vm, other)
     }
 
     /// Produce a new `Val` which divides `other` from this.
@@ -371,7 +371,7 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().div(vm, other)
+        self.tobj(vm).unwrap().as_gc().div(vm, other)
     }
 
     /// Produce a new `Val` which perfoms a Double divide on `other` with this.
@@ -399,7 +399,7 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().double_div(vm, other)
+        self.tobj(vm).unwrap().as_gc().double_div(vm, other)
     }
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
@@ -420,7 +420,7 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().modulus(vm, other)
+        self.tobj(vm).unwrap().as_gc().modulus(vm, other)
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
@@ -431,7 +431,7 @@ impl Val {
                 return Ok(Val { val });
             }
         }
-        self.tobj(vm).unwrap().mul(vm, other)
+        self.tobj(vm).unwrap().as_gc().mul(vm, other)
     }
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
@@ -450,7 +450,7 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().remainder(vm, other)
+        self.tobj(vm).unwrap().as_gc().remainder(vm, other)
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
@@ -485,7 +485,7 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().shl(vm, other)
+        self.tobj(vm).unwrap().as_gc().shl(vm, other)
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the right, treating `self` as if it
@@ -507,7 +507,7 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().shr(vm, other)
+        self.tobj(vm).unwrap().as_gc().shr(vm, other)
     }
 
     /// Produces a new `Val` which is the square root of this.
@@ -524,7 +524,7 @@ impl Val {
                 }
             }
         }
-        self.tobj(vm).unwrap().sqrt(vm)
+        self.tobj(vm).unwrap().as_gc().sqrt(vm)
     }
 
     /// Produce a new `Val` which subtracts `other` from this.
@@ -535,7 +535,7 @@ impl Val {
                 return Ok(Val { val });
             }
         }
-        self.tobj(vm).unwrap().sub(vm, other)
+        self.tobj(vm).unwrap().as_gc().sub(vm, other)
     }
 
     /// Produce a new `Val` which performs a bitwise xor operation with `other` and this.
@@ -556,7 +556,7 @@ impl Val {
                 VMErrorKind::BuiltinTypeError { expected, got },
             ));
         }
-        self.tobj(vm).unwrap().xor(vm, other)
+        self.tobj(vm).unwrap().as_gc().xor(vm, other)
     }
 
     /// Is this `Val` reference equal to `other`? Notice that for integers (but not Doubles)
@@ -564,7 +564,7 @@ impl Val {
     pub fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         match self.valkind() {
             ValKind::INT => self.equals(vm, other),
-            ValKind::GCBOX => self.tobj(vm)?.ref_equals(vm, other),
+            ValKind::GCBOX => self.tobj(vm)?.as_gc().ref_equals(vm, other),
             ValKind::ILLEGAL => unreachable!(),
         }
     }
@@ -586,7 +586,7 @@ macro_rules! binop_all {
                         Ok(vm.$tf)
                     }
                 } else {
-                    self.tobj(vm).unwrap().$name(vm, other)
+                    self.tobj(vm).unwrap().as_gc().$name(vm, other)
                 }
             }
         }
@@ -610,7 +610,7 @@ macro_rules! binop_typeerror {
                         }))
                     }
                 } else {
-                    self.tobj(vm).unwrap().$name(vm, other)
+                    self.tobj(vm).unwrap().as_gc().$name(vm, other)
                 }
             }
         }
@@ -634,7 +634,6 @@ mod tests {
 
     use serial_test::serial;
     use smartstring::alias::String as SmartString;
-    use std::ops::Deref;
 
     #[test]
     #[serial]
@@ -717,8 +716,8 @@ mod tests {
         let v = {
             let v = String_::new_str(&mut vm, SmartString::from("s"));
             let v_tobj = v.tobj(&mut vm).unwrap();
-            let v_int: &dyn Obj = v_tobj.deref().deref();
-            let v_recovered = Val::recover(v_int);
+            let v_str: Gc<String_> = v_tobj.downcast().unwrap();
+            let v_recovered = Val::recover(v_str);
             assert_eq!(v_recovered.val, v.val);
             v_recovered
         };

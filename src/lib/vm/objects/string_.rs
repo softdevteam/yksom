@@ -24,11 +24,11 @@ pub struct String_ {
 }
 
 impl Obj for String_ {
-    fn dyn_objtype(&self) -> ObjType {
+    fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::String_
     }
 
-    fn get_class(&self, _: &mut VM) -> Val {
+    fn get_class(self: Gc<Self>, _: &mut VM) -> Val {
         debug_assert!(
             self.cls.get().valkind() != crate::vm::val::ValKind::ILLEGAL,
             "{}",
@@ -37,7 +37,7 @@ impl Obj for String_ {
         self.cls.get()
     }
 
-    fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
+    fn to_strval(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(Val::from_obj(
             vm,
             String_ {
@@ -47,21 +47,21 @@ impl Obj for String_ {
         ))
     }
 
-    fn hashcode(&self) -> u64 {
+    fn hashcode(self: Gc<Self>) -> u64 {
         let mut s = DefaultHasher::new();
         self.s.hash(&mut s);
         s.finish()
     }
 
-    fn length(&self) -> usize {
+    fn length(self: Gc<Self>) -> usize {
         self.s.chars().count()
     }
 
-    fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn ref_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         self.equals(vm, other)
     }
 
-    fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = match other.downcast::<String_>(vm) {
             Ok(other_str) => (self.cls == other_str.cls) && (self.s == other_str.s),
             Err(_) => false,
@@ -122,7 +122,7 @@ impl String_ {
     }
 
     /// Concatenate this string with another string and return the result.
-    pub fn concatenate(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    pub fn concatenate(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let other_str: Gc<String_> = other.downcast(vm)?;
 
         // Since strings are immutable, concatenating an empty string means we don't need to

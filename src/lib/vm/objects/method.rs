@@ -2,6 +2,8 @@
 
 use std::{cell::Cell, collections::hash_map::DefaultHasher, hash::Hasher};
 
+use rboehm::Gc;
+
 use crate::{
     compiler::instrs::Primitive,
     vm::{
@@ -34,17 +36,17 @@ pub enum MethodBody {
 }
 
 impl Obj for Method {
-    fn dyn_objtype(&self) -> ObjType {
+    fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::Method
     }
 
-    fn get_class(&self, vm: &mut VM) -> Val {
+    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val {
         vm.method_cls
     }
 
-    fn hashcode(&self) -> u64 {
+    fn hashcode(self: Gc<Self>) -> u64 {
         let mut hasher = DefaultHasher::new();
-        hasher.write_usize(self as *const _ as usize);
+        hasher.write_usize(Gc::into_raw(self) as *const _ as usize);
         hasher.finish()
     }
 }

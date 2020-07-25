@@ -15,6 +15,7 @@ use std::convert::TryFrom;
 
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, Signed, ToPrimitive, Zero};
+use rboehm::Gc;
 
 use crate::vm::{
     core::VM,
@@ -32,19 +33,19 @@ pub struct ArbInt {
 impl NotUnboxable for ArbInt {}
 
 impl Obj for ArbInt {
-    fn dyn_objtype(&self) -> ObjType {
+    fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::ArbInt
     }
 
-    fn get_class(&self, vm: &mut VM) -> Val {
+    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val {
         vm.int_cls
     }
 
-    fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
+    fn to_strval(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(String_::new_str(vm, self.val.to_string().into()))
     }
 
-    fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn add(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, &self.val + rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
@@ -60,7 +61,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn and(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn and(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(
                 vm,
@@ -78,7 +79,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
@@ -105,7 +106,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn double_div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn double_div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
@@ -140,7 +141,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn modulus(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn modulus(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, ((&self.val % rhs) + rhs) % rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
@@ -162,7 +163,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn mul(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn mul(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, &self.val * rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
@@ -178,11 +179,11 @@ impl Obj for ArbInt {
         }
     }
 
-    fn remainder(&self, _vm: &mut VM, _other: Val) -> Result<Val, Box<VMError>> {
+    fn remainder(self: Gc<Self>, _vm: &mut VM, _other: Val) -> Result<Val, Box<VMError>> {
         todo!();
     }
 
-    fn shl(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn shl(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs < 0 {
                 Err(VMError::new(vm, VMErrorKind::NegativeShift))
@@ -199,7 +200,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn shr(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn shr(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs < 0 {
                 Err(VMError::new(vm, VMErrorKind::NegativeShift))
@@ -220,7 +221,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn sqrt(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
+    fn sqrt(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
         if self.val < Zero::zero() {
             Err(VMError::new(vm, VMErrorKind::DomainError))
         } else {
@@ -233,7 +234,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn sub(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn sub(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, &self.val - rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
@@ -249,7 +250,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn xor(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn xor(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(
                 vm,
@@ -267,7 +268,7 @@ impl Obj for ArbInt {
         }
     }
 
-    fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn ref_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             self.val == rhs.val
         } else {
@@ -276,7 +277,7 @@ impl Obj for ArbInt {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
             false
@@ -288,7 +289,7 @@ impl Obj for ArbInt {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn not_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn not_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(self.val != BigInt::from_isize(other.as_isize(vm).unwrap()).unwrap());
             true
@@ -300,7 +301,7 @@ impl Obj for ArbInt {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn greater_than(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn greater_than(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(
                 !self.val.is_positive()
@@ -316,7 +317,7 @@ impl Obj for ArbInt {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn greater_than_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn greater_than_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(
                 !self.val.is_positive()
@@ -332,7 +333,7 @@ impl Obj for ArbInt {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn less_than(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn less_than(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(
                 !self.val.is_negative()
@@ -348,7 +349,7 @@ impl Obj for ArbInt {
         Ok(Val::from_bool(vm, b))
     }
 
-    fn less_than_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn less_than_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = if other.dyn_objtype(vm) == ObjType::Int {
             debug_assert!(
                 !self.val.is_negative()
@@ -396,19 +397,19 @@ pub struct Int {
 }
 
 impl Obj for Int {
-    fn dyn_objtype(&self) -> ObjType {
+    fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::Int
     }
 
-    fn get_class(&self, vm: &mut VM) -> Val {
+    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val {
         vm.int_cls
     }
 
-    fn to_strval(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
+    fn to_strval(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
         Ok(String_::new_str(vm, self.val.to_string().into()))
     }
 
-    fn add(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn add(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             match self.val.checked_add(rhs) {
                 Some(i) => Ok(Val::from_isize(vm, i)),
@@ -427,7 +428,7 @@ impl Obj for Int {
         }
     }
 
-    fn div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
@@ -457,7 +458,7 @@ impl Obj for Int {
         }
     }
 
-    fn mul(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn mul(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             match self.val.checked_mul(rhs) {
                 Some(i) => Ok(Val::from_isize(vm, i)),
@@ -476,7 +477,7 @@ impl Obj for Int {
         }
     }
 
-    fn sub(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
+    fn sub(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         if let Some(rhs) = other.as_isize(vm) {
             match self.val.checked_sub(rhs) {
                 Some(i) => Ok(Val::from_isize(vm, i)),
@@ -593,12 +594,22 @@ mod tests {
         assert!(bi.downcast::<ArbInt>(&mut vm).is_ok());
         let v = Val::from_isize(&mut vm, 1 << (TAG_BITSIZE + 2));
         assert_eq!(
-            bi.tobj(&mut vm).unwrap().sub(&mut vm, v).unwrap().valkind(),
+            bi.tobj(&mut vm)
+                .unwrap()
+                .as_gc()
+                .sub(&mut vm, v)
+                .unwrap()
+                .valkind(),
             ValKind::GCBOX
         );
         let v = Val::from_isize(&mut vm, isize::max_value());
         assert_eq!(
-            bi.tobj(&mut vm).unwrap().sub(&mut vm, v).unwrap().valkind(),
+            bi.tobj(&mut vm)
+                .unwrap()
+                .as_gc()
+                .sub(&mut vm, v)
+                .unwrap()
+                .valkind(),
             ValKind::INT
         );
         // Different LHS and RHS types

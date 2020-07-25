@@ -18,34 +18,34 @@ pub struct Inst {
 }
 
 impl Obj for Inst {
-    fn dyn_objtype(&self) -> ObjType {
+    fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::Inst
     }
 
-    fn get_class(&self, _: &mut VM) -> Val {
+    fn get_class(self: Gc<Self>, _: &mut VM) -> Val {
         self.class
     }
 
-    fn num_inst_vars(&self) -> usize {
+    fn num_inst_vars(self: Gc<Self>) -> usize {
         unsafe { &*self.inst_vars.get() }.len()
     }
 
-    unsafe fn unchecked_inst_var_get(&self, n: usize) -> Val {
+    unsafe fn unchecked_inst_var_get(self: Gc<Self>, n: usize) -> Val {
         let inst_vars = &mut *self.inst_vars.get();
         debug_assert!(n < inst_vars.len());
         debug_assert!(inst_vars[n].valkind() != ValKind::ILLEGAL);
         inst_vars[n]
     }
 
-    unsafe fn unchecked_inst_var_set(&self, n: usize, v: Val) {
+    unsafe fn unchecked_inst_var_set(self: Gc<Self>, n: usize, v: Val) {
         let inst_vars = &mut *self.inst_vars.get();
         debug_assert!(n < inst_vars.len());
         inst_vars[n] = v;
     }
 
-    fn hashcode(&self) -> u64 {
+    fn hashcode(self: Gc<Self>) -> u64 {
         let mut hasher = DefaultHasher::new();
-        hasher.write_usize(self as *const _ as usize);
+        hasher.write_usize(Gc::into_raw(self) as *const _ as usize);
         hasher.finish()
     }
 }

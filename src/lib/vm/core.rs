@@ -494,12 +494,13 @@ impl VM {
                 }
                 Instr::InstVarLookup(n) => {
                     let inst = stry!(rcv.tobj(self));
-                    self.stack.push(unsafe { inst.unchecked_inst_var_get(n) });
+                    self.stack
+                        .push(unsafe { inst.as_gc().unchecked_inst_var_get(n) });
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst = stry!(rcv.tobj(self));
-                    unsafe { inst.unchecked_inst_var_set(n, self.stack.peek()) };
+                    unsafe { inst.as_gc().unchecked_inst_var_set(n, self.stack.peek()) };
                     pc += 1;
                 }
                 Instr::Int(i) => {
@@ -674,7 +675,7 @@ impl VM {
             }
             Primitive::At => {
                 let rcv_tobj = stry!(rcv.tobj(self));
-                let arr = stry!(rcv_tobj.to_array());
+                let arr = stry!(rcv_tobj.as_gc().to_array());
                 let idx = stry!(self.stack.pop().as_usize(self));
                 let v = stry!(arr.at(self, idx));
                 self.stack.push(v);
@@ -682,7 +683,7 @@ impl VM {
             }
             Primitive::AtPut => {
                 let rcv_tobj = stry!(rcv.tobj(self));
-                let arr = stry!(rcv_tobj.to_array());
+                let arr = stry!(rcv_tobj.as_gc().to_array());
                 let v = self.stack.pop();
                 let idx = stry!(self.stack.pop().as_usize(self));
                 stry!(arr.at_put(self, idx, v));
@@ -824,7 +825,7 @@ impl VM {
             Primitive::InstVarAt => {
                 let n = stry!(self.stack.pop().as_usize(self));
                 let inst = stry!(rcv.tobj(self));
-                let v = stry!(inst.inst_var_at(self, n));
+                let v = stry!(inst.as_gc().inst_var_at(self, n));
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -832,7 +833,7 @@ impl VM {
                 let v = self.stack.pop();
                 let n = stry!(self.stack.pop().as_usize(self));
                 let inst = stry!(rcv.tobj(self));
-                stry!(inst.inst_var_at_put(self, n, v));
+                stry!(inst.as_gc().inst_var_at_put(self, n, v));
                 self.stack.push(rcv);
                 SendReturn::Val
             }
@@ -854,7 +855,7 @@ impl VM {
                 // Only Arrays and Strings can have this primitive installed.
                 debug_assert!(rcv.valkind() == ValKind::GCBOX);
                 let tobj = rcv.tobj(self).unwrap();
-                let v = Val::from_usize(self, tobj.length());
+                let v = Val::from_usize(self, tobj.as_gc().length());
                 self.stack.push(v);
                 SendReturn::Val
             }
@@ -1088,17 +1089,17 @@ impl VM {
         }
 
         let args_tobj = stry!(args_val.tobj(self));
-        let args = stry!(args_tobj.to_array());
+        let args = stry!(args_tobj.as_gc().to_array());
         let sig = stry!(String_::symbol_to_string_(self, sig_val));
         let cls = stry!(cls_val.downcast::<Class>(self));
         match cls.get_method(self, sig.as_str()) {
             Ok(m) => {
-                if args_tobj.length() != m.num_params() {
+                if args_tobj.as_gc().length() != m.num_params() {
                     return SendReturn::Err(VMError::new(
                         self,
                         VMErrorKind::WrongNumberOfArgs {
                             wanted: m.num_params(),
-                            got: args_tobj.length(),
+                            got: args_tobj.as_gc().length(),
                         },
                     ));
                 }
