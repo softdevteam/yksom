@@ -47,19 +47,19 @@ impl Obj for Class {
         self.metacls.get()
     }
 
-    fn num_inst_vars(self: Gc<Self>) -> usize {
+    fn num_inst_vars(self: Gc<Self>, _: &VM) -> usize {
         let inst_vars = unsafe { &*self.inst_vars.get() };
         inst_vars.len()
     }
 
-    unsafe fn unchecked_inst_var_get(self: Gc<Self>, n: usize) -> Val {
-        debug_assert!(n < self.num_inst_vars());
+    unsafe fn unchecked_inst_var_get(self: Gc<Self>, vm: &VM, n: usize) -> Val {
+        debug_assert!(n < self.num_inst_vars(vm));
         let inst_vars = &mut *self.inst_vars.get();
         inst_vars[n]
     }
 
-    unsafe fn unchecked_inst_var_set(self: Gc<Self>, n: usize, v: Val) {
-        debug_assert!(n < self.num_inst_vars());
+    unsafe fn unchecked_inst_var_set(self: Gc<Self>, vm: &VM, n: usize, v: Val) {
+        debug_assert!(n < self.num_inst_vars(vm));
         let inst_vars = &mut *self.inst_vars.get();
         inst_vars[n] = v;
     }
@@ -90,7 +90,7 @@ impl Class {
         inst_vars_map: HashMap<SmartString, usize>,
         methods: Val,
         methods_map: HashMap<SmartString, usize>,
-    ) -> Self {
+    ) -> Val {
         #[cfg(debug_assertions)]
         {
             // We later use the indexes in methods_map with Array::unchecked_at, so we make sure at
@@ -101,7 +101,8 @@ impl Class {
                 debug_assert!(*i <= arr.length());
             }
         }
-        let cls = Class {
+
+        let cls_val = Val::from_obj(Class {
             metacls: Cell::new(metacls),
             name: Cell::new(name),
             path,
@@ -111,9 +112,10 @@ impl Class {
             methods,
             methods_map,
             inst_vars: UnsafeCell::new(vec![]),
-        };
+        });
+        let cls = cls_val.downcast::<Class>(vm).unwrap();
         cls.set_metacls(vm, metacls);
-        cls
+        cls_val
     }
 
     pub fn name(&self, _: &VM) -> Result<Val, Box<VMError>> {

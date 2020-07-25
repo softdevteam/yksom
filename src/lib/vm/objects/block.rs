@@ -71,15 +71,13 @@ impl Block {
             2 => vm.block3_cls,
             _ => unimplemented!(),
         };
-        Val::from_obj(
-            vm,
-            Block {
-                method,
-                inst,
-                blockn_cls,
-                blockinfo_off,
-                parent_closure,
-            },
-        )
+
+        Val::from_obj(Block {
+            method,
+            inst,
+            blockn_cls,
+            blockinfo_off,
+            parent_closure,
+        })
     }
 }

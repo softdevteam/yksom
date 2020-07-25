@@ -43,15 +43,12 @@ impl Obj for String_ {
         self.cls.get()
     }
 
-    fn to_strval(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(Val::from_obj(
-            vm,
-            String_ {
-                cls: self.cls.clone(),
-                chars_len: Cell::new(usize::MAX),
-                s: self.s.clone(),
-            },
-        ))
+    fn to_strval(self: Gc<Self>, _: &mut VM) -> Result<Val, Box<VMError>> {
+        Ok(Val::from_obj(String_ {
+            cls: self.cls.clone(),
+            chars_len: self.chars_len.clone(),
+            s: self.s.clone(),
+        }))
     }
 
     fn hashcode(self: Gc<Self>) -> u64 {
@@ -98,25 +95,19 @@ impl String_ {
     /// Create a new `String_` whose number of Unicode characters is already known. Note that it is
     /// safe to pass `usize::MAX` for `chars_len`.
     fn new_str_chars_len(vm: &mut VM, s: SmartString, chars_len: usize) -> Val {
-        Val::from_obj(
-            vm,
-            String_ {
-                cls: Cell::new(vm.str_cls),
-                chars_len: Cell::new(chars_len),
-                s,
-            },
-        )
+        Val::from_obj(String_ {
+            cls: Cell::new(vm.str_cls),
+            chars_len: Cell::new(chars_len),
+            s,
+        })
     }
 
     pub fn new_sym(vm: &mut VM, s: SmartString) -> Val {
-        Val::from_obj(
-            vm,
-            String_ {
-                cls: Cell::new(vm.sym_cls),
-                chars_len: Cell::new(usize::MAX),
-                s,
-            },
-        )
+        Val::from_obj(String_ {
+            cls: Cell::new(vm.sym_cls),
+            chars_len: Cell::new(usize::MAX),
+            s,
+        })
     }
 
     /// If the value `v` represents a `String_` which is an instance of the SOM `Symbol` class (and

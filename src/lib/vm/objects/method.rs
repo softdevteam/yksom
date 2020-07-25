@@ -60,13 +60,13 @@ impl StaticObjType for Method {
 }
 
 impl Method {
-    pub fn new(vm: &VM, sig: Val, num_params: usize, body: MethodBody) -> Method {
-        Method {
+    pub fn new(vm: &VM, sig: Val, num_params: usize, body: MethodBody) -> Val {
+        Val::from_obj(Method {
             sig: Cell::new(sig),
             num_params,
             body,
             holder: Cell::new(vm.nil),
-        }
+        })
     }
 
     pub fn holder(&self) -> Val {
