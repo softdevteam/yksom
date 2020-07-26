@@ -249,8 +249,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 let name = pairs
                     .iter()
                     .map(|x| self.lexer.span_str(x.0))
-                    .collect::<SmartString>()
-                    .into();
+                    .collect::<SmartString>();
                 let args = pairs.iter().map(|x| x.1).collect::<Vec<_>>();
                 ((pairs[0].0, name), args)
             }
