@@ -158,7 +158,7 @@ impl NormalArray {
     /// with a pointer to the uninitialised backing store. After `init` completes, the backing
     /// store will be considered fully initialised: failure to fully initialise it causes undefined
     /// behaviour.
-    unsafe fn alloc<F>(len: usize, init: F) -> Val
+    pub unsafe fn alloc<F>(len: usize, init: F) -> Val
     where
         F: FnOnce(*mut Val),
     {
