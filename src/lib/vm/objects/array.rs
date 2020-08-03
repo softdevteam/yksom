@@ -137,7 +137,7 @@ impl Array for NormalArray {
 impl NormalArray {
     pub fn new(vm: &VM, len: usize) -> Val {
         unsafe {
-            NormalArray::alloc(vm, len, |mut store: *mut Val| {
+            NormalArray::alloc(len, |mut store: *mut Val| {
                 for _ in 0..len {
                     store.write(vm.nil);
                     store = store.add(1);
@@ -146,9 +146,9 @@ impl NormalArray {
         }
     }
 
-    pub fn from_vec(vm: &VM, v: Vec<Val>) -> Val {
+    pub fn from_vec(v: Vec<Val>) -> Val {
         unsafe {
-            NormalArray::alloc(vm, v.len(), |store: *mut Val| {
+            NormalArray::alloc(v.len(), |store: *mut Val| {
                 copy_nonoverlapping(v.as_ptr(), store, v.len());
             })
         }
@@ -158,7 +158,7 @@ impl NormalArray {
     /// with a pointer to the uninitialised backing store. After `init` completes, the backing
     /// store will be considered fully initialised: failure to fully initialise it causes undefined
     /// behaviour.
-    unsafe fn alloc<F>(_: &VM, len: usize, init: F) -> Val
+    unsafe fn alloc<F>(len: usize, init: F) -> Val
     where
         F: FnOnce(*mut Val),
     {

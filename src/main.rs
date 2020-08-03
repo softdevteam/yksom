@@ -75,7 +75,7 @@ fn main() {
             .skip(1)
             .map(|x| String_::new_str(&mut vm, SmartString::from(x))),
     );
-    let args = NormalArray::from_vec(&mut vm, args_vec);
+    let args = NormalArray::from_vec(args_vec);
     match vm.top_level_send(system, "initialize:", vec![args]) {
         Ok(_) => (),
         Err(e) => {

@@ -185,7 +185,7 @@ impl Class {
             .keys()
             .map(|k| String_::new_sym(vm, k.clone()))
             .collect();
-        NormalArray::from_vec(vm, field_strs)
+        NormalArray::from_vec(field_strs)
     }
 
     pub fn methods(&self, _: &VM) -> Val {
