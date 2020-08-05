@@ -77,14 +77,6 @@ impl Val {
         }
     }
 
-    /// If this `Val` is a `GCBox` then convert it into `ThinObj`; if this `Val` is not a `GCBox`
-    /// then undefined behaviour will occur (hence why this function is `unsafe`).
-    unsafe fn val_to_tobj(&self) -> Gc<ThinObj> {
-        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
-        let ptr = (self.val & !(ValKind::GCBOX as usize)) as *const ThinObj;
-        Gc::from_raw(ptr)
-    }
-
     /// Convert `obj` into a `Val`. `Obj` must previously have been created via `Val::from_obj` and
     /// then turned into an actual object with `tobj`: failure to follow these steps will result in
     /// undefined behaviour.
@@ -161,6 +153,14 @@ impl Val {
             ValKind::GCBOX => unsafe { self.val_to_tobj() }.downcast(),
             ValKind::ILLEGAL => unreachable!(),
         }
+    }
+
+    /// If this `Val` is a `GCBox` then convert it into `ThinObj`; if this `Val` is not a `GCBox`
+    /// then undefined behaviour will occur (hence why this function is `unsafe`).
+    unsafe fn val_to_tobj(&self) -> Gc<ThinObj> {
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        let ptr = (self.val & !(ValKind::GCBOX as usize)) as *const ThinObj;
+        Gc::from_raw(ptr)
     }
 
     /// Return this `Val`'s box. If the `Val` refers to an unboxed value, this will box it.
