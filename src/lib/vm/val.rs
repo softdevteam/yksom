@@ -130,7 +130,7 @@ impl Val {
                 },
             )),
             ValKind::GCBOX => {
-                let tobj = unsafe { self.val_to_tobj() };
+                let tobj = unsafe { self.gcbox_to_tobj() };
                 tobj.downcast().ok_or_else(|| {
                     VMError::new(
                         vm,
@@ -150,14 +150,14 @@ impl Val {
     pub fn try_downcast<T: Obj + StaticObjType + NotUnboxable>(&self, _: &VM) -> Option<Gc<T>> {
         match self.valkind() {
             ValKind::INT => None,
-            ValKind::GCBOX => unsafe { self.val_to_tobj() }.downcast(),
+            ValKind::GCBOX => unsafe { self.gcbox_to_tobj() }.downcast(),
             ValKind::ILLEGAL => unreachable!(),
         }
     }
 
     /// If this `Val` is a `GCBox` then convert it into `ThinObj`; if this `Val` is not a `GCBox`
     /// then undefined behaviour will occur (hence why this function is `unsafe`).
-    unsafe fn val_to_tobj(&self) -> Gc<ThinObj> {
+    unsafe fn gcbox_to_tobj(&self) -> Gc<ThinObj> {
         debug_assert_eq!(self.valkind(), ValKind::GCBOX);
         let ptr = (self.val & !(ValKind::GCBOX as usize)) as *const ThinObj;
         Gc::from_raw(ptr)
@@ -168,7 +168,7 @@ impl Val {
         match self.valkind() {
             ValKind::GCBOX => {
                 debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-                Ok(unsafe { self.val_to_tobj() })
+                Ok(unsafe { self.gcbox_to_tobj() })
             }
             ValKind::INT => {
                 let i = self.as_isize(vm).unwrap();
