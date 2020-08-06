@@ -20,6 +20,12 @@ use crate::vm::{
 #[derive(Debug)]
 pub struct String_ {
     cls: Cell<Val>,
+    /// The number of Unicode characters in this string. This is initialised lazily: usize::MAX is
+    /// the marker that means both `this string contains usize::MAX characters` and `we don't know
+    /// how many characters this string has`. The former condition is rather unlikely, so we accept
+    /// that if anyone ever manages to make a string of usize::MAX characters, we won't cache its
+    /// length correctly, but will recalculate it each time.
+    chars_len: Cell<usize>,
     s: SmartString,
 }
 
@@ -42,6 +48,7 @@ impl Obj for String_ {
             vm,
             String_ {
                 cls: self.cls.clone(),
+                chars_len: Cell::new(usize::MAX),
                 s: self.s.clone(),
             },
         ))
@@ -54,7 +61,12 @@ impl Obj for String_ {
     }
 
     fn length(self: Gc<Self>) -> usize {
-        self.s.chars().count()
+        if self.chars_len.get() < usize::MAX {
+            return self.chars_len.get();
+        }
+        let chars_len = self.s.chars().count();
+        self.chars_len.set(chars_len);
+        chars_len
     }
 
     fn ref_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
@@ -80,10 +92,17 @@ impl StaticObjType for String_ {
 
 impl String_ {
     pub fn new_str(vm: &mut VM, s: SmartString) -> Val {
+        String_::new_str_chars_len(vm, s, usize::MAX)
+    }
+
+    /// Create a new `String_` whose number of Unicode characters is already known. Note that it is
+    /// safe to pass `usize::MAX` for `chars_len`.
+    fn new_str_chars_len(vm: &mut VM, s: SmartString, chars_len: usize) -> Val {
         Val::from_obj(
             vm,
             String_ {
                 cls: Cell::new(vm.str_cls),
+                chars_len: Cell::new(chars_len),
                 s,
             },
         )
@@ -94,6 +113,7 @@ impl String_ {
             vm,
             String_ {
                 cls: Cell::new(vm.sym_cls),
+                chars_len: Cell::new(usize::MAX),
                 s,
             },
         )
@@ -136,7 +156,18 @@ impl String_ {
         let mut new = String::new();
         new.push_str(&self.s);
         new.push_str(&other_str.s);
-        Ok(String_::new_str(vm, new.into()))
+        if self.chars_len.get() != usize::MAX && other_str.chars_len.get() != usize::MAX {
+            // If both strings have had their number of characters initialised then we can
+            // initialise the new string with its `chars_len` eagerly initialised.
+            let chars_len = self
+                .chars_len
+                .get()
+                .checked_add(other_str.chars_len.get())
+                .unwrap();
+            Ok(String_::new_str_chars_len(vm, new.into(), chars_len))
+        } else {
+            Ok(String_::new_str(vm, new.into()))
+        }
     }
 
     pub fn substring(&self, vm: &mut VM, start: usize, end: usize) -> Result<Val, Box<VMError>> {
@@ -156,11 +187,15 @@ impl String_ {
             .take(end - start + 1)
             .collect::<String>()
             .into();
-        Ok(String_::new_str(vm, substr))
+        Ok(String_::new_str_chars_len(vm, substr, end - start))
     }
 
     pub fn to_string_(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        Ok(String_::new_str(vm, self.s.clone()))
+        Ok(String_::new_str_chars_len(
+            vm,
+            self.s.clone(),
+            self.chars_len.get(),
+        ))
     }
 
     pub fn to_symbol(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
