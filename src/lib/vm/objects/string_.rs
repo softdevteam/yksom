@@ -156,18 +156,11 @@ impl String_ {
         let mut new = String::new();
         new.push_str(&self.s);
         new.push_str(&other_str.s);
-        if self.chars_len.get() != usize::MAX && other_str.chars_len.get() != usize::MAX {
-            // If both strings have had their number of characters initialised then we can
-            // initialise the new string with its `chars_len` eagerly initialised.
-            let chars_len = self
-                .chars_len
-                .get()
-                .checked_add(other_str.chars_len.get())
-                .unwrap();
-            Ok(String_::new_str_chars_len(vm, new.into(), chars_len))
-        } else {
-            Ok(String_::new_str(vm, new.into()))
-        }
+        let chars_len = self
+            .chars_len
+            .get()
+            .saturating_add(other_str.chars_len.get());
+        Ok(String_::new_str_chars_len(vm, new.into(), chars_len))
     }
 
     pub fn substring(&self, vm: &mut VM, start: usize, end: usize) -> Result<Val, Box<VMError>> {
