@@ -344,7 +344,8 @@ impl Val {
                 VMErrorKind::BuiltinTypeError { expected, got },
             ));
         }
-        self.tobj(vm).unwrap().as_gc().and(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().and(vm, other)
     }
 
     /// Produce a new `Val` which divides `other` from this.
@@ -371,7 +372,8 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().as_gc().div(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().div(vm, other)
     }
 
     /// Produce a new `Val` which perfoms a Double divide on `other` with this.
@@ -399,7 +401,10 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().as_gc().double_div(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }
+            .as_gc()
+            .double_div(vm, other)
     }
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
@@ -420,7 +425,8 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().as_gc().modulus(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().modulus(vm, other)
     }
 
     /// Produce a new `Val` which multiplies `other` to this.
@@ -450,7 +456,8 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().as_gc().remainder(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().remainder(vm, other)
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
@@ -485,7 +492,8 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().as_gc().shl(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().shl(vm, other)
     }
 
     /// Produce a new `Val` which shifts `self` `other` bits to the right, treating `self` as if it
@@ -507,7 +515,8 @@ impl Val {
             let got = other.dyn_objtype(vm);
             return Err(VMError::new(vm, VMErrorKind::NotANumber { got }));
         }
-        self.tobj(vm).unwrap().as_gc().shr(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().shr(vm, other)
     }
 
     /// Produces a new `Val` which is the square root of this.
@@ -524,7 +533,8 @@ impl Val {
                 }
             }
         }
-        self.tobj(vm).unwrap().as_gc().sqrt(vm)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().sqrt(vm)
     }
 
     /// Produce a new `Val` which subtracts `other` from this.
@@ -556,7 +566,8 @@ impl Val {
                 VMErrorKind::BuiltinTypeError { expected, got },
             ));
         }
-        self.tobj(vm).unwrap().as_gc().xor(vm, other)
+        debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+        unsafe { self.gcbox_to_tobj() }.as_gc().xor(vm, other)
     }
 
     /// Is this `Val` reference equal to `other`? Notice that for integers (but not Doubles)
@@ -564,7 +575,9 @@ impl Val {
     pub fn ref_equals(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         match self.valkind() {
             ValKind::INT => self.equals(vm, other),
-            ValKind::GCBOX => self.tobj(vm)?.as_gc().ref_equals(vm, other),
+            ValKind::GCBOX => unsafe { self.gcbox_to_tobj() }
+                .as_gc()
+                .ref_equals(vm, other),
             ValKind::ILLEGAL => unreachable!(),
         }
     }
@@ -586,7 +599,8 @@ macro_rules! binop_all {
                         Ok(vm.$tf)
                     }
                 } else {
-                    self.tobj(vm).unwrap().as_gc().$name(vm, other)
+                    debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+                    unsafe { self.gcbox_to_tobj() }.as_gc().$name(vm, other)
                 }
             }
         }
@@ -610,7 +624,8 @@ macro_rules! binop_typeerror {
                         }))
                     }
                 } else {
-                    self.tobj(vm).unwrap().as_gc().$name(vm, other)
+                    debug_assert_eq!(self.valkind(), ValKind::GCBOX);
+                    unsafe { self.gcbox_to_tobj() }.as_gc().$name(vm, other)
                 }
             }
         }
