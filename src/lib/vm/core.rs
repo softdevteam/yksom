@@ -341,7 +341,7 @@ impl VM {
                 for a in args {
                     self.stack.push(a);
                 }
-                let frame = Frame::new(self, None, rcv, None, num_vars, meth.num_params());
+                let frame = Frame::new_method(self, rcv, num_vars, meth.num_params());
                 self.frames.push(frame);
                 let r = self.exec_user(rcv, meth, bytecode_off);
                 self.frame_pop();
@@ -365,7 +365,7 @@ impl VM {
                 if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute method.");
                 }
-                let nframe = Frame::new(self, None, rcv, None, num_vars, method.num_params());
+                let nframe = Frame::new_method(self, rcv, num_vars, method.num_params());
                 self.frames.push(nframe);
                 let r = self.exec_user(rcv, method, bytecode_off);
                 self.frame_pop();
@@ -1061,14 +1061,8 @@ impl VM {
                 if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute block.");
                 }
-                let frame = Frame::new(
-                    self,
-                    Some(rcv),
-                    rcv,
-                    Some(rcv_blk.parent_closure),
-                    num_vars,
-                    nargs as usize,
-                );
+                let frame =
+                    Frame::new_block(self, rcv, rcv_blk.parent_closure, num_vars, nargs as usize);
                 self.frames.push(frame);
                 let r = self.exec_user(rcv_blk.inst, rcv_blk.method, bytecode_off);
                 self.frame_pop();
@@ -1331,38 +1325,46 @@ pub struct Frame {
 }
 
 impl Frame {
-    fn new(
+    fn new_block(
         vm: &mut VM,
-        block: Option<Val>,
-        self_val: Val,
-        parent_closure: Option<Gc<Closure>>,
+        block: Val,
+        parent_closure: Gc<Closure>,
         num_vars: usize,
         num_args: usize,
     ) -> Self {
         let mut vars = Vec::with_capacity(num_vars);
         vars.resize_with(num_vars, Val::illegal);
 
-        if block.is_none() {
-            vars[0] = self_val;
-            for i in 0..num_args {
-                vars[num_args - i] = vm.stack.pop();
-            }
-            for v in vars.iter_mut().skip(num_args + 1).take(num_vars) {
-                *v = vm.nil;
-            }
-        } else {
-            for i in 0..num_args {
-                vars[num_args - i - 1] = vm.stack.pop();
-            }
-            for v in vars.iter_mut().skip(num_args).take(num_vars) {
-                *v = vm.nil;
-            }
+        for i in 0..num_args {
+            vars[num_args - i - 1] = vm.stack.pop();
+        }
+        for v in vars.iter_mut().skip(num_args).take(num_vars) {
+            *v = vm.nil;
         }
 
         Frame {
             sp: 0,
-            block,
-            closure: Gc::new(Closure::new(parent_closure, vars)),
+            block: Some(block),
+            closure: Gc::new(Closure::new(Some(parent_closure), vars)),
+        }
+    }
+
+    fn new_method(vm: &mut VM, self_val: Val, num_vars: usize, num_args: usize) -> Self {
+        let mut vars = Vec::with_capacity(num_vars);
+        vars.resize_with(num_vars, Val::illegal);
+
+        vars[0] = self_val;
+        for i in 0..num_args {
+            vars[num_args - i] = vm.stack.pop();
+        }
+        for v in vars.iter_mut().skip(num_args + 1).take(num_vars) {
+            *v = vm.nil;
+        }
+
+        Frame {
+            sp: 0,
+            block: None,
+            closure: Gc::new(Closure::new(None, vars)),
         }
     }
 
@@ -1483,7 +1485,7 @@ mod tests {
         vm.stack.push(v);
         let v = Val::from_isize(&mut vm, 44);
         vm.stack.push(v);
-        let f = Frame::new(&mut vm, None, selfv, None, 3, 2);
+        let f = Frame::new_method(&mut vm, selfv, 3, 2);
         assert_eq!(f.var_lookup(0, 0).as_isize(&mut vm).unwrap(), 42);
         assert_eq!(f.var_lookup(0, 1).as_isize(&mut vm).unwrap(), 43);
         assert_eq!(f.var_lookup(0, 2).as_isize(&mut vm).unwrap(), 44);
