@@ -255,9 +255,16 @@ impl<'a, 'input> Compiler<'a, 'input> {
             }
         };
         let args_len = args.len();
+        // We later have to go over all the `BlockInfo`s and update their `method` field to point
+        // to this method, once it has been created.
+        let blk_infos_start = vm.blockinfos_len();
         let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
         let sig = String_::new_sym(vm, name.1.clone());
         let meth = Method::new(vm, sig, args_len, body);
+        for i in blk_infos_start..vm.blockinfos_len() {
+            vm.get_mut_blockinfo(i).method =
+                Some(meth.tobj(vm).unwrap().downcast::<Method>().unwrap());
+        }
         Ok((name.1, meth))
     }
 
@@ -555,12 +562,14 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 exprs,
             } => {
                 let bytecode_off = vm.instrs_len();
+                // Push a partially complete BlockInfo: we'll update its details later.
                 let blkinfo_idx = vm.push_blockinfo(BlockInfo {
                     bytecode_off,
                     bytecode_end: 0,
                     num_params: params.len(),
                     num_vars: 0,
                     max_stack: 0,
+                    method: None,
                 });
                 vm.instrs_push(Instr::Block(blkinfo_idx), *span);
                 self.closure_depth += 1;
@@ -568,16 +577,11 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 let (num_vars, max_stack) = self.c_block(vm, false, *span, &params, vars, exprs)?;
                 self.closure_depth -= 1;
                 let bytecode_end = vm.instrs_len();
-                vm.set_blockinfo(
-                    blkinfo_idx,
-                    BlockInfo {
-                        bytecode_off,
-                        bytecode_end,
-                        num_params: params.len(),
-                        num_vars,
-                        max_stack,
-                    },
-                );
+                let blkinfo = vm.get_mut_blockinfo(blkinfo_idx);
+                blkinfo.bytecode_off = bytecode_off;
+                blkinfo.bytecode_end = bytecode_end;
+                blkinfo.num_vars = num_vars;
+                blkinfo.max_stack = max_stack;
                 Ok(1)
             }
             ast::Expr::Double {

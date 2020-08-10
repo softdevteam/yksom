@@ -429,7 +429,7 @@ impl VM {
                         (blkinfo.num_params, blkinfo.bytecode_end)
                     };
                     let closure = self.current_frame().closure;
-                    let v = Block::new(self, method, rcv, blkinfo_off, closure, num_params);
+                    let v = Block::new(self, rcv, blkinfo_off, closure, num_params);
                     self.stack.push(v);
                     pc = bytecode_end;
                 }
@@ -1055,9 +1055,14 @@ impl VM {
             Primitive::Time => todo!(),
             Primitive::Value(nargs) => {
                 let rcv_blk: Gc<Block> = stry!(rcv.downcast(self));
-                let (num_vars, bytecode_off, max_stack) = {
+                let (num_vars, bytecode_off, max_stack, method) = {
                     let blkinfo = &self.blockinfos[rcv_blk.blockinfo_off];
-                    (blkinfo.num_vars, blkinfo.bytecode_off, blkinfo.max_stack)
+                    (
+                        blkinfo.num_vars,
+                        blkinfo.bytecode_off,
+                        blkinfo.max_stack,
+                        blkinfo.method.unwrap(),
+                    )
                 };
                 if self.stack.remaining_capacity() < max_stack {
                     panic!("Not enough stack space to execute block.");
@@ -1065,7 +1070,7 @@ impl VM {
                 let frame =
                     Frame::new_block(self, rcv, rcv_blk.parent_closure, num_vars, nargs as usize);
                 self.frames.push(frame);
-                let r = self.exec_user(rcv_blk.inst, rcv_blk.method, bytecode_off);
+                let r = self.exec_user(rcv_blk.inst, method, bytecode_off);
                 self.frame_pop();
                 r
             }
@@ -1149,6 +1154,11 @@ impl VM {
         self.frames.len()
     }
 
+    /// The index of the last `BlockInfo`.
+    pub fn blockinfos_len(&self) -> usize {
+        self.blockinfos.len()
+    }
+
     /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
     pub fn push_blockinfo(&mut self, blkinfo: BlockInfo) -> usize {
         let len = self.blockinfos.len();
@@ -1156,9 +1166,9 @@ impl VM {
         len
     }
 
-    /// Update the `BlockInfo` at index `idx` to `blkinfo`.
-    pub fn set_blockinfo(&mut self, idx: usize, blkinfo: BlockInfo) {
-        self.blockinfos[idx] = blkinfo;
+    /// Get a mutable reference to the `BlockInfo` at index `idx`.
+    pub fn get_mut_blockinfo(&mut self, idx: usize) -> &mut BlockInfo {
+        self.blockinfos.get_mut(idx).unwrap()
     }
 
     pub fn flush_inline_caches(&mut self) {
