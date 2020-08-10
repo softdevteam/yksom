@@ -9,16 +9,18 @@ export CARGO_HOME="`pwd`/.cargo"
 export RUSTUP_HOME="`pwd`/.rustup"
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
-# Install no toolchain initially to ensure toolchain rollback.
-sh rustup.sh --default-host x86_64-unknown-linux-gnu --default-toolchain none -y --no-modify-path
-
+sh rustup.sh --default-host x86_64-unknown-linux-gnu \
+    --default-toolchain nightly \
+    --no-modify-path \
+    --profile minimal \
+    -y
 export PATH=`pwd`/.cargo/bin/:$PATH
-rustup install nightly
-
-cargo +nightly fmt --all -- --check
 
 cargo test
 cargo test --release
 
 cargo run -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
 cargo run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
+
+rustup toolchain install nightly --allow-downgrade --component rustfmt
+cargo +nightly fmt --all -- --check
