@@ -419,8 +419,7 @@ impl VM {
             };
             match instr {
                 Instr::Array(num_items) => {
-                    let items = self.stack.split_off(self.stack.len() - num_items);
-                    let arr = NormalArray::from_vec(self, items);
+                    let arr = self.stack.split_off(self.stack.len() - num_items);
                     self.stack.push(arr);
                     pc += 1;
                 }
@@ -553,8 +552,7 @@ impl VM {
                                         let meth = cls
                                             .get_method(self, "doesNotUnderstand:arguments:")
                                             .unwrap();
-                                        let items = self.stack.split_off(self.stack.len() - nargs);
-                                        let arr = NormalArray::from_vec(self, items);
+                                        let arr = self.stack.split_off(self.stack.len() - nargs);
                                         let sig = String_::new_sym(self, (&*name).to_owned());
                                         self.stack.push(sig);
                                         self.stack.push(arr);

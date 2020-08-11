@@ -3,7 +3,7 @@ use std::{
     ptr,
 };
 
-use crate::vm::val::Val;
+use crate::vm::{objects::NormalArray, val::Val};
 
 pub const SOM_STACK_LEN: usize = 4096;
 
@@ -75,19 +75,17 @@ impl SOMStack {
 
     /// Splits the collection into two at the given index.
     ///
-    /// Returns a newly allocated vector containing the elements in the range [at, len). After the
-    /// call, the original vector will be left containing the elements [0, at) with its previous
-    /// capacity unchanged.
-    pub fn split_off(&mut self, at: usize) -> Vec<Val> {
-        let mut out = Vec::with_capacity(self.len() - at);
-        for i in at..self.len() {
-            let v = unsafe { ptr::read(self.storage.add(i)) };
-            let e = unsafe { out.get_unchecked_mut(i - at) };
-            *e = v;
-        }
-        unsafe { out.set_len(self.len() - at) };
+    /// Returns a newly allocated `NormalArray` containing the elements in the range [at, len).
+    /// After the call, the SOM stack will be left containing the elements [0, at) with its
+    /// previous capacity unchanged.
+    pub fn split_off(&mut self, at: usize) -> Val {
+        let arr = unsafe {
+            NormalArray::alloc(self.len() - at, |arr_store: *mut Val| {
+                ptr::copy_nonoverlapping(self.storage.add(at), arr_store, self.len() - at);
+            })
+        };
         self.len = at;
-        out
+        arr
     }
 
     /// Shortens the stack, keeping the first len elements and dropping the rest.
