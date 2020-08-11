@@ -381,7 +381,7 @@ impl ArbInt {
         if let Some(i) = val.to_isize() {
             Val::from_isize(vm, i)
         } else {
-            Val::from_obj(vm, ArbInt { val })
+            Val::from_obj(ArbInt { val })
         }
     }
 
@@ -506,8 +506,8 @@ impl StaticObjType for Int {
 impl Int {
     /// Create a `Val` representing the `usize` integer `i`. The `Val` is guaranteed to be boxed
     /// internally.
-    pub fn boxed_isize(vm: &mut VM, i: isize) -> Val {
-        Val::from_obj(vm, Int { val: i })
+    pub fn boxed_isize(_: &mut VM, i: isize) -> Val {
+        Val::from_obj(Int { val: i })
     }
 
     pub fn as_isize(&self) -> isize {

@@ -3,8 +3,9 @@
 #![allow(clippy::new_ret_no_self)]
 
 use std::{
+    alloc::Layout,
     convert::TryFrom,
-    mem::{size_of, transmute},
+    mem::{align_of, size_of, transmute},
     ops::Deref,
 };
 
@@ -65,15 +66,35 @@ pub struct Val {
 }
 
 impl Val {
-    /// Create a `Val` from a given instance of the `Obj` trait.
-    ///
-    /// [In an ideal world, this would be a function on `Obj` itself, but that would mean that
-    /// `Obj` couldn't be a trait object. Oh well.]
-    pub fn from_obj<T: Obj + 'static>(_: &mut VM, obj: T) -> Self {
-        debug_assert_eq!(size_of::<*const ThinObj>(), size_of::<usize>());
-        let ptr = Gc::into_raw(ThinObj::new(obj));
+    /// Create a new `Val` from an object that should be allocated on the heap.
+    pub fn from_obj<T: Obj + 'static>(obj: T) -> Val {
+        let p = Gc::into_raw(ThinObj::new(obj));
         Val {
-            val: unsafe { transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize) },
+            val: unsafe { transmute::<*const ThinObj, usize>(p) } | (ValKind::GCBOX as usize),
+        }
+    }
+
+    /// Allocate memory on the heap into which an object (and, optionally, additional memory) can
+    /// be stored.
+    ///
+    /// # Safety
+    ///
+    /// `layout` must be at least big enough for an object of type `T` (but may optionally be
+    /// bigger) and must have at least the same alignment that `T requires (but may optionally have
+    /// a bigger alignment). `init` will be called with a pointer to uninitialised memory into
+    /// which a fully initialised object of type `T` *must* be written. After `init` completes, the
+    /// object will be considered fully initialised: failure to fully initialise it leads to
+    /// undefined behaviour. Note that if additional memory was requested beyond that needed to
+    /// store `T` then that extra memory does not have to be initialised after `init` completes.
+    pub unsafe fn new_from_layout<T: Obj + 'static, F>(layout: Layout, init: F) -> Val
+    where
+        F: FnOnce(*mut T),
+    {
+        debug_assert!(layout.size() >= size_of::<T>() && layout.align() >= align_of::<T>());
+        let gcp = ThinObj::new_from_layout::<T, _>(layout, |p| init(p));
+        let p = Gc::into_raw(gcp);
+        Val {
+            val: transmute::<*const ThinObj, usize>(p) | (ValKind::GCBOX as usize),
         }
     }
 

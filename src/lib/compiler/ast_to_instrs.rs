@@ -213,7 +213,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
 
         let name_val = String_::new_str(vm, name);
         let methods = MethodsArray::from_vec(vm, methods);
-        let cls = Class::new(
+        let cls_val = Class::new(
             vm,
             vm.cls_cls,
             name_val,
@@ -224,7 +224,6 @@ impl<'a, 'input> Compiler<'a, 'input> {
             methods,
             methods_map,
         );
-        let cls_val = Val::from_obj(vm, cls);
         let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
         cls.set_methods_class(vm, cls_val);
         Ok(cls_val)
@@ -250,8 +249,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 let name = pairs
                     .iter()
                     .map(|x| self.lexer.span_str(x.0))
-                    .collect::<SmartString>()
-                    .into();
+                    .collect::<SmartString>();
                 let args = pairs.iter().map(|x| x.1).collect::<Vec<_>>();
                 ((pairs[0].0, name), args)
             }
@@ -260,7 +258,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
         let sig = String_::new_sym(vm, name.1.clone());
         let meth = Method::new(vm, sig, args_len, body);
-        Ok((name.1, Val::from_obj(vm, meth)))
+        Ok((name.1, meth))
     }
 
     fn c_body(

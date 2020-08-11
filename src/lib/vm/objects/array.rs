@@ -121,21 +121,15 @@ impl NormalArray {
     pub fn new(vm: &mut VM, len: usize) -> Val {
         let mut store = Vec::with_capacity(len);
         store.resize(len, vm.nil);
-        Val::from_obj(
-            vm,
-            NormalArray {
-                store: UnsafeCell::new(store),
-            },
-        )
+        Val::from_obj(NormalArray {
+            store: UnsafeCell::new(store),
+        })
     }
 
-    pub fn from_vec(vm: &mut VM, store: Vec<Val>) -> Val {
-        Val::from_obj(
-            vm,
-            NormalArray {
-                store: UnsafeCell::new(store),
-            },
-        )
+    pub fn from_vec(_: &mut VM, store: Vec<Val>) -> Val {
+        Val::from_obj(NormalArray {
+            store: UnsafeCell::new(store),
+        })
     }
 }
 
@@ -230,13 +224,10 @@ impl Array for MethodsArray {
 }
 
 impl MethodsArray {
-    pub fn from_vec(vm: &mut VM, store: Vec<Val>) -> Val {
-        Val::from_obj(
-            vm,
-            MethodsArray {
-                store: UnsafeCell::new(store),
-            },
-        )
+    pub fn from_vec(_vm: &mut VM, store: Vec<Val>) -> Val {
+        Val::from_obj(MethodsArray {
+            store: UnsafeCell::new(store),
+        })
     }
 }
 

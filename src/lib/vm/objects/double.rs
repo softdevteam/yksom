@@ -188,8 +188,8 @@ impl StaticObjType for Double {
 }
 
 impl Double {
-    pub fn new(vm: &mut VM, val: f64) -> Val {
-        Val::from_obj(vm, Double { val })
+    pub fn new(_: &mut VM, val: f64) -> Val {
+        Val::from_obj(Double { val })
     }
 
     pub fn double(&self) -> f64 {

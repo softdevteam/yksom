@@ -275,7 +275,7 @@ impl VM {
     fn compile(&mut self, path: &Path, inst_vars_allowed: bool) -> Val {
         let (name, cls_val) = compile(self, path);
         let cls: Gc<Class> = cls_val.downcast(self).unwrap();
-        if !inst_vars_allowed && cls.inst_vars_map.len() > 0 {
+        if !inst_vars_allowed && !cls.inst_vars_map.is_empty() {
             panic!("No instance vars allowed in {}", path.to_str().unwrap());
         }
         self.set_global(&name, cls_val);
@@ -495,12 +495,15 @@ impl VM {
                 Instr::InstVarLookup(n) => {
                     let inst = stry!(rcv.tobj(self));
                     self.stack
-                        .push(unsafe { inst.as_gc().unchecked_inst_var_get(n) });
+                        .push(unsafe { inst.as_gc().unchecked_inst_var_get(self, n) });
                     pc += 1;
                 }
                 Instr::InstVarSet(n) => {
                     let inst = stry!(rcv.tobj(self));
-                    unsafe { inst.as_gc().unchecked_inst_var_set(n, self.stack.peek()) };
+                    unsafe {
+                        inst.as_gc()
+                            .unchecked_inst_var_set(self, n, self.stack.peek())
+                    };
                     pc += 1;
                 }
                 Instr::Int(i) => {

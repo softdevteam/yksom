@@ -98,20 +98,20 @@ pub trait Obj: std::fmt::Debug {
     }
 
     /// How many instance variables does this object contain?
-    fn num_inst_vars(self: Gc<Self>) -> usize {
+    fn num_inst_vars(self: Gc<Self>, _: &VM) -> usize {
         unreachable!();
     }
 
     /// Return the instance variable at `i` (using SOM indexing).
     fn inst_var_at(self: Gc<Self>, vm: &VM, i: usize) -> Result<Val, Box<VMError>> {
-        if i > 0 && i <= self.num_inst_vars() {
-            Ok(unsafe { self.unchecked_inst_var_get(i - 1) })
+        if i > 0 && i <= self.num_inst_vars(vm) {
+            Ok(unsafe { self.unchecked_inst_var_get(vm, i - 1) })
         } else {
             Err(VMError::new(
                 vm,
                 VMErrorKind::IndexError {
                     tried: i,
-                    max: self.num_inst_vars(),
+                    max: self.num_inst_vars(vm),
                 },
             ))
         }
@@ -119,15 +119,15 @@ pub trait Obj: std::fmt::Debug {
 
     /// Return the instance variable at `i` (using SOM indexing).
     fn inst_var_at_put(self: Gc<Self>, vm: &VM, i: usize, v: Val) -> Result<(), Box<VMError>> {
-        if i > 0 && i <= self.num_inst_vars() {
-            unsafe { self.unchecked_inst_var_set(i - 1, v) };
+        if i > 0 && i <= self.num_inst_vars(vm) {
+            unsafe { self.unchecked_inst_var_set(vm, i - 1, v) };
             Ok(())
         } else {
             Err(VMError::new(
                 vm,
                 VMErrorKind::IndexError {
                     tried: i,
-                    max: self.num_inst_vars(),
+                    max: self.num_inst_vars(vm),
                 },
             ))
         }
@@ -135,13 +135,13 @@ pub trait Obj: std::fmt::Debug {
 
     /// Lookup an instance variable in this object. If `usize` exceeds the number of instance
     /// variables this will lead to undefined behaviour.
-    unsafe fn unchecked_inst_var_get(self: Gc<Self>, _: usize) -> Val {
+    unsafe fn unchecked_inst_var_get(self: Gc<Self>, _: &VM, _: usize) -> Val {
         unreachable!();
     }
 
     /// Set an instance variable in this object. If `usize` exceeds the number of instance
     /// variables this will lead to undefined behaviour.
-    unsafe fn unchecked_inst_var_set(self: Gc<Self>, _: usize, _: Val) {
+    unsafe fn unchecked_inst_var_set(self: Gc<Self>, _: &VM, _: usize, _: Val) {
         unreachable!();
     }
 
