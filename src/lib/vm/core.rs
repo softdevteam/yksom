@@ -411,7 +411,7 @@ impl VM {
             }};
         }
 
-        let stack_start = self.stack.len();
+        let stack_base = self.stack.len();
         loop {
             let instr = {
                 debug_assert!(pc < self.instrs.len());
@@ -568,7 +568,7 @@ impl VM {
                     };
 
                     if let MethodBody::Primitive(Primitive::Restart) = meth.body {
-                        self.stack.truncate(stack_start);
+                        self.stack.truncate(stack_base);
                         pc = meth_start_pc;
                         continue;
                     }
