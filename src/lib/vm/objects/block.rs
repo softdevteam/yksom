@@ -18,11 +18,13 @@ pub struct BlockInfo {
     pub num_params: usize,
     pub num_vars: usize,
     pub max_stack: usize,
+    /// The method this block is contained within (note that it does not matter if a block is
+    /// nested within other blocks: this refers to a method, not an intermediate block).
+    pub method: Option<Gc<Method>>,
 }
 
 #[derive(Debug)]
 pub struct Block {
-    pub method: Gc<Method>,
     /// This `Block`'s `self` val. XXX This should probably be part of the corresponding closure's
     /// variables.
     pub inst: Val,
@@ -59,7 +61,6 @@ impl StaticObjType for Block {
 impl Block {
     pub fn new(
         vm: &mut VM,
-        method: Gc<Method>,
         inst: Val,
         blockinfo_off: usize,
         parent_closure: Gc<Closure>,
@@ -73,7 +74,6 @@ impl Block {
         };
 
         Val::from_obj(Block {
-            method,
             inst,
             blockn_cls,
             blockinfo_off,
