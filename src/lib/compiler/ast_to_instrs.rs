@@ -501,7 +501,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 vm.instrs_push(Instr::Pop, span);
             }
             debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
-            vm.instrs_push(Instr::VarLookup(0, 0), span);
+            vm.instrs_push(Instr::LocalVarLookup(0), span);
             max_stack = max(max_stack, 1);
             vm.instrs_push(Instr::Return, span);
         } else if exprs.is_empty() {
@@ -540,8 +540,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 let max_stack = self.c_expr(vm, expr)?;
                 if depth == self.vars_stack.len() - 1 {
                     vm.instrs_push(Instr::InstVarSet(var_num), *span);
+                } else if depth == 0 {
+                    vm.instrs_push(Instr::LocalVarSet(var_num), *span);
                 } else {
-                    vm.instrs_push(Instr::VarSet(depth, var_num), *span);
+                    vm.instrs_push(Instr::UpVarSet(depth, var_num), *span);
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -727,8 +729,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     Some((depth, var_num)) => {
                         if depth == self.vars_stack.len() - 1 {
                             vm.instrs_push(Instr::InstVarLookup(var_num), *span);
+                        } else if depth == 0 {
+                            vm.instrs_push(Instr::LocalVarLookup(var_num), *span);
                         } else {
-                            vm.instrs_push(Instr::VarLookup(depth, var_num), *span);
+                            vm.instrs_push(Instr::UpVarLookup(depth, var_num), *span);
                         }
                     }
                     None => {

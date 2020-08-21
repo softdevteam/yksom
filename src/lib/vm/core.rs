@@ -590,14 +590,24 @@ impl VM {
                     self.stack.push(s);
                     pc += 1;
                 }
-                Instr::VarLookup(d, n) => {
-                    let v = self.current_frame().var_lookup(d, n);
+                Instr::LocalVarLookup(n) => {
+                    let v = self.current_frame().local_var_lookup(n);
                     self.stack.push(v);
                     pc += 1;
                 }
-                Instr::VarSet(d, n) => {
+                Instr::LocalVarSet(n) => {
                     let v = self.stack.peek();
-                    self.current_frame().var_set(d, n, v);
+                    self.current_frame().local_var_set(n, v);
+                    pc += 1;
+                }
+                Instr::UpVarLookup(d, n) => {
+                    let v = self.current_frame().up_var_lookup(d, n);
+                    self.stack.push(v);
+                    pc += 1;
+                }
+                Instr::UpVarSet(d, n) => {
+                    let v = self.stack.peek();
+                    self.current_frame().up_var_set(d, n, v);
                     pc += 1;
                 }
             }
@@ -1379,11 +1389,19 @@ impl Frame {
         }
     }
 
-    fn var_lookup(&self, depth: usize, var: usize) -> Val {
+    fn local_var_lookup(&self, var: usize) -> Val {
+        self.closure.get_var(var)
+    }
+
+    fn local_var_set(&mut self, var: usize, val: Val) {
+        self.closure.set_var(var, val);
+    }
+
+    fn up_var_lookup(&self, depth: usize, var: usize) -> Val {
         self.closure(depth).get_var(var)
     }
 
-    fn var_set(&mut self, depth: usize, var: usize, val: Val) {
+    fn up_var_set(&mut self, depth: usize, var: usize, val: Val) {
         self.closure(depth).set_var(var, val);
     }
 
@@ -1497,8 +1515,8 @@ mod tests {
         let v = Val::from_isize(&mut vm, 44);
         vm.stack.push(v);
         let f = Frame::new_method(&mut vm, selfv, 3, 2);
-        assert_eq!(f.var_lookup(0, 0).as_isize(&mut vm).unwrap(), 42);
-        assert_eq!(f.var_lookup(0, 1).as_isize(&mut vm).unwrap(), 43);
-        assert_eq!(f.var_lookup(0, 2).as_isize(&mut vm).unwrap(), 44);
+        assert_eq!(f.local_var_lookup(0).as_isize(&mut vm).unwrap(), 42);
+        assert_eq!(f.local_var_lookup(1).as_isize(&mut vm).unwrap(), 43);
+        assert_eq!(f.local_var_lookup(2).as_isize(&mut vm).unwrap(), 44);
     }
 }
