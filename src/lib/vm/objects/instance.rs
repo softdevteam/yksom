@@ -91,7 +91,7 @@ impl Inst {
         debug_assert_eq!(inst_vars_off, size_of::<Inst>());
         unsafe {
             Val::new_from_layout(layout, |basep: *mut Inst| {
-                *(&raw mut *basep) = Inst { class };
+                *basep = Inst { class };
                 let mut inst_vars = (basep as *mut u8).add(size_of::<Inst>()) as *mut Val;
                 for _ in 0..len {
                     inst_vars.write(vm.nil);

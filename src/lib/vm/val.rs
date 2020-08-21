@@ -5,7 +5,7 @@
 use std::{
     alloc::Layout,
     convert::TryFrom,
-    mem::{align_of, size_of, transmute},
+    mem::{align_of, size_of},
     ops::Deref,
 };
 
@@ -70,7 +70,7 @@ impl Val {
     pub fn from_obj<T: Obj + 'static>(obj: T) -> Val {
         let p = Gc::into_raw(ThinObj::new(obj));
         Val {
-            val: unsafe { transmute::<*const ThinObj, usize>(p) } | (ValKind::GCBOX as usize),
+            val: (p as usize) | (ValKind::GCBOX as usize),
         }
     }
 
@@ -94,7 +94,7 @@ impl Val {
         let gcp = ThinObj::new_from_layout::<T, _>(layout, |p| init(p));
         let p = Gc::into_raw(gcp);
         Val {
-            val: transmute::<*const ThinObj, usize>(p) | (ValKind::GCBOX as usize),
+            val: (p as usize) | (ValKind::GCBOX as usize),
         }
     }
 
@@ -103,9 +103,9 @@ impl Val {
     /// undefined behaviour.
     pub fn recover<T: Obj + 'static>(obj: Gc<T>) -> Self {
         unsafe {
-            let ptr = Gc::into_raw(ThinObj::recover_gc(obj));
+            let p = Gc::into_raw(ThinObj::recover_gc(obj));
             Val {
-                val: transmute::<*const ThinObj, usize>(ptr) | (ValKind::GCBOX as usize),
+                val: (p as usize) | (ValKind::GCBOX as usize),
             }
         }
     }
