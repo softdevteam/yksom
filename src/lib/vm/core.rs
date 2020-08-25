@@ -330,7 +330,7 @@ impl VM {
             for a in args {
                 self.stack.push(a);
             }
-            let frame = Frame::new_method(self, rcv, meth.func.num_vars(), meth.func.num_params());
+            let frame = Frame::new_method(self, rcv, meth.func.num_params(), meth.func.num_vars());
             self.frames.push(frame);
             let r = self.exec_user(rcv, &meth.func);
             self.frame_pop();
@@ -346,7 +346,7 @@ impl VM {
         if meth.func.is_primitive() {
             self.exec_primitive(meth.func.primitive(), rcv)
         } else {
-            let nframe = Frame::new_method(self, rcv, meth.func.num_vars(), meth.func.num_params());
+            let nframe = Frame::new_method(self, rcv, meth.func.num_params(), meth.func.num_vars());
             self.frames.push(nframe);
             let r = self.exec_user(rcv, &meth.func);
             self.frame_pop();
@@ -1053,8 +1053,8 @@ impl VM {
                     self,
                     rcv,
                     blk.parent_closure,
-                    blk.func.num_vars(),
                     blk.func.num_params(),
+                    blk.func.num_vars(),
                 );
                 self.frames.push(frame);
                 let r = self.exec_user(blk.inst, &*blk.func);
@@ -1310,16 +1310,16 @@ impl Frame {
         vm: &mut VM,
         block: Val,
         parent_closure: Gc<Closure>,
+        num_params: usize,
         num_vars: usize,
-        num_args: usize,
     ) -> Self {
         let mut vars = Vec::with_capacity(num_vars);
         vars.resize_with(num_vars, Val::illegal);
 
-        for i in 0..num_args {
-            vars[num_args - i - 1] = vm.stack.pop();
+        for i in 0..num_params {
+            vars[num_params - i - 1] = vm.stack.pop();
         }
-        for v in vars.iter_mut().skip(num_args).take(num_vars) {
+        for v in vars.iter_mut().skip(num_params).take(num_vars) {
             *v = vm.nil;
         }
 
@@ -1330,15 +1330,15 @@ impl Frame {
         }
     }
 
-    fn new_method(vm: &mut VM, self_val: Val, num_vars: usize, num_args: usize) -> Self {
+    fn new_method(vm: &mut VM, self_val: Val, num_params: usize, num_vars: usize) -> Self {
         let mut vars = Vec::with_capacity(num_vars);
         vars.resize_with(num_vars, Val::illegal);
 
         vars[0] = self_val;
-        for i in 0..num_args {
-            vars[num_args - i] = vm.stack.pop();
+        for i in 0..num_params {
+            vars[num_params - i] = vm.stack.pop();
         }
-        for v in vars.iter_mut().skip(num_args + 1).take(num_vars) {
+        for v in vars.iter_mut().skip(num_params + 1).take(num_vars) {
             *v = vm.nil;
         }
 
@@ -1473,7 +1473,7 @@ mod tests {
         vm.stack.push(v);
         let v = Val::from_isize(&mut vm, 44);
         vm.stack.push(v);
-        let f = Frame::new_method(&mut vm, selfv, 3, 2);
+        let f = Frame::new_method(&mut vm, selfv, 2, 3);
         assert_eq!(f.local_var_lookup(0).as_isize(&mut vm).unwrap(), 42);
         assert_eq!(f.local_var_lookup(1).as_isize(&mut vm).unwrap(), 43);
         assert_eq!(f.local_var_lookup(2).as_isize(&mut vm).unwrap(), 44);
