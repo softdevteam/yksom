@@ -30,12 +30,12 @@ mod method;
 mod string_;
 
 pub use array::{Array, MethodsArray, NormalArray};
-pub use block::{Block, BlockInfo};
+pub use block::Block;
 pub use class::Class;
 pub use double::Double;
 pub use instance::Inst;
 pub use integers::{ArbInt, Int};
-pub use method::{Method, MethodBody};
+pub use method::Method;
 pub use string_::String_;
 
 use natrob::narrowable_rboehm;

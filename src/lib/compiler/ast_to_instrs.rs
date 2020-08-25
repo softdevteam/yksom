@@ -16,7 +16,8 @@ use crate::{
         StorageT,
     },
     vm::{
-        objects::{BlockInfo, Class, Method, MethodBody, MethodsArray, String_},
+        function::Function,
+        objects::{Class, Method, MethodsArray, String_},
         val::Val,
         VM,
     },
@@ -27,6 +28,7 @@ pub struct Compiler<'a, 'input> {
     path: &'a Path,
     /// The stack of variables at the current point of evaluation.
     vars_stack: Vec<HashMap<SmartString, usize>>,
+    blocks_stack: Vec<Vec<Gc<Function>>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
     /// in a closure -- and, if so, how many nested closures we are inside at the current point of
     /// evaluation.
@@ -46,6 +48,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             lexer,
             path,
             vars_stack: Vec::new(),
+            blocks_stack: Vec::new(),
             closure_depth: 0,
         };
 
@@ -254,17 +257,26 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 ((pairs[0].0, name), args)
             }
         };
-        let args_len = args.len();
         // We later have to go over all the `BlockInfo`s and update their `method` field to point
         // to this method, once it has been created.
-        let blk_infos_start = vm.blockinfos_len();
-        let body = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
+        let func = self.c_body(vm, astmeth.span, (name.0, &name.1), args, &astmeth.body)?;
         let sig = String_::new_sym(vm, name.1.clone());
-        let meth = Method::new(vm, sig, args_len, body);
-        for i in blk_infos_start..vm.blockinfos_len() {
-            vm.get_mut_blockinfo(i).method =
-                Some(meth.tobj(vm).unwrap().downcast::<Method>().unwrap());
+        let meth = Method::new(vm, sig, func);
+        let meth_gc = meth.tobj(vm).unwrap().downcast::<Method>().unwrap();
+        meth_gc.func.set_containing_method(meth_gc);
+
+        // We now need to set the containing method of all blocks (and, recursively, their child
+        // blocks) to be the method itself.
+        fn patch(f: &Function, meth: Gc<Method>) {
+            for blk_func in f.block_funcs().iter() {
+                blk_func.set_containing_method(meth);
+                for f in blk_func.block_funcs().iter() {
+                    patch(f, meth);
+                }
+            }
         }
+        patch(&meth_gc.func, meth_gc);
+
         Ok((name.1, meth))
     }
 
@@ -275,163 +287,103 @@ impl<'a, 'input> Compiler<'a, 'input> {
         name: (Span, &str),
         params: Vec<Span>,
         body: &ast::MethodBody,
-    ) -> CompileResult<MethodBody> {
-        // We check the number of arguments at compile-time so that we don't have to check them
-        // continuously at run-time.
-        let requires_args = |n: usize| -> CompileResult<()> {
-            if params.len() != n {
-                Err(vec![(
-                    name.0,
-                    format!("Expected {} parameters, got {}", n, params.len()),
-                )])
-            } else {
-                Ok(())
-            }
-        };
-
+    ) -> CompileResult<Function> {
         match body {
-            ast::MethodBody::Primitive => match name.1 {
-                "+" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Add))
-                }
-                "-" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Sub))
-                }
-                "*" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Mul))
-                }
-                "/" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Div))
-                }
-                "//" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::DoubleDiv))
-                }
-                "%" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Mod))
-                }
-                "=" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Equals))
-                }
-                "==" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::RefEquals))
-                }
-                "~=" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::NotEquals))
-                }
-                "<<" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Shl))
-                }
-                "<" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::LessThan))
-                }
-                "<=" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::LessThanEquals))
-                }
-                ">" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::GreaterThan))
-                }
-                ">>>" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::Shr))
-                }
-                ">=" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::GreaterThanEquals))
-                }
-                "&" => {
-                    requires_args(1)?;
-                    Ok(MethodBody::Primitive(Primitive::And))
-                }
-                "bitXor:" => Ok(MethodBody::Primitive(Primitive::BitXor)),
-                "as32BitSignedValue" => Ok(MethodBody::Primitive(Primitive::As32BitSignedValue)),
-                "as32BitUnsignedValue" => {
-                    Ok(MethodBody::Primitive(Primitive::As32BitUnsignedValue))
-                }
-                "asInteger" => Ok(MethodBody::Primitive(Primitive::AsInteger)),
-                "asString" => Ok(MethodBody::Primitive(Primitive::AsString)),
-                "asSymbol" => Ok(MethodBody::Primitive(Primitive::AsSymbol)),
-                "at:" => Ok(MethodBody::Primitive(Primitive::At)),
-                "at:put:" => Ok(MethodBody::Primitive(Primitive::AtPut)),
-                "atRandom" => Ok(MethodBody::Primitive(Primitive::AtRandom)),
-                "class" => Ok(MethodBody::Primitive(Primitive::Class)),
-                "concatenate:" => Ok(MethodBody::Primitive(Primitive::Concatenate)),
-                "cos" => Ok(MethodBody::Primitive(Primitive::Cos)),
-                "exit:" => Ok(MethodBody::Primitive(Primitive::Exit)),
-                "fields" => Ok(MethodBody::Primitive(Primitive::Fields)),
-                "fromString:" => Ok(MethodBody::Primitive(Primitive::FromString)),
-                "fullGC" => Ok(MethodBody::Primitive(Primitive::FullGC)),
-                "global:" => Ok(MethodBody::Primitive(Primitive::Global)),
-                "global:put:" => Ok(MethodBody::Primitive(Primitive::GlobalPut)),
-                "halt" => Ok(MethodBody::Primitive(Primitive::Halt)),
-                "hasGlobal:" => Ok(MethodBody::Primitive(Primitive::HasGlobal)),
-                "hashcode" => Ok(MethodBody::Primitive(Primitive::Hashcode)),
-                "holder" => Ok(MethodBody::Primitive(Primitive::Holder)),
-                "inspect" => Ok(MethodBody::Primitive(Primitive::Inspect)),
-                "instVarAt:" => Ok(MethodBody::Primitive(Primitive::InstVarAt)),
-                "instVarAt:put:" => Ok(MethodBody::Primitive(Primitive::InstVarAtPut)),
-                "instVarNamed:" => Ok(MethodBody::Primitive(Primitive::InstVarNamed)),
-                "invokeOn:with:" => Ok(MethodBody::Primitive(Primitive::InvokeOnWith)),
-                "isDigits" => Ok(MethodBody::Primitive(Primitive::IsDigits)),
-                "isLetters" => Ok(MethodBody::Primitive(Primitive::IsLetters)),
-                "isWhiteSpace" => Ok(MethodBody::Primitive(Primitive::IsWhiteSpace)),
-                "length" => Ok(MethodBody::Primitive(Primitive::Length)),
-                "load:" => Ok(MethodBody::Primitive(Primitive::Load)),
-                "methods" => Ok(MethodBody::Primitive(Primitive::Methods)),
-                "name" => Ok(MethodBody::Primitive(Primitive::Name)),
-                "new" => Ok(MethodBody::Primitive(Primitive::New)),
-                "new:" => Ok(MethodBody::Primitive(Primitive::NewArray)),
-                "objectSize" => Ok(MethodBody::Primitive(Primitive::ObjectSize)),
-                "perform:" => Ok(MethodBody::Primitive(Primitive::Perform)),
-                "perform:inSuperclass:" => {
-                    Ok(MethodBody::Primitive(Primitive::PerformInSuperClass))
-                }
-                "perform:withArguments:" => {
-                    Ok(MethodBody::Primitive(Primitive::PerformWithArguments))
-                }
-                "perform:withArguments:inSuperclass:" => Ok(MethodBody::Primitive(
-                    Primitive::PerformWithArgumentsInSuperClass,
-                )),
-                "PositiveInfinity" => Ok(MethodBody::Primitive(Primitive::PositiveInfinity)),
-                "primSubstringFrom:to:" => {
-                    Ok(MethodBody::Primitive(Primitive::PrimSubstringFromTo))
-                }
-                "printNewline" => Ok(MethodBody::Primitive(Primitive::PrintNewline)),
-                "printString:" => Ok(MethodBody::Primitive(Primitive::PrintString)),
-                "rem:" => Ok(MethodBody::Primitive(Primitive::Rem)),
-                "signature" => Ok(MethodBody::Primitive(Primitive::Signature)),
-                "sin" => Ok(MethodBody::Primitive(Primitive::Sin)),
-                "sqrt" => Ok(MethodBody::Primitive(Primitive::Sqrt)),
-                "restart" => Ok(MethodBody::Primitive(Primitive::Restart)),
-                "round" => Ok(MethodBody::Primitive(Primitive::Round)),
-                "superclass" => Ok(MethodBody::Primitive(Primitive::Superclass)),
-                "ticks" => Ok(MethodBody::Primitive(Primitive::Ticks)),
-                "time" => Ok(MethodBody::Primitive(Primitive::Time)),
-                "value" => Ok(MethodBody::Primitive(Primitive::Value(0))),
-                "value:" => Ok(MethodBody::Primitive(Primitive::Value(1))),
-                "value:with:" => Ok(MethodBody::Primitive(Primitive::Value(2))),
-                _ => Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
-            },
+            ast::MethodBody::Primitive => {
+                let (num_params, primitive) = match name.1 {
+                    "+" => (1, Primitive::Add),
+                    "-" => (1, Primitive::Sub),
+                    "*" => (1, Primitive::Mul),
+                    "/" => (1, Primitive::Div),
+                    "//" => (1, Primitive::DoubleDiv),
+                    "%" => (1, Primitive::Mod),
+                    "=" => (1, Primitive::Equals),
+                    "==" => (1, Primitive::RefEquals),
+                    "~=" => (1, Primitive::NotEquals),
+                    "<<" => (1, Primitive::Shl),
+                    "<" => (1, Primitive::LessThan),
+                    "<=" => (1, Primitive::LessThanEquals),
+                    ">" => (1, Primitive::GreaterThan),
+                    ">>>" => (1, Primitive::Shr),
+                    ">=" => (1, Primitive::GreaterThanEquals),
+                    "&" => (1, Primitive::And),
+                    "bitXor:" => (1, Primitive::BitXor),
+                    "as32BitSignedValue" => (0, Primitive::As32BitSignedValue),
+                    "as32BitUnsignedValue" => (0, Primitive::As32BitUnsignedValue),
+                    "asInteger" => (0, Primitive::AsInteger),
+                    "asString" => (0, Primitive::AsString),
+                    "asSymbol" => (0, Primitive::AsSymbol),
+                    "at:" => (1, Primitive::At),
+                    "at:put:" => (2, Primitive::AtPut),
+                    "atRandom" => (0, Primitive::AtRandom),
+                    "class" => (0, Primitive::Class),
+                    "concatenate:" => (0, Primitive::Concatenate),
+                    "cos" => (0, Primitive::Cos),
+                    "exit:" => (1, Primitive::Exit),
+                    "fields" => (0, Primitive::Fields),
+                    "fromString:" => (1, Primitive::FromString),
+                    "fullGC" => (0, Primitive::FullGC),
+                    "global:" => (1, Primitive::Global),
+                    "global:put:" => (2, Primitive::GlobalPut),
+                    "halt" => (0, Primitive::Halt),
+                    "hasGlobal:" => (1, Primitive::HasGlobal),
+                    "hashcode" => (0, Primitive::Hashcode),
+                    "holder" => (0, Primitive::Holder),
+                    "inspect" => (0, Primitive::Inspect),
+                    "instVarAt:" => (1, Primitive::InstVarAt),
+                    "instVarAt:put:" => (2, Primitive::InstVarAtPut),
+                    "instVarNamed:" => (1, Primitive::InstVarNamed),
+                    "invokeOn:with:" => (2, Primitive::InvokeOnWith),
+                    "isDigits" => (0, Primitive::IsDigits),
+                    "isLetters" => (0, Primitive::IsLetters),
+                    "isWhiteSpace" => (0, Primitive::IsWhiteSpace),
+                    "length" => (0, Primitive::Length),
+                    "load:" => (1, Primitive::Load),
+                    "methods" => (0, Primitive::Methods),
+                    "name" => (0, Primitive::Name),
+                    "new" => (0, Primitive::New),
+                    "new:" => (0, Primitive::NewArray),
+                    "objectSize" => (0, Primitive::ObjectSize),
+                    "perform:" => (1, Primitive::Perform),
+                    "perform:inSuperclass:" => (2, Primitive::PerformInSuperClass),
+                    "perform:withArguments:" => (2, Primitive::PerformWithArguments),
+                    "perform:withArguments:inSuperclass:" => {
+                        (3, Primitive::PerformWithArgumentsInSuperClass)
+                    }
+                    "PositiveInfinity" => (0, Primitive::PositiveInfinity),
+                    "primSubstringFrom:to:" => (2, Primitive::PrimSubstringFromTo),
+                    "printNewline" => (0, Primitive::PrintNewline),
+                    "printString:" => (1, Primitive::PrintString),
+                    "rem:" => (1, Primitive::Rem),
+                    "signature" => (0, Primitive::Signature),
+                    "sin" => (0, Primitive::Sin),
+                    "sqrt" => (0, Primitive::Sqrt),
+                    "restart" => (0, Primitive::Restart),
+                    "round" => (0, Primitive::Round),
+                    "superclass" => (0, Primitive::Superclass),
+                    "ticks" => (0, Primitive::Ticks),
+                    "time" => (0, Primitive::Time),
+                    "value" => (0, Primitive::Value(0)),
+                    "value:" => (1, Primitive::Value(1)),
+                    "value:with:" => (2, Primitive::Value(2)),
+                    _ => return Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
+                };
+
+                Ok(Function::new_primitive(vm, num_params, primitive))
+            }
             ast::MethodBody::Body { vars, exprs } => {
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack) = self.c_block(vm, true, span, &params, vars, exprs)?;
-                Ok(MethodBody::User {
+                let (num_vars, max_stack, block_funcs) =
+                    self.c_block(vm, true, span, &params, vars, exprs)?;
+                Ok(Function::new_bytecode(
+                    vm,
+                    params.len(),
                     num_vars,
                     bytecode_off,
+                    None,
                     max_stack,
-                })
+                    block_funcs,
+                ))
             }
         }
     }
@@ -448,7 +400,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         params: &[Span],
         vars_spans: &[Span],
         exprs: &[ast::Expr],
-    ) -> CompileResult<(usize, usize)> {
+    ) -> CompileResult<(usize, usize, Vec<Gc<Function>>)> {
         let mut vars = HashMap::new();
         if is_method {
             // The VM assumes that the first variable of a method is "self".
@@ -485,6 +437,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
 
         let num_vars = vars.len();
         self.vars_stack.push(vars);
+        self.blocks_stack.push(Vec::new());
         let mut max_stack = 0;
         for (i, e) in exprs.iter().enumerate() {
             // We deliberately bomb out at the first error in a method on the basis that
@@ -513,7 +466,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         }
         self.vars_stack.pop();
 
-        Ok((num_vars, max_stack))
+        Ok((num_vars, max_stack, self.blocks_stack.pop().unwrap()))
     }
 
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
@@ -563,27 +516,23 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 vars,
                 exprs,
             } => {
-                let bytecode_off = vm.instrs_len();
-                // Push a partially complete BlockInfo: we'll update its details later.
-                let blkinfo_idx = vm.push_blockinfo(BlockInfo {
-                    bytecode_off,
-                    bytecode_end: 0,
-                    num_params: params.len(),
-                    num_vars: 0,
-                    max_stack: 0,
-                    method: None,
-                });
-                vm.instrs_push(Instr::Block(blkinfo_idx), *span);
+                vm.instrs_push(Instr::Block(self.blocks_stack.last().unwrap().len()), *span);
                 self.closure_depth += 1;
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack) = self.c_block(vm, false, *span, &params, vars, exprs)?;
+                let (num_vars, max_stack, block_funcs) =
+                    self.c_block(vm, false, *span, &params, vars, exprs)?;
                 self.closure_depth -= 1;
                 let bytecode_end = vm.instrs_len();
-                let blkinfo = vm.get_mut_blockinfo(blkinfo_idx);
-                blkinfo.bytecode_off = bytecode_off;
-                blkinfo.bytecode_end = bytecode_end;
-                blkinfo.num_vars = num_vars;
-                blkinfo.max_stack = max_stack;
+                let func = Gc::new(Function::new_bytecode(
+                    vm,
+                    params.len(),
+                    num_vars,
+                    bytecode_off,
+                    Some(bytecode_end),
+                    max_stack,
+                    block_funcs,
+                ));
+                self.blocks_stack.last_mut().unwrap().push(func);
                 Ok(1)
             }
             ast::Expr::Double {

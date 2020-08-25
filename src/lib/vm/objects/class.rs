@@ -163,7 +163,7 @@ impl Class {
     pub fn set_methods_class(&self, vm: &VM, cls: Val) {
         for meth_val in self.methods.downcast::<MethodsArray>(vm).unwrap().iter() {
             let meth = meth_val.downcast::<Method>(vm).unwrap();
-            meth.set_holder(vm, cls);
+            meth.func.set_holder(vm, cls);
         }
     }
 

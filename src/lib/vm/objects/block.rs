@@ -6,31 +6,17 @@ use rboehm::Gc;
 
 use crate::vm::{
     core::{Closure, VM},
-    objects::{Method, Obj, ObjType, StaticObjType},
+    function::Function,
+    objects::{Obj, ObjType, StaticObjType},
     val::{NotUnboxable, Val},
 };
-
-/// Minimal information about a SOM block.
-#[derive(Debug)]
-pub struct BlockInfo {
-    pub bytecode_off: usize,
-    pub bytecode_end: usize,
-    pub num_params: usize,
-    pub num_vars: usize,
-    pub max_stack: usize,
-    /// The method this block is contained within (note that it does not matter if a block is
-    /// nested within other blocks: this refers to a method, not an intermediate block).
-    pub method: Option<Gc<Method>>,
-}
 
 #[derive(Debug)]
 pub struct Block {
     /// This `Block`'s `self` val. XXX This should probably be part of the corresponding closure's
     /// variables.
     pub inst: Val,
-    /// Does this Block represent Block, Block2, or Block3?
-    pub blockn_cls: Val,
-    pub blockinfo_off: usize,
+    pub func: Gc<Function>,
     pub parent_closure: Gc<Closure>,
 }
 
@@ -39,8 +25,13 @@ impl Obj for Block {
         ObjType::Block
     }
 
-    fn get_class(self: Gc<Self>, _: &mut VM) -> Val {
-        self.blockn_cls
+    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val {
+        match self.func.num_params() {
+            0 => vm.block1_cls,
+            1 => vm.block2_cls,
+            2 => vm.block3_cls,
+            _ => unreachable!(),
+        }
     }
 
     fn hashcode(self: Gc<Self>) -> u64 {
@@ -59,24 +50,10 @@ impl StaticObjType for Block {
 }
 
 impl Block {
-    pub fn new(
-        vm: &mut VM,
-        inst: Val,
-        blockinfo_off: usize,
-        parent_closure: Gc<Closure>,
-        num_params: usize,
-    ) -> Val {
-        let blockn_cls = match num_params {
-            0 => vm.block1_cls,
-            1 => vm.block2_cls,
-            2 => vm.block3_cls,
-            _ => unimplemented!(),
-        };
-
+    pub fn new(_: &mut VM, inst: Val, func: Gc<Function>, parent_closure: Gc<Closure>) -> Val {
         Val::from_obj(Block {
             inst,
-            blockn_cls,
-            blockinfo_off,
+            func,
             parent_closure,
         })
     }

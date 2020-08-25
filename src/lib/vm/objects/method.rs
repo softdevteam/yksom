@@ -4,35 +4,17 @@ use std::{cell::Cell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 use rboehm::Gc;
 
-use crate::{
-    compiler::instrs::Primitive,
-    vm::{
-        core::VM,
-        objects::{Obj, ObjType, StaticObjType, String_},
-        val::{NotUnboxable, Val},
-    },
+use crate::vm::{
+    core::VM,
+    function::Function,
+    objects::{Obj, ObjType, StaticObjType, String_},
+    val::{NotUnboxable, Val},
 };
 
 #[derive(Debug)]
 pub struct Method {
     sig: Cell<Val>,
-    num_params: usize,
-    pub body: MethodBody,
-    holder: Cell<Val>,
-}
-
-#[derive(Debug)]
-pub enum MethodBody {
-    /// A built-in primitive.
-    Primitive(Primitive),
-    /// User bytecode.
-    User {
-        /// How many variables does this method define?
-        num_vars: usize,
-        /// The offset of this method's bytecode in its parent class.
-        bytecode_off: usize,
-        max_stack: usize,
-    },
+    pub func: Function,
 }
 
 impl Obj for Method {
@@ -60,25 +42,11 @@ impl StaticObjType for Method {
 }
 
 impl Method {
-    pub fn new(vm: &VM, sig: Val, num_params: usize, body: MethodBody) -> Val {
+    pub fn new(_: &VM, sig: Val, func: Function) -> Val {
         Val::from_obj(Method {
             sig: Cell::new(sig),
-            num_params,
-            body,
-            holder: Cell::new(vm.nil),
+            func,
         })
-    }
-
-    pub fn holder(&self) -> Val {
-        self.holder.get()
-    }
-
-    pub fn num_params(&self) -> usize {
-        self.num_params
-    }
-
-    pub fn set_holder(&self, _: &VM, class: Val) {
-        self.holder.set(class);
     }
 
     pub fn bootstrap(&self, vm: &VM) {

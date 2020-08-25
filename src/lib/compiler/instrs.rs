@@ -20,7 +20,7 @@ pub enum Instr {
     UpVarSet(usize, usize),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Primitive {
     Add,
     And,
