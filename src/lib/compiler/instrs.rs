@@ -14,8 +14,10 @@ pub enum Instr {
     String(usize),
     SuperSend(usize, usize),
     Symbol(usize),
-    VarLookup(usize, usize),
-    VarSet(usize, usize),
+    LocalVarLookup(usize),
+    LocalVarSet(usize),
+    UpVarLookup(usize, usize),
+    UpVarSet(usize, usize),
 }
 
 #[derive(Clone, Copy, Debug)]
