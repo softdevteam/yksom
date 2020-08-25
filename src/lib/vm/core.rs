@@ -24,9 +24,9 @@ use crate::{
     },
     vm::{
         error::{VMError, VMErrorKind},
+        function::Function,
         objects::{
-            ArbInt, Block, BlockInfo, Class, Double, Inst, Int, Method, MethodBody, NormalArray,
-            StaticObjType, String_,
+            ArbInt, Block, Class, Double, Inst, Int, Method, NormalArray, StaticObjType, String_,
         },
         somstack::SOMStack,
         val::{Val, ValKind},
@@ -71,7 +71,6 @@ pub struct VM {
     pub nil: Val,
     pub system: Val,
     pub true_: Val,
-    blockinfos: Vec<BlockInfo>,
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
     globals: Vec<Val>,
@@ -128,7 +127,6 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
-            blockinfos: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
@@ -323,61 +321,44 @@ impl VM {
         assert!(self.frames_len() == 0);
         let cls = rcv.get_class(self);
         let meth = cls.downcast::<Class>(self)?.get_method(self, msg)?;
-        match meth.body {
-            MethodBody::Primitive(_) => {
-                panic!("Primitives can't be called outside of a function frame.");
+        if meth.func.is_primitive() {
+            panic!("Primitives can't be called outside of a function frame.");
+        } else {
+            if args.len() != meth.func.num_params() {
+                panic!("Passed the wrong number of parameters.");
             }
-            MethodBody::User {
-                num_vars,
-                bytecode_off,
-                max_stack,
-            } => {
-                if self.stack.remaining_capacity() < max_stack {
-                    panic!("Not enough stack space to execute method.");
-                }
-                if args.len() != meth.num_params() {
-                    panic!("Passed the wrong number of parameters.");
-                }
-                for a in args {
-                    self.stack.push(a);
-                }
-                let frame = Frame::new_method(self, rcv, num_vars, meth.num_params());
-                self.frames.push(frame);
-                let r = self.exec_user(rcv, meth, bytecode_off);
-                self.frame_pop();
-                match r {
-                    SendReturn::ClosureReturn(_) => unreachable!(),
-                    SendReturn::Err(e) => Err(Box::new(*e)),
-                    SendReturn::Val => Ok(self.stack.pop()),
-                }
+            for a in args {
+                self.stack.push(a);
+            }
+            let frame = Frame::new_method(self, rcv, meth.func.num_params(), meth.func.num_vars());
+            self.frames.push(frame);
+            let r = self.exec_user(rcv, &meth.func);
+            self.frame_pop();
+            match r {
+                SendReturn::ClosureReturn(_) => unreachable!(),
+                SendReturn::Err(e) => Err(Box::new(*e)),
+                SendReturn::Val => Ok(self.stack.pop()),
             }
         }
     }
 
-    fn send_args_on_stack(&mut self, rcv: Val, method: Gc<Method>) -> SendReturn {
-        match method.body {
-            MethodBody::Primitive(p) => self.exec_primitive(p, rcv),
-            MethodBody::User {
-                num_vars,
-                bytecode_off,
-                max_stack,
-            } => {
-                if self.stack.remaining_capacity() < max_stack {
-                    panic!("Not enough stack space to execute method.");
-                }
-                let nframe = Frame::new_method(self, rcv, num_vars, method.num_params());
-                self.frames.push(nframe);
-                let r = self.exec_user(rcv, method, bytecode_off);
-                self.frame_pop();
-                r
-            }
+    fn send_args_on_stack(&mut self, rcv: Val, meth: Gc<Method>) -> SendReturn {
+        if meth.func.is_primitive() {
+            self.exec_primitive(meth.func.primitive(), rcv)
+        } else {
+            let nframe = Frame::new_method(self, rcv, meth.func.num_params(), meth.func.num_vars());
+            self.frames.push(nframe);
+            let r = self.exec_user(rcv, &meth.func);
+            self.frame_pop();
+            r
         }
     }
 
     /// Execute a SOM method. Note that the frame for this method must have been created *before*
     /// calling this function.
-    fn exec_user(&mut self, rcv: Val, method: Gc<Method>, meth_start_pc: usize) -> SendReturn {
-        let mut pc = meth_start_pc;
+    fn exec_user(&mut self, rcv: Val, func: &Function) -> SendReturn {
+        debug_assert!(!func.is_primitive());
+        let mut pc = func.bytecode_off();
 
         macro_rules! stry {
             ($elem:expr) => {{
@@ -385,7 +366,8 @@ impl VM {
                 match e {
                     Ok(o) => o,
                     Err(mut e) => {
-                        e.backtrace.push((method, self.instr_spans[pc]));
+                        e.backtrace
+                            .push((func.containing_method(), self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                 }
@@ -403,7 +385,8 @@ impl VM {
                         }
                     }
                     SendReturn::Err(mut e) => {
-                        e.backtrace.push((method, self.instr_spans[pc]));
+                        e.backtrace
+                            .push((func.containing_method(), self.instr_spans[pc]));
                         return SendReturn::Err(e);
                     }
                     SendReturn::Val => (),
@@ -411,6 +394,9 @@ impl VM {
             }};
         }
 
+        if self.stack.remaining_capacity() < func.max_stack() {
+            panic!("Not enough stack space to execute block.");
+        }
         let stack_base = self.stack.len();
         loop {
             let instr = {
@@ -423,15 +409,12 @@ impl VM {
                     self.stack.push(arr);
                     pc += 1;
                 }
-                Instr::Block(blkinfo_off) => {
-                    let (num_params, bytecode_end) = {
-                        let blkinfo = &self.blockinfos[blkinfo_off];
-                        (blkinfo.num_params, blkinfo.bytecode_end)
-                    };
+                Instr::Block(blkfn_idx) => {
+                    let blk_func = func.block_func(blkfn_idx);
                     let closure = self.current_frame().closure;
-                    let v = Block::new(self, rcv, blkinfo_off, closure, num_params);
+                    let v = Block::new(self, rcv, blk_func, closure);
                     self.stack.push(v);
-                    pc = bytecode_end;
+                    pc = blk_func.bytecode_end();
                 }
                 Instr::ClosureReturn(closure_depth) => {
                     // We want to do a non-local return. Before we attempt that, we need to
@@ -525,7 +508,7 @@ impl VM {
                         let lookup_cls = match instr {
                             Instr::Send(_, _) => rcv.get_class(self),
                             Instr::SuperSend(_, _) => {
-                                let method_cls_val = method.holder();
+                                let method_cls_val = func.holder();
                                 let method_cls: Gc<Class> = stry!(method_cls_val.downcast(self));
                                 method_cls.supercls(self)
                             }
@@ -567,9 +550,9 @@ impl VM {
                         (rcv, nargs, meth)
                     };
 
-                    if let MethodBody::Primitive(Primitive::Restart) = meth.body {
+                    if meth.func.is_primitive() && meth.func.primitive() == Primitive::Restart {
                         self.stack.truncate(stack_base);
-                        pc = meth_start_pc;
+                        pc = func.bytecode_off();
                         continue;
                     }
 
@@ -828,7 +811,7 @@ impl VM {
             }
             Primitive::Holder => {
                 let meth = stry!(rcv.downcast::<Method>(self));
-                let cls = meth.holder();
+                let cls = meth.func.holder();
                 self.stack.push(cls);
                 SendReturn::Val
             }
@@ -1064,23 +1047,17 @@ impl VM {
             }
             Primitive::Time => todo!(),
             Primitive::Value(nargs) => {
-                let rcv_blk: Gc<Block> = stry!(rcv.downcast(self));
-                let (num_vars, bytecode_off, max_stack, method) = {
-                    let blkinfo = &self.blockinfos[rcv_blk.blockinfo_off];
-                    (
-                        blkinfo.num_vars,
-                        blkinfo.bytecode_off,
-                        blkinfo.max_stack,
-                        blkinfo.method.unwrap(),
-                    )
-                };
-                if self.stack.remaining_capacity() < max_stack {
-                    panic!("Not enough stack space to execute block.");
-                }
-                let frame =
-                    Frame::new_block(self, rcv, rcv_blk.parent_closure, num_vars, nargs as usize);
+                let blk: Gc<Block> = stry!(rcv.downcast(self));
+                debug_assert_eq!(nargs as usize, blk.func.num_params());
+                let frame = Frame::new_block(
+                    self,
+                    rcv,
+                    blk.parent_closure,
+                    blk.func.num_params(),
+                    blk.func.num_vars(),
+                );
                 self.frames.push(frame);
-                let r = self.exec_user(rcv_blk.inst, method, bytecode_off);
+                let r = self.exec_user(blk.inst, &*blk.func);
                 self.frame_pop();
                 r
             }
@@ -1104,11 +1081,11 @@ impl VM {
         let cls = stry!(cls_val.downcast::<Class>(self));
         match cls.get_method(self, sig.as_str()) {
             Ok(m) => {
-                if args_tobj.as_gc().length() != m.num_params() {
+                if args_tobj.as_gc().length() != m.func.num_params() {
                     return SendReturn::Err(VMError::new(
                         self,
                         VMErrorKind::WrongNumberOfArgs {
-                            wanted: m.num_params(),
+                            wanted: m.func.num_params(),
                             got: args_tobj.as_gc().length(),
                         },
                     ));
@@ -1162,23 +1139,6 @@ impl VM {
 
     pub fn frames_len(&self) -> usize {
         self.frames.len()
-    }
-
-    /// The index of the last `BlockInfo`.
-    pub fn blockinfos_len(&self) -> usize {
-        self.blockinfos.len()
-    }
-
-    /// Add `blkinfo` to the set of known `BlockInfo`s and return its index.
-    pub fn push_blockinfo(&mut self, blkinfo: BlockInfo) -> usize {
-        let len = self.blockinfos.len();
-        self.blockinfos.push(blkinfo);
-        len
-    }
-
-    /// Get a mutable reference to the `BlockInfo` at index `idx`.
-    pub fn get_mut_blockinfo(&mut self, idx: usize) -> &mut BlockInfo {
-        self.blockinfos.get_mut(idx).unwrap()
     }
 
     pub fn flush_inline_caches(&mut self) {
@@ -1350,16 +1310,16 @@ impl Frame {
         vm: &mut VM,
         block: Val,
         parent_closure: Gc<Closure>,
+        num_params: usize,
         num_vars: usize,
-        num_args: usize,
     ) -> Self {
         let mut vars = Vec::with_capacity(num_vars);
         vars.resize_with(num_vars, Val::illegal);
 
-        for i in 0..num_args {
-            vars[num_args - i - 1] = vm.stack.pop();
+        for i in 0..num_params {
+            vars[num_params - i - 1] = vm.stack.pop();
         }
-        for v in vars.iter_mut().skip(num_args).take(num_vars) {
+        for v in vars.iter_mut().skip(num_params).take(num_vars) {
             *v = vm.nil;
         }
 
@@ -1370,15 +1330,15 @@ impl Frame {
         }
     }
 
-    fn new_method(vm: &mut VM, self_val: Val, num_vars: usize, num_args: usize) -> Self {
+    fn new_method(vm: &mut VM, self_val: Val, num_params: usize, num_vars: usize) -> Self {
         let mut vars = Vec::with_capacity(num_vars);
         vars.resize_with(num_vars, Val::illegal);
 
         vars[0] = self_val;
-        for i in 0..num_args {
-            vars[num_args - i] = vm.stack.pop();
+        for i in 0..num_params {
+            vars[num_params - i] = vm.stack.pop();
         }
-        for v in vars.iter_mut().skip(num_args + 1).take(num_vars) {
+        for v in vars.iter_mut().skip(num_params + 1).take(num_vars) {
             *v = vm.nil;
         }
 
@@ -1481,7 +1441,6 @@ impl VM {
             nil: Val::illegal(),
             system: Val::illegal(),
             true_: Val::illegal(),
-            blockinfos: Vec::new(),
             globals: Vec::new(),
             reverse_globals: HashMap::new(),
             inline_caches: Vec::new(),
@@ -1514,7 +1473,7 @@ mod tests {
         vm.stack.push(v);
         let v = Val::from_isize(&mut vm, 44);
         vm.stack.push(v);
-        let f = Frame::new_method(&mut vm, selfv, 3, 2);
+        let f = Frame::new_method(&mut vm, selfv, 2, 3);
         assert_eq!(f.local_var_lookup(0).as_isize(&mut vm).unwrap(), 42);
         assert_eq!(f.local_var_lookup(1).as_isize(&mut vm).unwrap(), 43);
         assert_eq!(f.local_var_lookup(2).as_isize(&mut vm).unwrap(), 44);
