@@ -12,7 +12,7 @@ use smartstring::alias::String as SmartString;
 use crate::{
     compiler::{
         ast,
-        instrs::{Instr, Primitive},
+        instrs::{Instr, Primitive, UpVarDef},
         StorageT,
     },
     vm::{
@@ -23,11 +23,16 @@ use crate::{
     },
 };
 
+// A variable with a name which the user cannot reference.
+const CLOSURE_RETURN_VAR: &str = "$$closurereturn$$";
+
 pub struct Compiler<'a, 'input> {
     lexer: &'a dyn NonStreamingLexer<'input, StorageT>,
     path: &'a Path,
-    /// The stack of variables at the current point of evaluation.
-    vars_stack: Vec<HashMap<SmartString, usize>>,
+    upvars_stack: Vec<Vec<(SmartString, UpVarDef)>>,
+    /// The stack of local variables at the current point of evaluation. Maps variable names to
+    /// `(captured, var idx)`.
+    locals_stack: Vec<HashMap<SmartString, (bool, usize)>>,
     blocks_stack: Vec<Vec<Gc<Function>>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
     /// in a closure -- and, if so, how many nested closures we are inside at the current point of
@@ -36,6 +41,14 @@ pub struct Compiler<'a, 'input> {
 }
 
 type CompileResult<T> = Result<T, Vec<(Span, String)>>;
+
+#[derive(Debug)]
+enum VarLookup {
+    Local(usize),
+    UpVar(usize),
+    InstVar(usize),
+    Unknown,
+}
 
 impl<'a, 'input> Compiler<'a, 'input> {
     pub fn compile(
@@ -47,7 +60,8 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let mut compiler = Compiler {
             lexer,
             path,
-            vars_stack: Vec::new(),
+            locals_stack: Vec::new(),
+            upvars_stack: Vec::new(),
             blocks_stack: Vec::new(),
             closure_depth: 0,
         };
@@ -84,6 +98,8 @@ impl<'a, 'input> Compiler<'a, 'input> {
             }
         };
 
+        debug_assert_eq!(compiler.locals_stack.len(), 0);
+        debug_assert_eq!(compiler.upvars_stack.len(), 0);
         // Create the "main" class.
         let cls = match compiler.c_class(
             vm,
@@ -155,7 +171,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 supercls
                     .inst_vars_map
                     .iter()
-                    .map(|(k, v)| (k.to_owned(), *v)),
+                    .map(|(k, v)| (k.to_owned(), (false, *v))),
             );
             for var in ast_inst_vars {
                 let n = lexer.span_str(*var);
@@ -184,11 +200,12 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     )])
                 }
                 hash_map::Entry::Vacant(e) => {
-                    e.insert(vars_len);
+                    e.insert((false, vars_len));
                 }
             }
         }
-        self.vars_stack.push(inst_vars);
+        self.upvars_stack.push(Vec::new());
+        self.locals_stack.push(inst_vars);
 
         let mut methods = Vec::with_capacity(ast_methods.len());
         let mut methods_map = HashMap::with_capacity(ast_methods.len());
@@ -202,14 +219,20 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 }
                 Err(mut e) => {
                     errs.extend(e.drain(..));
+                    self.locals_stack.truncate(1);
+                    self.upvars_stack.truncate(1);
+                    self.blocks_stack.truncate(1);
                 }
             }
         }
-        let inst_vars_map = self.vars_stack[0]
+        debug_assert!(self.locals_stack.len() == 1);
+        debug_assert!(self.upvars_stack.len() == 1 && self.upvars_stack.last().unwrap().is_empty());
+        self.upvars_stack.pop();
+        let inst_vars_map = self.locals_stack[0]
             .iter()
-            .map(|(k, v)| (k.clone(), *v))
+            .map(|(k, v)| (k.clone(), v.1))
             .collect::<HashMap<SmartString, usize>>();
-        self.vars_stack.pop();
+        self.locals_stack.pop();
         if !errs.is_empty() {
             return Err(errs);
         }
@@ -369,19 +392,21 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     _ => return Err(vec![(name.0, format!("Unknown primitive '{}'", name.1))]),
                 };
 
-                Ok(Function::new_primitive(vm, num_params, primitive))
+                Ok(Function::new_primitive(vm, num_params + 1, primitive))
             }
             ast::MethodBody::Body { vars, exprs } => {
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack, block_funcs) =
-                    self.c_block(vm, true, span, &params, vars, exprs)?;
+                let (max_stack, block_funcs, upvars) =
+                    self.c_block(vm, true, span, &params, &vars, exprs)?;
+                debug_assert_eq!(upvars.len(), 0);
                 Ok(Function::new_bytecode(
                     vm,
-                    params.len(),
-                    num_vars,
+                    params.len() + 1,
+                    params.len() + 1 + vars.len(),
                     bytecode_off,
                     None,
                     max_stack,
+                    Vec::new(),
                     block_funcs,
                 ))
             }
@@ -400,13 +425,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
         params: &[Span],
         vars_spans: &[Span],
         exprs: &[ast::Expr],
-    ) -> CompileResult<(usize, usize, Vec<Gc<Function>>)> {
+    ) -> CompileResult<(usize, Vec<Gc<Function>>, Vec<UpVarDef>)> {
+        self.upvars_stack.push(Vec::new());
         let mut vars = HashMap::new();
-        if is_method {
-            // The VM assumes that the first variable of a method is "self".
-            vars.insert(SmartString::from("self"), 0);
-        }
-
+        vars.insert(SmartString::from("self"), (false, 0));
         let mut process_var = |var_sp: Span| {
             let vars_len = vars.len();
             let var_str = SmartString::from(self.lexer.span_str(var_sp));
@@ -419,14 +441,13 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     ),
                 )]),
                 hash_map::Entry::Vacant(e) => {
-                    e.insert(vars_len);
+                    e.insert((false, vars_len));
                     Ok(vars_len)
                 }
             }
         };
 
-        // The VM assumes that a blocks's arguments are stored in variables
-        // 0..n and a method's arguments in 1..n+1.
+        // The VM assumes that the 'n' arguments are stored in variables 1..n+1.
         for param in params.iter() {
             process_var(*param)?;
         }
@@ -435,8 +456,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             process_var(*var)?;
         }
 
-        let num_vars = vars.len();
-        self.vars_stack.push(vars);
+        self.locals_stack.push(vars);
         self.blocks_stack.push(Vec::new());
         let mut max_stack = 0;
         for (i, e) in exprs.iter().enumerate() {
@@ -453,7 +473,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             if !exprs.is_empty() {
                 vm.instrs_push(Instr::Pop, span);
             }
-            debug_assert_eq!(*self.vars_stack.last().unwrap().get("self").unwrap(), 0);
+            debug_assert_eq!(self.locals_stack.last().unwrap().get("self").unwrap().1, 0);
             vm.instrs_push(Instr::LocalVarLookup(0), span);
             max_stack = max(max_stack, 1);
             vm.instrs_push(Instr::Return, span);
@@ -464,9 +484,16 @@ impl<'a, 'input> Compiler<'a, 'input> {
         } else {
             vm.instrs_push(Instr::Return, exprs.iter().last().unwrap().span());
         }
-        self.vars_stack.pop();
+        self.locals_stack.pop();
+        let upvars = self
+            .upvars_stack
+            .pop()
+            .unwrap()
+            .drain(..)
+            .map(|x| x.1)
+            .collect::<Vec<_>>();
 
-        Ok((num_vars, max_stack, self.blocks_stack.pop().unwrap()))
+        Ok((max_stack, self.blocks_stack.pop().unwrap(), upvars))
     }
 
     /// Evaluate an expression, returning `Ok(max_stack_size)` if successful.
@@ -481,24 +508,19 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 Ok(max_stack)
             }
             ast::Expr::Assign { span, id, expr } => {
-                let (depth, var_num) = match self.find_var(*id) {
-                    Some((d, v)) => (d, v),
-                    None => {
+                let max_stack = self.c_expr(vm, expr)?;
+                debug_assert!(max_stack > 0);
+                match self.find_var(*id) {
+                    VarLookup::Local(idx) => vm.instrs_push(Instr::LocalVarSet(idx), *span),
+                    VarLookup::UpVar(idx) => vm.instrs_push(Instr::UpVarSet(idx), *span),
+                    VarLookup::InstVar(idx) => vm.instrs_push(Instr::InstVarSet(idx), *span),
+                    VarLookup::Unknown => {
                         return Err(vec![(
                             *span,
                             format!("No such field '{}' in class", self.lexer.span_str(*id)),
                         )])
                     }
-                };
-                let max_stack = self.c_expr(vm, expr)?;
-                if depth == self.vars_stack.len() - 1 {
-                    vm.instrs_push(Instr::InstVarSet(var_num), *span);
-                } else if depth == 0 {
-                    vm.instrs_push(Instr::LocalVarSet(var_num), *span);
-                } else {
-                    vm.instrs_push(Instr::UpVarSet(depth, var_num), *span);
                 }
-                debug_assert!(max_stack > 0);
                 Ok(max_stack)
             }
             ast::Expr::BinaryMsg { span, lhs, op, rhs } => {
@@ -516,22 +538,29 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 vars,
                 exprs,
             } => {
-                vm.instrs_push(Instr::Block(self.blocks_stack.last().unwrap().len()), *span);
+                let instr_idx = vm.instrs_len();
+                vm.instrs_push(Instr::Dummy, *span);
                 self.closure_depth += 1;
                 let bytecode_off = vm.instrs_len();
-                let (num_vars, max_stack, block_funcs) =
+                let (max_stack, block_funcs, upvars) =
                     self.c_block(vm, false, *span, &params, vars, exprs)?;
                 self.closure_depth -= 1;
                 let bytecode_end = vm.instrs_len();
                 let func = Gc::new(Function::new_bytecode(
                     vm,
-                    params.len(),
-                    num_vars,
+                    params.len() + 1,
+                    params.len() + 1 + vars.len(),
                     bytecode_off,
                     Some(bytecode_end),
                     max_stack,
+                    upvars,
                     block_funcs,
                 ));
+                vm.instrs_set(
+                    instr_idx,
+                    Instr::Block(self.blocks_stack.last().unwrap().len()),
+                    *span,
+                );
                 self.blocks_stack.last_mut().unwrap().push(func);
                 Ok(1)
             }
@@ -614,7 +643,24 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 if self.closure_depth == 0 {
                     vm.instrs_push(Instr::Return, *span);
                 } else {
-                    vm.instrs_push(Instr::ClosureReturn(self.closure_depth), *span);
+                    // When we encounter a return in a closure, we need to provide some way for the
+                    // VM to detect closures that have escaped their containing method. The way we
+                    // do that is to rely on a variable that is defined in the containing method
+                    // itself: at run-time we merely need to check whether the corresponding
+                    // `UpVar` has been closed or not to detect whether a closure has escaped. We
+                    // do this by relying on the method's `self` variable; to reference that we use
+                    // a hacky guaranteed-can't-be-used-by-the-user variable name that threads
+                    // "self" as an upvalue.
+                    let locals_stack_len = self.locals_stack[1].len();
+                    self.locals_stack[1]
+                        .entry(SmartString::from(CLOSURE_RETURN_VAR))
+                        .or_insert((false, locals_stack_len));
+                    match self.find_var_name(CLOSURE_RETURN_VAR) {
+                        VarLookup::UpVar(upidx) => {
+                            vm.instrs_push(Instr::ClosureReturn(upidx), *span)
+                        }
+                        _ => unreachable!(),
+                    }
                 }
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
@@ -675,16 +721,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
             }
             ast::Expr::VarLookup(span) => {
                 match self.find_var(*span) {
-                    Some((depth, var_num)) => {
-                        if depth == self.vars_stack.len() - 1 {
-                            vm.instrs_push(Instr::InstVarLookup(var_num), *span);
-                        } else if depth == 0 {
-                            vm.instrs_push(Instr::LocalVarLookup(var_num), *span);
-                        } else {
-                            vm.instrs_push(Instr::UpVarLookup(depth, var_num), *span);
-                        }
-                    }
-                    None => {
+                    VarLookup::Local(idx) => vm.instrs_push(Instr::LocalVarLookup(idx), *span),
+                    VarLookup::UpVar(idx) => vm.instrs_push(Instr::UpVarLookup(idx), *span),
+                    VarLookup::InstVar(idx) => vm.instrs_push(Instr::InstVarLookup(idx), *span),
+                    VarLookup::Unknown => {
                         let name = self.lexer.span_str(*span);
                         let instr = Instr::GlobalLookup(vm.add_global(name));
                         vm.instrs_push(instr, *span);
@@ -698,16 +738,70 @@ impl<'a, 'input> Compiler<'a, 'input> {
     /// Find the variable at `span` in the variable stack returning a tuple `Some((depth,
     /// var_num))` or `Err` if the variable isn't found. `depth` is the number of closures away
     /// from the "current" one that the variable is found.
-    fn find_var(&self, span: Span) -> Option<(usize, usize)> {
-        let name = match self.lexer.span_str(span) {
+    fn find_var(&mut self, span: Span) -> VarLookup {
+        self.find_var_name(self.lexer.span_str(span))
+    }
+
+    /// Find the variable at `span` in the variable stack returning a tuple `Some((depth,
+    /// var_num))` or `Err` if the variable isn't found. `depth` is the number of closures away
+    /// from the "current" one that the variable is found.
+    fn find_var_name(&mut self, mut name: &str) -> VarLookup {
+        name = match name {
             "super" => "self",
             s => s,
         };
-        for (depth, vars) in self.vars_stack.iter().enumerate().rev() {
-            if let Some(n) = vars.get(name) {
-                return Some((self.vars_stack.len() - depth - 1, *n));
+        debug_assert!(!self.locals_stack.is_empty());
+        debug_assert_eq!(self.locals_stack.len(), self.upvars_stack.len());
+
+        let mut depth = self.locals_stack.len() - 1;
+        while depth > 0 {
+            if depth == 1 && name == CLOSURE_RETURN_VAR {
+                name = "self";
             }
+
+            if self.locals_stack[depth].contains_key(name) {
+                let locals_stack_len = self.locals_stack.len();
+                let upidx = {
+                    let e = self.locals_stack[depth].get_mut(name).unwrap();
+                    if depth == locals_stack_len - 1 {
+                        return VarLookup::Local(e.1);
+                    }
+                    e.0 = true;
+                    e.1
+                };
+                self.upvars_stack[depth + 1].push((
+                    SmartString::from(name),
+                    UpVarDef {
+                        capture_local: true,
+                        upidx,
+                    },
+                ));
+                depth += 1;
+            }
+
+            for i in 0..self.upvars_stack[depth].len() {
+                if &self.upvars_stack[depth][i].0 == name {
+                    let mut upidx = i;
+                    for j in depth + 1..self.upvars_stack.len() {
+                        self.upvars_stack[j].push((
+                            SmartString::from(name),
+                            UpVarDef {
+                                capture_local: false,
+                                upidx,
+                            },
+                        ));
+                        upidx = self.upvars_stack[j].len() - 1;
+                    }
+                    return VarLookup::UpVar(upidx);
+                }
+            }
+            depth -= 1;
         }
-        None
+
+        if let Some(ref e) = self.locals_stack[0].get(name) {
+            return VarLookup::InstVar(e.1);
+        }
+
+        VarLookup::Unknown
     }
 }

@@ -16,6 +16,7 @@
 #![feature(box_patterns)]
 #![feature(coerce_unsized)]
 #![feature(dispatch_from_dyn)]
+#![feature(entry_insert)]
 #![feature(raw_ref_op)]
 #![feature(unsize)]
 #![allow(clippy::cognitive_complexity)]
