@@ -3,7 +3,7 @@ use std::cell::Cell;
 use rboehm::Gc;
 
 use crate::{
-    compiler::instrs::Primitive,
+    compiler::instrs::{Primitive, UpVarDef},
     vm::{core::VM, objects::Method, val::Val},
 };
 
@@ -20,6 +20,7 @@ use crate::{
 /// the two.
 #[derive(Debug)]
 pub struct Function {
+    /// The number of parameters. Note: always includes the implicit "self" parameter.
     num_params: usize,
     /// The class this function is contained within. Note that we ensure this is set properly for
     /// both methods and blocks.
@@ -37,6 +38,7 @@ pub struct Function {
     /// If this function is a block, this specifies the end of the block's bytecode.
     bytecode_end: usize,
     max_stack: usize,
+    upvar_defs: Vec<UpVarDef>,
     /// This function's blocks.
     block_funcs: Vec<Gc<Function>>,
 }
@@ -49,6 +51,7 @@ impl Function {
         bytecode_off: usize,
         bytecode_end: Option<usize>,
         max_stack: usize,
+        upvar_defs: Vec<UpVarDef>,
         block_funcs: Vec<Gc<Function>>,
     ) -> Function {
         Function {
@@ -60,6 +63,7 @@ impl Function {
             bytecode_off,
             bytecode_end: bytecode_end.unwrap_or(usize::MAX),
             max_stack,
+            upvar_defs,
             block_funcs,
         }
     }
@@ -74,6 +78,7 @@ impl Function {
             bytecode_off: usize::MAX,
             bytecode_end: usize::MAX,
             max_stack: usize::MAX,
+            upvar_defs: Vec::new(),
             block_funcs: Vec::new(),
         }
     }
@@ -150,6 +155,10 @@ impl Function {
     pub fn block_func(&self, idx: usize) -> Gc<Function> {
         debug_assert!(idx < self.block_funcs.len());
         *unsafe { self.block_funcs.get_unchecked(idx) }
+    }
+
+    pub fn upvar_defs(&self) -> &Vec<UpVarDef> {
+        &self.upvar_defs
     }
 
     pub fn block_funcs(&self) -> &Vec<Gc<Function>> {

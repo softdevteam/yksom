@@ -1,3 +1,9 @@
+#[derive(Clone, Debug)]
+pub struct UpVarDef {
+    pub capture_local: bool,
+    pub upidx: usize,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
     Array(usize),
@@ -5,6 +11,7 @@ pub enum Instr {
     GlobalLookup(usize),
     ClosureReturn(usize),
     Double(f64),
+    Dummy,
     InstVarLookup(usize),
     InstVarSet(usize),
     Int(isize),
@@ -16,8 +23,8 @@ pub enum Instr {
     Symbol(usize),
     LocalVarLookup(usize),
     LocalVarSet(usize),
-    UpVarLookup(usize, usize),
-    UpVarSet(usize, usize),
+    UpVarLookup(usize),
+    UpVarSet(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

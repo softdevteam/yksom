@@ -30,7 +30,7 @@ mod method;
 mod string_;
 
 pub use array::{Array, MethodsArray, NormalArray};
-pub use block::Block;
+pub use block::{Block, UpVar};
 pub use class::Class;
 pub use double::Double;
 pub use instance::Inst;

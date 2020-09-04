@@ -19,8 +19,8 @@ pub struct VMError {
 }
 
 impl VMError {
-    pub fn new(vm: &VM, kind: VMErrorKind) -> Box<Self> {
-        let backtrace = Vec::with_capacity(vm.frames_len());
+    pub fn new(_: &VM, kind: VMErrorKind) -> Box<Self> {
+        let backtrace = Vec::new();
         Box::new(VMError { kind, backtrace })
     }
 
