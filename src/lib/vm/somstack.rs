@@ -72,8 +72,9 @@ impl SOMStack {
         SOM_STACK_LEN - self.len()
     }
 
-    pub unsafe fn addr_of(self: Gc<Self>, n: usize) -> Gc<Val> {
-        Gc::from_raw(storage!(self).add(n))
+    /// Return the address of the variable `off` items from the beginning of the stack.
+    pub unsafe fn addr_of(self: Gc<Self>, off: usize) -> Gc<Val> {
+        Gc::from_raw(storage!(self).add(off))
     }
 
     /// Returns the top-most value of the stack without removing it. If the stack is empty, calling
@@ -82,7 +83,7 @@ impl SOMStack {
         self.peek_n(0)
     }
 
-    /// Peeks at a value `n` items from the top of the stack.
+    /// Peeks at a value `n` items from the beginning of the stack.
     pub fn peek_at(self: Gc<Self>, off: usize) -> Val {
         debug_assert!(off < self.len());
         unsafe { ptr::read(storage!(self).add(off)) }
@@ -122,10 +123,11 @@ impl SOMStack {
         self.len += 1;
     }
 
-    pub fn set(self: Gc<Self>, n: usize, v: Val) {
-        debug_assert!(n < self.len());
+    /// Sets the value `off` items from the beginning of the stack to `v`.
+    pub fn set(self: Gc<Self>, off: usize, v: Val) {
+        debug_assert!(off < self.len());
         unsafe {
-            ptr::write(storage!(self).add(n), v);
+            ptr::write(storage!(self).add(off), v);
         }
     }
 
