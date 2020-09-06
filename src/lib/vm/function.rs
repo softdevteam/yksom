@@ -152,6 +152,10 @@ impl Function {
         self.max_stack
     }
 
+    pub fn num_blocks(&self) -> usize {
+        self.block_funcs.len()
+    }
+
     pub fn block_func(&self, idx: usize) -> Gc<Function> {
         debug_assert!(idx < self.block_funcs.len());
         *unsafe { self.block_funcs.get_unchecked(idx) }

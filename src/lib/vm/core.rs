@@ -367,7 +367,7 @@ impl VM {
         }
 
         let stack_base = self.stack.len() - func.num_params();
-        for _ in 0..func.num_vars() - func.num_params() {
+        for _ in 0..func.num_vars() - func.num_params() + func.num_blocks() {
             self.stack.push(self.nil);
         }
         // Inside this function, one should use this macro instead of calling `send_args_on_stack`
@@ -410,6 +410,13 @@ impl VM {
                     pc += 1;
                 }
                 Instr::Block(blkfn_idx) => {
+                    let cnd = self.stack.peek_at(stack_base + func.num_vars() + blkfn_idx);
+                    if cnd != self.nil {
+                        let blk = cnd.downcast::<Block>(self).unwrap();
+                        self.stack.push(cnd);
+                        pc = blk.func.bytecode_end();
+                        continue;
+                    }
                     let blk_func = func.block_func(blkfn_idx);
                     let mut blk_upvars = Vec::with_capacity(blk_func.upvar_defs().len());
                     for u in blk_func.upvar_defs() {
@@ -462,6 +469,7 @@ impl VM {
                         stack_base
                     };
                     let v = Block::new(self, rcv, blk_func, blk_upvars, sb);
+                    self.stack.set(stack_base + func.num_vars() + blkfn_idx, v);
                     self.stack.push(v);
                     pc = blk_func.bytecode_end();
                 }
@@ -592,7 +600,8 @@ impl VM {
                     };
 
                     if meth.func.is_primitive() && meth.func.primitive() == Primitive::Restart {
-                        self.stack.truncate(stack_base + func.num_vars());
+                        self.stack
+                            .truncate(stack_base + func.num_vars() + func.num_blocks());
                         pc = func.bytecode_off();
                         continue;
                     }

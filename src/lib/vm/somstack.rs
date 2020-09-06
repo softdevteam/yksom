@@ -19,7 +19,10 @@ pub const SOM_STACK_LEN: usize = 4096;
 ///   n * 8:     <var 0>
 ///              ...
 ///              <var m>
-///   (n+m) * 8: <working stack>
+///   (n+m)*8:   <block 0>
+///              ...
+///              <block p>
+///   (n+m+p)*8: <working stack>
 ///
 /// The compiler and VM treat <arg 0> as special: it always contains a reference to `self` (hence
 /// all functions have 1 extra parameter over those specified by the user). Functions are expected
@@ -27,7 +30,8 @@ pub const SOM_STACK_LEN: usize = 4096;
 /// to after the arguments but before the variables (i.e. the function will then set up its
 /// variables however it wants). Similarly, when a function is returned, the return value is
 /// expected to be placed where <arg 0> was originally found (i.e. at the end of the previous
-/// function's working stack).
+/// function's working stack). A functions `Block`s are cached after the variables, saving us from
+/// repeatedly allocating `UpVar`s for blocks in tight loops.
 pub struct SOMStack {
     /// How many items are used? Note that the stack has an implicit capacity of [`SOM_STACK_LEN`].
     len: usize,
