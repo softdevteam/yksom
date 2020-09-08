@@ -411,62 +411,63 @@ impl VM {
                 }
                 Instr::Block(blkfn_idx) => {
                     let blk_func = func.block_func(blkfn_idx);
-                    let mut blk_upvars = Vec::with_capacity(blk_func.upvar_defs().len());
-                    for u in blk_func.upvar_defs() {
-                        if u.capture_local {
-                            // We want to capture a local from this frame: if an existing UpVar
-                            // points to it, we must reuse that; if no such UpVar exists, we need
-                            // to create a new one.
-                            let mut uv = self.open_upvars;
-                            let mut prev = None;
-                            let local_ptr =
-                                Gc::into_raw(unsafe { self.stack.addr_of(stack_base + u.upidx) });
-
-                            // Search for an existing UpVar.
-                            while let Some(uv_uw) = uv {
-                                // Since:
-                                //   * open_upvars is sorted;
-                                //   * the stack is contiguous
-                                // we can stop searching if this UpVar is for a variable lower on
-                                // the stack than the one we're looking for.
-                                if Gc::into_raw(uv_uw.to_gc()) <= local_ptr {
-                                    break;
-                                }
-                                prev = uv;
-                                uv = uv_uw.prev();
-                            }
-
-                            if (uv.is_some() && Gc::into_raw(uv.unwrap().to_gc()) < local_ptr)
-                                || uv.is_none()
-                            {
-                                // Create a new UpVar.
-                                uv = Some(Gc::new(UpVar::new(uv, Gc::from_raw(local_ptr))));
-                                if let Some(mut prev_uw) = prev {
-                                    // Insert it in the list.
-                                    prev_uw.set_prev(uv);
-                                } else {
-                                    // Insert it at the end of the list.
-                                    self.open_upvars = uv;
-                                }
-                            } else {
-                                debug_assert_eq!(Gc::into_raw(uv.unwrap().to_gc()), local_ptr);
-                            }
-                            blk_upvars.push(uv.unwrap());
-                        } else {
-                            blk_upvars.push(blk.unwrap().upvars[u.upidx]);
-                        }
-                    }
                     let sb = if let Some(b) = blk {
                         b.method_stack_base
                     } else {
                         stack_base
                     };
-                    let v = Block::new(self, rcv, blk_func, blk_upvars, sb);
+                    let v = Block::new(self, rcv, blk_func, sb, |vm, mut upvars_store| {
+                        for u in blk_func.upvar_defs() {
+                            if u.capture_local {
+                                // We want to capture a local from this frame: if an existing UpVar
+                                // points to it, we must reuse that; if no such UpVar exists, we need
+                                // to create a new one.
+                                let mut uv = vm.open_upvars;
+                                let mut prev = None;
+                                let local_ptr =
+                                    Gc::into_raw(unsafe { vm.stack.addr_of(stack_base + u.upidx) });
+
+                                // Search for an existing UpVar.
+                                while let Some(uv_uw) = uv {
+                                    // Since:
+                                    //   * open_upvars is sorted;
+                                    //   * the stack is contiguous
+                                    // we can stop searching if this UpVar is for a variable lower on
+                                    // the stack than the one we're looking for.
+                                    if Gc::into_raw(uv_uw.to_gc()) <= local_ptr {
+                                        break;
+                                    }
+                                    prev = uv;
+                                    uv = uv_uw.prev();
+                                }
+
+                                if (uv.is_some() && Gc::into_raw(uv.unwrap().to_gc()) < local_ptr)
+                                    || uv.is_none()
+                                {
+                                    // Create a new UpVar.
+                                    uv = Some(Gc::new(UpVar::new(uv, Gc::from_raw(local_ptr))));
+                                    if let Some(mut prev_uw) = prev {
+                                        // Insert it in the list.
+                                        prev_uw.set_prev(uv);
+                                    } else {
+                                        // Insert it at the end of the list.
+                                        vm.open_upvars = uv;
+                                    }
+                                } else {
+                                    debug_assert_eq!(Gc::into_raw(uv.unwrap().to_gc()), local_ptr);
+                                }
+                                unsafe { *upvars_store = uv.unwrap() };
+                            } else {
+                                unsafe { *upvars_store = blk.unwrap().upvar(u.upidx) };
+                            }
+                            upvars_store = unsafe { upvars_store.add(1) };
+                        }
+                    });
                     self.stack.push(v);
                     pc = blk_func.bytecode_end();
                 }
                 Instr::ClosureReturn(upvar_idx) => {
-                    if !blk.unwrap().upvars[upvar_idx].is_closed() {
+                    if !blk.unwrap().upvar(upvar_idx).is_closed() {
                         return SendReturn::ClosureReturn(blk.unwrap().method_stack_base);
                     }
                     let cls_val = rcv.get_class(self);
@@ -623,12 +624,12 @@ impl VM {
                     pc += 1;
                 }
                 Instr::UpVarLookup(n) => {
-                    self.stack.push(*blk.unwrap().upvars[n].to_gc());
+                    self.stack.push(*blk.unwrap().upvar(n).to_gc());
                     pc += 1;
                 }
                 Instr::UpVarSet(n) => {
                     let v = self.stack.peek();
-                    unsafe { (Gc::into_raw(blk.unwrap().upvars[n].to_gc()) as *mut Val).write(v) };
+                    unsafe { (Gc::into_raw(blk.unwrap().upvar(n).to_gc()) as *mut Val).write(v) };
                     pc += 1;
                 }
             }

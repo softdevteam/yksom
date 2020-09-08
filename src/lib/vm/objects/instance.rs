@@ -17,9 +17,9 @@ pub struct Inst {
 }
 
 // Since instances have a fixed number of instance variables, we do not need to allocate a separate
-// object and backing store: we can fit both in a single block.  We thus use a custom layout where
-// the `Inst` comes first, followed immediately by the `Val`s representing instance variables. On a
-// 64-bit machine this looks roughly as follows:
+// object and backing store: we can fit both in a single allocation. We thus use a custom layout
+// where the `Inst` comes first, followed immediately by the `Val`s representing instance
+// variables. On a 64-bit machine this looks roughly as follows:
 //
 //   0: Inst
 //   8: Val [representing instance field 0]
