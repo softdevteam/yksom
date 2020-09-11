@@ -40,7 +40,12 @@ fn main() {
     let args = env::args().collect::<Vec<_>>();
     let prog = &args[0];
     let matches = Options::new()
-        .optmulti("", "cp", "Path to System classes", "<path>")
+        .reqopt(
+            "",
+            "cp",
+            "Path to System classes (directories separated by ':')",
+            "<path>",
+        )
         .optflag("h", "help", "")
         .parse(&args[1..])
         .unwrap_or_else(|_| usage(prog));
@@ -55,8 +60,9 @@ fn main() {
     };
     cp.extend(
         matches
-            .opt_strs("cp")
-            .iter()
+            .opt_str("cp")
+            .unwrap()
+            .split(":")
             .map(|x| PathBuf::from_str(x).unwrap()),
     );
 
