@@ -18,6 +18,9 @@ name = "lang_tests"
 path = "lang_tests/run.rs"
 harness = false
 
+[features]
+rustc_boehm = ["rboehm/rustc_boehm"]
+
 [build-dependencies]
 cfgrammar = "0.9"
 lrlex = "0.9"

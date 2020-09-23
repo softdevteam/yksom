@@ -19,6 +19,7 @@
 #![feature(entry_insert)]
 #![feature(raw_ref_op)]
 #![feature(unsize)]
+#![cfg_attr(feature = "rustc_boehm", feature(gc))]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::float_cmp)]
 #![allow(clippy::missing_safety_doc)]
