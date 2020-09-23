@@ -2,6 +2,9 @@
 
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
+#[cfg(feature = "rustc_boehm")]
+use std::gc::NoFinalize;
+
 use rboehm::Gc;
 
 use crate::vm::{
@@ -66,6 +69,9 @@ pub struct Block {
     /// cart that around with the Block.
     pub method_stack_base: usize,
 }
+
+#[cfg(feature = "rustc_boehm")]
+impl NoFinalize for Block {}
 
 impl Obj for Block {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {

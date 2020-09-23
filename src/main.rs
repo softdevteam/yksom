@@ -1,3 +1,5 @@
+#![feature(allocator_api)]
+#![cfg_attr(feature = "rustc_boehm", feature(gc))]
 #![feature(box_patterns)]
 
 use std::{
