@@ -7,6 +7,9 @@ use std::{
     str,
 };
 
+#[cfg(feature = "rustc_boehm")]
+use std::gc::NoFinalize;
+
 use rboehm::Gc;
 use smartstring::alias::String as SmartString;
 
@@ -28,6 +31,9 @@ pub struct String_ {
     chars_len: Cell<usize>,
     s: SmartString,
 }
+
+#[cfg(feature = "rustc_boehm")]
+impl NoFinalize for String_ {}
 
 impl Obj for String_ {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {
