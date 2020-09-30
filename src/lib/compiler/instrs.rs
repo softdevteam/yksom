@@ -66,6 +66,18 @@ pub enum Primitive {
     IsDigits,
     IsLetters,
     IsWhiteSpace,
+    #[cfg(feature = "krun_harness")]
+    KrunInit,
+    #[cfg(feature = "krun_harness")]
+    KrunDone,
+    #[cfg(feature = "krun_harness")]
+    KrunMeasure,
+    #[cfg(feature = "krun_harness")]
+    KrunGetCoreCyclesDouble,
+    #[cfg(feature = "krun_harness")]
+    KrunGetNumCores,
+    #[cfg(feature = "krun_harness")]
+    KrunGetWallclock,
     Length,
     Load,
     LessThan,

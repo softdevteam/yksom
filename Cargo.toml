@@ -20,6 +20,7 @@ harness = false
 
 [features]
 rustc_boehm = ["rboehm/rustc_boehm"]
+krun_harness = ["libc"]
 
 [build-dependencies]
 cfgrammar = "0.9"
@@ -50,6 +51,7 @@ ryu = "1.0"
 smartstring = "0.2"
 static_assertions = "1.1"
 termion = "1.5"
+libc = { version = "0.2", optional = true }
 
 # The main reason for customising the profile.* sections is to force unwind=abort.
 [profile.release]
