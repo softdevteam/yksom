@@ -15,6 +15,9 @@ pub mod objects;
 pub mod somstack;
 pub mod val;
 
+#[cfg(feature = "krun_harness")]
+mod krun;
+
 pub use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},

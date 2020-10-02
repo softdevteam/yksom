@@ -33,6 +33,9 @@ use crate::{
     },
 };
 
+#[cfg(feature = "krun_harness")]
+use crate::vm::krun;
+
 pub const SOM_EXTENSION: &str = "som";
 
 #[derive(Debug)]
@@ -910,6 +913,81 @@ impl VM {
             Primitive::IsWhiteSpace => {
                 let rcv = self.stack.pop();
                 stry!(self.str_is(rcv, |x| x.is_whitespace()));
+                SendReturn::Val
+            }
+            #[cfg(feature = "krun_harness")]
+            Primitive::KrunInit => {
+                unsafe { krun::krun_init() };
+                SendReturn::Val
+            }
+            #[cfg(feature = "krun_harness")]
+            Primitive::KrunDone => {
+                unsafe { krun::krun_done() };
+                SendReturn::Val
+            }
+            #[cfg(feature = "krun_harness")]
+            Primitive::KrunMeasure => {
+                let idx = match self.stack.pop().as_isize(self) {
+                    Some(i) => i,
+                    None => {
+                        return SendReturn::Err(VMError::new(
+                            self,
+                            VMErrorKind::CantRepresentAsIsize,
+                        ))
+                    }
+                };
+                unsafe { krun::krun_measure(idx as libc::c_int) };
+                SendReturn::Val
+            }
+            #[cfg(feature = "krun_harness")]
+            Primitive::KrunGetCoreCyclesDouble => {
+                let core = match self.stack.pop().as_isize(self) {
+                    Some(i) => i,
+                    None => {
+                        return SendReturn::Err(VMError::new(
+                            self,
+                            VMErrorKind::CantRepresentAsIsize,
+                        ))
+                    }
+                };
+
+                let idx = match self.stack.pop().as_isize(self) {
+                    Some(i) => i,
+                    None => {
+                        return SendReturn::Err(VMError::new(
+                            self,
+                            VMErrorKind::CantRepresentAsIsize,
+                        ))
+                    }
+                };
+                let dbl = Double::new(self, unsafe {
+                    krun::krun_get_core_cycles_double(idx as libc::c_int, core as libc::c_int)
+                } as f64);
+                self.stack.push(dbl);
+                SendReturn::Val
+            }
+            #[cfg(feature = "krun_harness")]
+            Primitive::KrunGetNumCores => {
+                let cores = Val::from_isize(self, unsafe { krun::krun_get_num_cores() as isize });
+                self.stack.push(cores);
+                SendReturn::Val
+            }
+            #[cfg(feature = "krun_harness")]
+            Primitive::KrunGetWallclock => {
+                let idx = match self.stack.pop().as_isize(self) {
+                    Some(i) => i,
+                    None => {
+                        return SendReturn::Err(VMError::new(
+                            self,
+                            VMErrorKind::CantRepresentAsIsize,
+                        ))
+                    }
+                };
+                let dbl = Double::new(
+                    self,
+                    unsafe { krun::krun_get_wallclock(idx as libc::c_int) } as f64,
+                );
+                self.stack.push(dbl);
                 SendReturn::Val
             }
             Primitive::Length => {
