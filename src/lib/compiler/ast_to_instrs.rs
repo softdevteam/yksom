@@ -369,7 +369,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     #[cfg(feature = "krun_harness")]
                     "krunGetCoreCyclesDouble:core:" => (2, Primitive::KrunGetCoreCyclesDouble),
                     #[cfg(feature = "krun_harness")]
-                    "krunGetNumCores:" => (1, Primitive::KrunGetNumCores),
+                    "krunGetNumCores" => (0, Primitive::KrunGetNumCores),
                     #[cfg(feature = "krun_harness")]
                     "krunGetWallclock:" => (1, Primitive::KrunGetWallclock),
                     "length" => (0, Primitive::Length),
