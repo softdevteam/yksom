@@ -241,11 +241,9 @@ impl Val {
     }
 
     /// If this `Val` represents a non-bigint integer, return its value as an `isize`.
-    pub fn as_isize(&self, vm: &mut VM) -> Option<isize> {
+    pub fn as_isize(&self, _: &mut VM) -> Option<isize> {
         match self.valkind() {
-            ValKind::GCBOX => self
-                .tobj(vm)
-                .unwrap()
+            ValKind::GCBOX => unsafe { self.gcbox_to_tobj() }
                 .downcast::<Int>()
                 .map(|tobj| tobj.as_isize()),
             ValKind::INT => {
@@ -266,7 +264,7 @@ impl Val {
     /// If this `Val` represents a non-bigint integer, return its value as an `usize`.
     pub fn as_usize(&self, vm: &mut VM) -> Result<usize, Box<VMError>> {
         match self.valkind() {
-            ValKind::GCBOX => match self.tobj(vm).unwrap().downcast::<Int>() {
+            ValKind::GCBOX => match unsafe { self.gcbox_to_tobj() }.downcast::<Int>() {
                 Some(x) => x.as_usize(vm),
                 None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsUsize)),
             },
