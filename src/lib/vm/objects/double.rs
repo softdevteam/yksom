@@ -46,7 +46,7 @@ impl Obj for Double {
     }
 
     fn add(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val + (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             Ok(Double::new(vm, self.val + rhs.val))
@@ -62,7 +62,7 @@ impl Obj for Double {
     }
 
     fn double_div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
             } else {
@@ -90,7 +90,7 @@ impl Obj for Double {
     }
 
     fn modulus(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val % (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             Ok(Double::new(vm, self.val % rhs.val))
@@ -106,7 +106,7 @@ impl Obj for Double {
     }
 
     fn mul(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val * (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             Ok(Double::new(vm, self.val * rhs.val))
@@ -126,7 +126,7 @@ impl Obj for Double {
     }
 
     fn sub(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(Double::new(vm, self.val - (rhs as f64)))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             Ok(Double::new(vm, self.val - rhs.val))
@@ -146,7 +146,7 @@ impl Obj for Double {
     }
 
     fn equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        let b = if let Some(rhs) = other.as_isize(vm) {
+        let b = if let Ok(rhs) = other.as_isize(vm) {
             self.val == (rhs as f64)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             self.val == rhs.double()
@@ -163,7 +163,7 @@ impl Obj for Double {
     }
 
     fn less_than(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        let b = if let Some(rhs) = other.as_isize(vm) {
+        let b = if let Ok(rhs) = other.as_isize(vm) {
             self.val < (rhs as f64)
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             self.val < rhs.double()
