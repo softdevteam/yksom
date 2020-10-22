@@ -35,7 +35,7 @@ lazy_static = "1.3"
 regex = "1.1"
 
 [dependencies]
-rboehm = { git = "https://github.com/softdevteam/rboehm" }
+rboehm = { git = "https://github.com/softdevteam/rboehm", features=["use_boehm"] }
 arrayvec = "0.5"
 cfgrammar = "0.9"
 getopts = "0.2"
