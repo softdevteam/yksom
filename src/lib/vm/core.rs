@@ -687,7 +687,7 @@ impl VM {
             }
             Primitive::As32BitSignedValue => {
                 let rcv = self.stack.pop();
-                let i = if let Some(i) = rcv.as_isize(self) {
+                let i = if let Ok(i) = rcv.as_isize(self) {
                     i as i32 as isize
                 } else {
                     rcv.downcast::<ArbInt>(self)
@@ -702,7 +702,7 @@ impl VM {
             }
             Primitive::As32BitUnsignedValue => {
                 let rcv = self.stack.pop();
-                let i = if let Some(i) = rcv.as_isize(self) {
+                let i = if let Ok(i) = rcv.as_isize(self) {
                     i as u32
                 } else {
                     rcv.downcast::<ArbInt>(self)
@@ -790,7 +790,7 @@ impl VM {
                 // integers are unboxed, boxed, or big ints. Just because we can't convert the
                 // value to an isize doesn't mean that the user hasn't handed us an integer: we
                 // have to craft a special error message below to capture this.
-                if let Some(c) = c_val.as_isize(self) {
+                if let Ok(c) = c_val.as_isize(self) {
                     if let Ok(c) = i32::try_from(c) {
                         return SendReturn::Err(VMError::new(self, VMErrorKind::Exit(c)));
                     }

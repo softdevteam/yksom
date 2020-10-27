@@ -241,19 +241,18 @@ impl Val {
     }
 
     /// If this `Val` represents a non-bigint integer, return its value as an `isize`.
-    pub fn as_isize(&self, vm: &mut VM) -> Option<isize> {
+    pub fn as_isize(&self, vm: &mut VM) -> Result<isize, Box<VMError>> {
         match self.valkind() {
-            ValKind::GCBOX => self
-                .tobj(vm)
-                .unwrap()
-                .downcast::<Int>()
-                .map(|tobj| tobj.as_isize()),
+            ValKind::GCBOX => match unsafe { self.gcbox_to_tobj() }.downcast::<Int>() {
+                Some(tobj) => Ok(tobj.as_isize()),
+                None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsIsize)),
+            },
             ValKind::INT => {
                 if self.val & 1 << (BITSIZE - 1) == 0 {
-                    Some((self.val >> TAG_BITSIZE) as isize)
+                    Ok((self.val >> TAG_BITSIZE) as isize)
                 } else {
                     // For negative integers we need to pad the top TAG_BITSIZE bits with 1s.
-                    Some(
+                    Ok(
                         ((self.val >> TAG_BITSIZE) | (TAG_BITMASK << (BITSIZE - TAG_BITSIZE)))
                             as isize,
                     )
@@ -266,8 +265,8 @@ impl Val {
     /// If this `Val` represents a non-bigint integer, return its value as an `usize`.
     pub fn as_usize(&self, vm: &mut VM) -> Result<usize, Box<VMError>> {
         match self.valkind() {
-            ValKind::GCBOX => match self.tobj(vm).unwrap().downcast::<Int>() {
-                Some(x) => x.as_usize(vm),
+            ValKind::GCBOX => match unsafe { self.gcbox_to_tobj() }.downcast::<Int>() {
+                Some(tobj) => tobj.as_usize(vm),
                 None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsUsize)),
             },
             ValKind::INT => {
@@ -349,8 +348,8 @@ impl Val {
 
     /// Produce a new `Val` which performs a bitwise and operation with `other` and this.
     pub fn and(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 return Ok(Val::from_isize(vm, lhs & rhs));
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return Ok(ArbInt::new(
@@ -371,8 +370,8 @@ impl Val {
 
     /// Produce a new `Val` which divides `other` from this.
     pub fn div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 if rhs == 0 {
                     return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
                 } else {
@@ -399,8 +398,8 @@ impl Val {
 
     /// Produce a new `Val` which perfoms a Double divide on `other` with this.
     pub fn double_div(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 if rhs == 0 {
                     return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
                 } else {
@@ -430,8 +429,8 @@ impl Val {
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
     pub fn modulus(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 if rhs == 0 {
                     return Err(VMError::new(vm, VMErrorKind::DivisionByZero));
                 }
@@ -463,8 +462,8 @@ impl Val {
 
     /// Produce a new `Val` which performs a mod operation on this with `other`.
     pub fn remainder(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 match lhs.checked_rem(rhs) {
                     Some(i) => return Ok(Val::from_isize(vm, i)),
                     None => return Err(VMError::new(vm, VMErrorKind::RemainderError)),
@@ -483,8 +482,8 @@ impl Val {
 
     /// Produce a new `Val` which shifts `self` `other` bits to the left.
     pub fn shl(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 if rhs < 0 {
                     return Err(VMError::new(vm, VMErrorKind::NegativeShift));
                 } else {
@@ -520,8 +519,8 @@ impl Val {
     /// Produce a new `Val` which shifts `self` `other` bits to the right, treating `self` as if it
     /// did not have a sign bit.
     pub fn shr(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 if rhs < 0 {
                     return Err(VMError::new(vm, VMErrorKind::NegativeShift));
                 } else {
@@ -542,7 +541,7 @@ impl Val {
 
     /// Produces a new `Val` which is the square root of this.
     pub fn sqrt(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
             if lhs < 0 {
                 return Err(VMError::new(vm, VMErrorKind::DomainError));
             } else {
@@ -571,8 +570,8 @@ impl Val {
 
     /// Produce a new `Val` which performs a bitwise xor operation with `other` and this.
     pub fn xor(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(lhs) = self.as_isize(vm) {
-            if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(lhs) = self.as_isize(vm) {
+            if let Ok(rhs) = other.as_isize(vm) {
                 return Ok(Val::from_isize(vm, lhs ^ rhs));
             } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                 return Ok(ArbInt::new(
@@ -608,8 +607,8 @@ macro_rules! binop_all {
     ($name:ident, $op:tt, $tf:ident) => {
         impl Val {
             pub fn $name(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-                if let Some(lhs) = self.as_isize(vm) {
-                    if let Some(rhs) = other.as_isize(vm) {
+                if let Ok(lhs) = self.as_isize(vm) {
+                    if let Ok(rhs) = other.as_isize(vm) {
                         Ok(Val::from_bool(vm, lhs $op rhs))
                     } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
                         Ok(Val::from_bool(vm, (lhs as f64) $op rhs.double()))
@@ -632,8 +631,8 @@ macro_rules! binop_typeerror {
     ($name:ident, $op:tt) => {
         impl Val {
             pub fn $name(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-                if let Some(lhs) = self.as_isize(vm) {
-                    if let Some(rhs) = other.as_isize(vm) {
+                if let Ok(lhs) = self.as_isize(vm) {
+                    if let Ok(rhs) = other.as_isize(vm) {
                         Ok(Val::from_bool(vm, lhs $op rhs))
                     } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
                         Ok(Val::from_bool(vm,

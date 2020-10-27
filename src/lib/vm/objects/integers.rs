@@ -46,7 +46,7 @@ impl Obj for ArbInt {
     }
 
     fn add(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, &self.val + rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             Ok(ArbInt::new(vm, &self.val + &rhs.val))
@@ -62,7 +62,7 @@ impl Obj for ArbInt {
     }
 
     fn and(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(
                 vm,
                 &self.val & BigInt::from_isize(rhs).unwrap(),
@@ -80,7 +80,7 @@ impl Obj for ArbInt {
     }
 
     fn div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
             } else {
@@ -107,7 +107,7 @@ impl Obj for ArbInt {
     }
 
     fn double_div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
             } else if let Some(lhs) = self.val.to_f64() {
@@ -142,7 +142,7 @@ impl Obj for ArbInt {
     }
 
     fn modulus(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, ((&self.val % rhs) + rhs) % rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             Ok(ArbInt::new(
@@ -164,7 +164,7 @@ impl Obj for ArbInt {
     }
 
     fn mul(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, &self.val * rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             Ok(ArbInt::new(vm, &self.val * &rhs.val))
@@ -184,7 +184,7 @@ impl Obj for ArbInt {
     }
 
     fn shl(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             if rhs < 0 {
                 Err(VMError::new(vm, VMErrorKind::NegativeShift))
             } else {
@@ -201,7 +201,7 @@ impl Obj for ArbInt {
     }
 
     fn shr(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             if rhs < 0 {
                 Err(VMError::new(vm, VMErrorKind::NegativeShift))
             } else {
@@ -235,7 +235,7 @@ impl Obj for ArbInt {
     }
 
     fn sub(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(vm, &self.val - rhs))
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             Ok(ArbInt::new(vm, &self.val - &rhs.val))
@@ -251,7 +251,7 @@ impl Obj for ArbInt {
     }
 
     fn xor(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             Ok(ArbInt::new(
                 vm,
                 &self.val ^ BigInt::from_isize(rhs).unwrap(),
@@ -410,7 +410,7 @@ impl Obj for Int {
     }
 
     fn add(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             match self.val.checked_add(rhs) {
                 Some(i) => Ok(Val::from_isize(vm, i)),
                 None => Ok(ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() + rhs)),
@@ -429,7 +429,7 @@ impl Obj for Int {
     }
 
     fn div(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
             } else {
@@ -459,7 +459,7 @@ impl Obj for Int {
     }
 
     fn mul(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             match self.val.checked_mul(rhs) {
                 Some(i) => Ok(Val::from_isize(vm, i)),
                 None => Ok(ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() * rhs)),
@@ -478,7 +478,7 @@ impl Obj for Int {
     }
 
     fn sub(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        if let Some(rhs) = other.as_isize(vm) {
+        if let Ok(rhs) = other.as_isize(vm) {
             match self.val.checked_sub(rhs) {
                 Some(i) => Ok(Val::from_isize(vm, i)),
                 None => Ok(ArbInt::new(vm, BigInt::from_isize(self.val).unwrap() - rhs)),
