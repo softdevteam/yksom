@@ -927,38 +927,26 @@ impl VM {
             }
             #[cfg(feature = "krun_harness")]
             Primitive::KrunMeasure => {
-                let idx = match self.stack.pop().as_isize(self) {
-                    Some(i) => i,
-                    None => {
-                        return SendReturn::Err(VMError::new(
-                            self,
-                            VMErrorKind::CantRepresentAsIsize,
-                        ))
-                    }
+                let idx = if let Ok(i) = self.stack.pop().as_isize(self) {
+                    i
+                } else {
+                    return SendReturn::Err(VMError::new(self, VMErrorKind::CantRepresentAsIsize));
                 };
                 unsafe { krun::krun_measure(idx as libc::c_int) };
                 SendReturn::Val
             }
             #[cfg(feature = "krun_harness")]
             Primitive::KrunGetCoreCyclesDouble => {
-                let core = match self.stack.pop().as_isize(self) {
-                    Some(i) => i,
-                    None => {
-                        return SendReturn::Err(VMError::new(
-                            self,
-                            VMErrorKind::CantRepresentAsIsize,
-                        ))
-                    }
+                let core = if let Ok(i) = self.stack.pop().as_isize(self) {
+                    i
+                } else {
+                    return SendReturn::Err(VMError::new(self, VMErrorKind::CantRepresentAsIsize));
                 };
 
-                let idx = match self.stack.pop().as_isize(self) {
-                    Some(i) => i,
-                    None => {
-                        return SendReturn::Err(VMError::new(
-                            self,
-                            VMErrorKind::CantRepresentAsIsize,
-                        ))
-                    }
+                let idx = if let Ok(i) = self.stack.pop().as_isize(self) {
+                    i
+                } else {
+                    return SendReturn::Err(VMError::new(self, VMErrorKind::CantRepresentAsIsize));
                 };
                 let dbl = Double::new(self, unsafe {
                     krun::krun_get_core_cycles_double(idx as libc::c_int, core as libc::c_int)
@@ -974,14 +962,10 @@ impl VM {
             }
             #[cfg(feature = "krun_harness")]
             Primitive::KrunGetWallclock => {
-                let idx = match self.stack.pop().as_isize(self) {
-                    Some(i) => i,
-                    None => {
-                        return SendReturn::Err(VMError::new(
-                            self,
-                            VMErrorKind::CantRepresentAsIsize,
-                        ))
-                    }
+                let idx = if let Ok(i) = self.stack.pop().as_isize(self) {
+                    i
+                } else {
+                    return SendReturn::Err(VMError::new(self, VMErrorKind::CantRepresentAsIsize));
                 };
                 let dbl = Double::new(
                     self,
