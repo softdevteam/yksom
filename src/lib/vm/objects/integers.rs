@@ -51,10 +51,7 @@ impl Obj for ArbInt {
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             Ok(ArbInt::new(vm, &self.val + &rhs.val))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            match self.val.to_f64() {
-                Some(i) => Ok(Double::new(vm, i + rhs.double())),
-                None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
-            }
+            Ok(Double::new(vm, self.to_f64(vm)? + rhs.double()))
         } else {
             let got = other.dyn_objtype(vm);
             Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
@@ -95,10 +92,10 @@ impl Obj for ArbInt {
             if rhs.double() == 0f64 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
             } else {
-                match self.val.to_f64() {
-                    Some(i) => Ok(ArbInt::new(vm, BigInt::from_f64(i / rhs.double()).unwrap())),
-                    None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
-                }
+                Ok(ArbInt::new(
+                    vm,
+                    BigInt::from_f64(self.to_f64(vm)? / rhs.double()).unwrap(),
+                ))
             }
         } else {
             let got = other.dyn_objtype(vm);
@@ -110,30 +107,20 @@ impl Obj for ArbInt {
         if let Ok(rhs) = other.as_isize(vm) {
             if rhs == 0 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
-            } else if let Some(lhs) = self.val.to_f64() {
-                Ok(Double::new(vm, lhs / (rhs as f64)))
             } else {
-                Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble))
+                Ok(Double::new(vm, self.to_f64(vm)? / (rhs as f64)))
             }
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             if Zero::is_zero(rhs.bigint()) {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
-            } else if let Some(lhs) = self.val.to_f64() {
-                if let Some(i) = rhs.bigint().to_f64() {
-                    Ok(Double::new(vm, lhs / i))
-                } else {
-                    Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble))
-                }
             } else {
-                Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble))
+                Ok(Double::new(vm, self.to_f64(vm)? / rhs.to_f64(vm)?))
             }
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
             if rhs.double() == 0f64 {
                 Err(VMError::new(vm, VMErrorKind::DivisionByZero))
-            } else if let Some(lhs) = self.val.to_f64() {
-                Ok(Double::new(vm, lhs / rhs.double()))
             } else {
-                Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble))
+                Ok(Double::new(vm, self.to_f64(vm)? / rhs.double()))
             }
         } else {
             let got = other.dyn_objtype(vm);
@@ -150,13 +137,8 @@ impl Obj for ArbInt {
                 ((&self.val % &rhs.val) + &rhs.val) % &rhs.val,
             ))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            match self.val.to_f64() {
-                Some(i) => {
-                    let rhs = rhs.double();
-                    Ok(Double::new(vm, ((i % rhs) + rhs) % rhs))
-                }
-                None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
-            }
+            let rhs = rhs.double();
+            Ok(Double::new(vm, ((self.to_f64(vm)? % rhs) + rhs) % rhs))
         } else {
             let got = other.dyn_objtype(vm);
             Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
@@ -169,10 +151,7 @@ impl Obj for ArbInt {
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             Ok(ArbInt::new(vm, &self.val * &rhs.val))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            match self.val.to_f64() {
-                Some(i) => Ok(Double::new(vm, i * rhs.double())),
-                None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
-            }
+            Ok(Double::new(vm, self.to_f64(vm)? * rhs.double()))
         } else {
             let got = other.dyn_objtype(vm);
             Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
@@ -240,10 +219,7 @@ impl Obj for ArbInt {
         } else if let Some(rhs) = other.try_downcast::<ArbInt>(vm) {
             Ok(ArbInt::new(vm, &self.val - &rhs.val))
         } else if let Some(rhs) = other.try_downcast::<Double>(vm) {
-            match self.val.to_f64() {
-                Some(i) => Ok(Double::new(vm, i - rhs.double())),
-                None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
-            }
+            Ok(Double::new(vm, self.to_f64(vm)? - rhs.double()))
         } else {
             let got = other.dyn_objtype(vm);
             Err(VMError::new(vm, VMErrorKind::NotANumber { got }))
@@ -387,6 +363,17 @@ impl ArbInt {
 
     pub fn bigint(&self) -> &BigInt {
         &self.val
+    }
+
+    /// If this `ArbInt` can be represented as a finite `f64`, return that value; otherwise return
+    /// `Err(CantRepresentAsDouble)`.
+    pub fn to_f64(&self, vm: &VM) -> Result<f64, Box<VMError>> {
+        let i = self.val.to_f64().unwrap();
+        if i.is_finite() {
+            Ok(i)
+        } else {
+            Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble))
+        }
     }
 }
 
