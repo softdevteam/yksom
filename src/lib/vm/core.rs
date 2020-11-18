@@ -88,6 +88,7 @@ pub struct VM {
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
     reverse_sends: HashMap<(Gc<SmartString>, usize), usize>,
     stack: Gc<SOMStack>,
+    arbints: Vec<Val>,
     strings: Vec<Val>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
@@ -138,6 +139,7 @@ impl VM {
             sends: Vec::new(),
             reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
+            arbints: Vec::new(),
             strings: Vec::new(),
             reverse_strings: HashMap::new(),
             symbols: Vec::new(),
@@ -407,6 +409,12 @@ impl VM {
                 unsafe { self.instrs.get_unchecked(pc) }
             };
             match instr {
+                Instr::ArbInt(arbint_off) => {
+                    debug_assert!(self.arbints.len() > arbint_off);
+                    let b = *unsafe { self.arbints.get_unchecked(arbint_off) };
+                    self.stack.push(b);
+                    pc += 1;
+                }
                 Instr::Array(num_items) => {
                     let arr = self.stack.split_off(self.stack.len() - num_items);
                     self.stack.push(arr);
@@ -1363,6 +1371,14 @@ impl VM {
         }
     }
 
+    /// Add the `BigInt` `x` to the VM, returning its index. Note that these might (or might not)
+    /// be cached, so indexes might be reused.
+    pub fn add_bigint(&mut self, x: BigInt) -> usize {
+        let v = ArbInt::new(self, x);
+        self.arbints.push(v);
+        self.arbints.len() - 1
+    }
+
     /// Add the string `s` to the VM, returning its index. Note that strings are reused, so indexes
     /// are also reused.
     pub fn add_string(&mut self, s: SmartString) -> usize {
@@ -1490,6 +1506,7 @@ impl VM {
             sends: Vec::new(),
             reverse_sends: HashMap::new(),
             stack: SOMStack::new(),
+            arbints: Vec::new(),
             strings: Vec::new(),
             reverse_strings: HashMap::new(),
             symbols: Vec::new(),

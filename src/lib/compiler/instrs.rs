@@ -6,6 +6,7 @@ pub struct UpVarDef {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instr {
+    ArbInt(usize),
     Array(usize),
     Block(usize),
     GlobalLookup(usize),
