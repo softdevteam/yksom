@@ -6,6 +6,7 @@ use std::{
 
 use itertools::Itertools;
 use lrpar::{NonStreamingLexer, Span};
+use num_bigint::BigInt;
 use rboehm::Gc;
 use smartstring::alias::String as SmartString;
 
@@ -608,7 +609,17 @@ impl<'a, 'input> Compiler<'a, 'input> {
                         vm.instrs_push(Instr::Int(i), *span);
                         Ok(1)
                     }
-                    Err(e) => Err(vec![(*val, format!("{}", e))]),
+                    Err(e) => match self.lexer.span_str(*val).parse::<BigInt>() {
+                        Ok(mut i) => {
+                            if *is_negative {
+                                i = -i;
+                            }
+                            let off = vm.add_bigint(i);
+                            vm.instrs_push(Instr::ArbInt(off), *span);
+                            Ok(1)
+                        }
+                        Err(_) => Err(vec![(*val, format!("{}", e))]),
+                    },
                 }
             }
             ast::Expr::KeywordMsg {
