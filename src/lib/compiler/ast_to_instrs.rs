@@ -7,7 +7,7 @@ use std::{
 use itertools::Itertools;
 use lrpar::{NonStreamingLexer, Span};
 use num_bigint::BigInt;
-use rboehm::Gc;
+use libgc::Gc;
 use smartstring::alias::String as SmartString;
 
 use crate::{

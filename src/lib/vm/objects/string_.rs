@@ -7,10 +7,10 @@ use std::{
     str,
 };
 
-#[cfg(feature = "rustc_boehm")]
+#[cfg(feature = "rustgc")]
 use std::gc::NoFinalize;
 
-use rboehm::Gc;
+use libgc::Gc;
 use smartstring::alias::String as SmartString;
 
 use crate::vm::{
@@ -32,7 +32,7 @@ pub struct String_ {
     s: SmartString,
 }
 
-#[cfg(feature = "rustc_boehm")]
+#[cfg(feature = "rustgc")]
 impl NoFinalize for String_ {}
 
 impl Obj for String_ {

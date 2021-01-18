@@ -4,7 +4,7 @@ use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
-use rboehm::Gc;
+use libgc::Gc;
 use smartstring::alias::String as SmartString;
 
 use crate::vm::{

@@ -15,7 +15,7 @@ use std::convert::TryFrom;
 
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, Signed, ToPrimitive, Zero};
-use rboehm::Gc;
+use libgc::Gc;
 
 use crate::vm::{
     core::VM,

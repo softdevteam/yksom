@@ -12,7 +12,7 @@ use std::{
 
 use lrpar::Span;
 use num_bigint::BigInt;
-use rboehm::Gc;
+use libgc::Gc;
 use smartstring::alias::String as SmartString;
 use static_assertions::const_assert;
 

@@ -19,7 +19,7 @@ path = "lang_tests/run.rs"
 harness = false
 
 [features]
-rustc_boehm = ["rboehm/rustc_boehm"]
+rustgc = ["libgc/rustgc"]
 krun_harness = ["libc"]
 
 [build-dependencies]
@@ -35,14 +35,14 @@ lazy_static = "1.3"
 regex = "1.1"
 
 [dependencies]
-rboehm = { git = "https://github.com/softdevteam/rboehm", features=["use_boehm"] }
 arrayvec = "0.5"
 cfgrammar = "0.9"
 getopts = "0.2"
 itertools = "0.9"
+libgc = { git = "https://github.com/softdevteam/libgc" }
 lrlex = "0.9"
 lrpar = "0.9"
-natrob = { git="https://github.com/softdevteam/natrob", features=["rboehm"] }
+natrob = { git="https://github.com/softdevteam/natrob", features=["libgc"] }
 num-bigint = "0.3"
 num-integer = "0.1"
 num_enum = "0.5"

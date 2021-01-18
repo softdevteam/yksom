@@ -1,5 +1,5 @@
 #![feature(allocator_api)]
-#![cfg_attr(feature = "rustc_boehm", feature(gc))]
+#![cfg_attr(feature = "rustgc", feature(gc))]
 #![feature(box_patterns)]
 
 use std::{
@@ -18,7 +18,7 @@ use yksom::vm::{
     VMError, VMErrorKind, VM,
 };
 
-use rboehm::BoehmAllocator;
+use libgc::BoehmAllocator;
 
 #[global_allocator]
 static ALLOCATOR: BoehmAllocator = BoehmAllocator;

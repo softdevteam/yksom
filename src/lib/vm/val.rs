@@ -12,7 +12,7 @@ use std::{
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
-use rboehm::{self, Gc};
+use libgc::{self, Gc};
 
 use super::{
     core::VM,
