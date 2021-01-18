@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, io::stderr};
 
+use libgc::Gc;
 use lrpar::Span;
-use rboehm::Gc;
 use smartstring::alias::String as SmartString;
 use termion::{is_tty, style};
 

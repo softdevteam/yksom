@@ -8,7 +8,7 @@ use std::{
     str,
 };
 
-use rboehm::Gc;
+use libgc::Gc;
 use smartstring::alias::String as SmartString;
 
 use crate::vm::{
