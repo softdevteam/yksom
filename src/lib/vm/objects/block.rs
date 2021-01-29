@@ -2,10 +2,10 @@
 
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
-#[cfg(feature = "rustc_boehm")]
+#[cfg(feature = "rustgc")]
 use std::gc::NoFinalize;
 
-use rboehm::Gc;
+use libgc::Gc;
 
 use crate::vm::{
     core::VM,
@@ -70,7 +70,7 @@ pub struct Block {
     pub method_stack_base: usize,
 }
 
-#[cfg(feature = "rustc_boehm")]
+#[cfg(feature = "rustgc")]
 impl NoFinalize for Block {}
 
 impl Obj for Block {

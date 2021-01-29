@@ -9,10 +9,10 @@ use std::{
     ops::Deref,
 };
 
+use libgc::{self, Gc};
 use num_bigint::BigInt;
 use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
-use rboehm::{self, Gc};
 
 use super::{
     core::VM,

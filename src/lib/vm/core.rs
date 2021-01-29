@@ -10,9 +10,9 @@ use std::{
     time::Instant,
 };
 
+use libgc::Gc;
 use lrpar::Span;
 use num_bigint::BigInt;
-use rboehm::Gc;
 use smartstring::alias::String as SmartString;
 use static_assertions::const_assert;
 
