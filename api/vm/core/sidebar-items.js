@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["SOM_EXTENSION",""]],"struct":[["VM","The core VM struct."]]});

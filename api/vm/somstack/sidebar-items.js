@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["SOM_STACK_LEN",""]],"struct":[["SOMStack","A contiguous stack of SOM values. This stack does minimal or no checking on important operations and users must ensure that they obey the constraints on each function herein, or undefined behaviour will occur."]]});
