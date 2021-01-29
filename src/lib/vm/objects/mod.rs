@@ -38,8 +38,8 @@ pub use integers::{ArbInt, Int};
 pub use method::Method;
 pub use string_::String_;
 
-use natrob::narrowable_libgc;
 use libgc::Gc;
+use natrob::narrowable_libgc;
 
 use crate::vm::{
     core::VM,
