@@ -30,7 +30,7 @@ git clone https://github.com/softdevteam/rustgc
 mkdir -p rustgc/build/rustgc
 (cd rustgc && ./x.py build --config ../.buildbot.config.toml)
 
-rustup toolchain link rustcgc rustgc/build/x86_64-unknown-linux-gnu/stage1
+rustup toolchain link rustgc rustgc/build/x86_64-unknown-linux-gnu/stage1
 
 cargo clean
 
