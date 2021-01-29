@@ -18,10 +18,10 @@ use yksom::vm::{
     VMError, VMErrorKind, VM,
 };
 
-use libgc::BoehmAllocator;
+use libgc::GcAllocator;
 
 #[global_allocator]
-static ALLOCATOR: BoehmAllocator = BoehmAllocator;
+static ALLOCATOR: GcAllocator = GcAllocator;
 
 fn usage(prog: &str) -> ! {
     let path = Path::new(prog);
