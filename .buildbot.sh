@@ -25,12 +25,12 @@ cargo run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
 rustup toolchain install nightly --allow-downgrade --component rustfmt
 cargo +nightly fmt --all -- --check
 
-# Build rustc_boehm
+# Build rustgc
 git clone https://github.com/softdevteam/rustgc
-mkdir -p rustc_boehm/build/rustgc
+mkdir -p rustgc/build/rustgc
 (cd rustgc && ./x.py build --config ../.buildbot.config.toml)
 
-rustup toolchain link rustc_boehm rustgc/build/x86_64-unknown-linux-gnu/stage1
+rustup toolchain link rustcgc rustgc/build/x86_64-unknown-linux-gnu/stage1
 
 cargo clean
 
