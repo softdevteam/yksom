@@ -5,9 +5,9 @@ use std::{
 };
 
 use itertools::Itertools;
+use libgc::Gc;
 use lrpar::{NonStreamingLexer, Span};
 use num_bigint::BigInt;
-use rboehm::Gc;
 use smartstring::alias::String as SmartString;
 
 use crate::{

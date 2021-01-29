@@ -2,7 +2,7 @@
 
 use std::{cell::Cell, collections::hash_map::DefaultHasher, hash::Hasher};
 
-use rboehm::Gc;
+use libgc::Gc;
 
 use crate::vm::{
     core::VM,

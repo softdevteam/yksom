@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use rboehm::Gc;
+use libgc::Gc;
 
 use crate::{
     compiler::instrs::{Primitive, UpVarDef},
