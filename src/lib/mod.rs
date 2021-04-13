@@ -27,6 +27,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
+#![allow(where_clauses_object_safety)]
 
 pub mod compiler;
 pub mod vm;

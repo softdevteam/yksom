@@ -1,4 +1,4 @@
-use std::{alloc::Layout, mem::size_of, ptr};
+use std::{alloc::Layout, mem::size_of, ptr, cell::Cell};
 
 use libgc::Gc;
 

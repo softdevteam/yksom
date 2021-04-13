@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+use std::{collections::hash_map::DefaultHasher, hash::Hasher, cell::Cell};
 
 #[cfg(feature = "rustgc")]
 use std::gc::NoFinalize;
@@ -20,40 +20,40 @@ use crate::vm::{
 /// be found at: http://www.craftinginterpreters.com/closures.html.
 #[derive(Clone, Debug)]
 pub struct UpVar {
-    prev: Option<Gc<UpVar>>,
-    ptr: Gc<Val>,
-    closed: Val,
+    prev: Cell<Option<Gc<UpVar>>>,
+    ptr: Cell<Gc<Val>>,
+    closed: Cell<Val>,
 }
 
 impl UpVar {
     pub fn new(prev: Option<Gc<UpVar>>, ptr: Gc<Val>) -> Self {
         UpVar {
-            prev,
-            ptr,
-            closed: Val::illegal(),
+            prev: Cell::new(prev),
+            ptr: Cell::new(ptr),
+            closed: Cell::new(Val::illegal()),
         }
     }
 
     pub fn to_gc(&self) -> Gc<Val> {
-        debug_assert_ne!(self.ptr.valkind(), ValKind::ILLEGAL);
-        self.ptr
+        debug_assert_ne!(self.ptr.get().valkind(), ValKind::ILLEGAL);
+        self.ptr.get()
     }
 
-    pub fn close(&mut self) {
-        self.closed = *self.to_gc();
-        self.ptr = Gc::from_raw(&self.closed);
+    pub fn close(&self) {
+        self.closed.set(*self.to_gc());
+        self.ptr.set(Gc::from_raw(&self.closed as *const Cell<_> as *const _));
     }
 
     pub fn is_closed(&self) -> bool {
-        Gc::into_raw(self.ptr) == &self.closed
+        Gc::into_raw(self.ptr.get()) == &self.closed as *const Cell<_> as *const _
     }
 
     pub fn prev(&self) -> Option<Gc<UpVar>> {
-        self.prev
+        self.prev.get()
     }
 
-    pub fn set_prev(&mut self, prev: Option<Gc<UpVar>>) {
-        self.prev = prev;
+    pub fn set_prev(&self, prev: Option<Gc<UpVar>>) {
+        self.prev.set(prev);
     }
 }
 
