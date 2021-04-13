@@ -452,7 +452,7 @@ impl VM {
                             {
                                 // Create a new UpVar.
                                 uv = Some(Gc::new(UpVar::new(uv, Gc::from_raw(local_ptr))));
-                                if let Some(mut prev_uw) = prev {
+                                if let Some(prev_uw) = prev {
                                     // Insert it in the list.
                                     prev_uw.set_prev(uv);
                                 } else {
@@ -1273,7 +1273,7 @@ impl VM {
     /// `stack_base`.
     fn close_vars(&mut self, stack_base: usize) {
         while self.open_upvars.is_some() {
-            let mut uv = self.open_upvars.unwrap();
+            let uv = self.open_upvars.unwrap();
             debug_assert!(!uv.is_closed());
             if Gc::into_raw(uv.to_gc()) < Gc::into_raw(unsafe { self.stack.addr_of(stack_base) }) {
                 break;

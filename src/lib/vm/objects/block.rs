@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::{collections::hash_map::DefaultHasher, hash::Hasher, cell::Cell};
+use std::{cell::Cell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 #[cfg(feature = "rustgc")]
 use std::gc::NoFinalize;
@@ -41,7 +41,8 @@ impl UpVar {
 
     pub fn close(&self) {
         self.closed.set(*self.to_gc());
-        self.ptr.set(Gc::from_raw(&self.closed as *const Cell<_> as *const _));
+        self.ptr
+            .set(Gc::from_raw(&self.closed as *const Cell<_> as *const _));
     }
 
     pub fn is_closed(&self) -> bool {
