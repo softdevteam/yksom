@@ -1,4 +1,4 @@
-use std::{alloc::Layout, mem::size_of, ptr};
+use std::{alloc::Layout, cell::Cell, mem::size_of, ptr};
 
 use libgc::Gc;
 
@@ -30,7 +30,7 @@ pub const SOM_STACK_LEN: usize = 4096;
 /// function's working stack).
 pub struct SOMStack {
     /// How many items are used? Note that the stack has an implicit capacity of [`SOM_STACK_LEN`].
-    len: usize,
+    len: Cell<usize>,
 }
 
 macro_rules! storage {
@@ -52,7 +52,7 @@ impl SOMStack {
         assert_eq!(off, size_of::<usize>());
         let gc = Gc::<Self>::new_from_layout(layout);
         unsafe {
-            *(&raw mut *(Gc::into_raw(gc) as *mut Self)) = SOMStack { len: 0 };
+            *(&raw mut *(Gc::into_raw(gc) as *mut Self)) = SOMStack { len: Cell::new(0) };
             gc.assume_init()
         }
     }
@@ -64,7 +64,7 @@ impl SOMStack {
 
     /// Returns the number of elements in the stack.
     pub fn len(self: Gc<Self>) -> usize {
-        self.len
+        self.len.get()
     }
 
     /// Returns the number of elements the stack can store before running out of room.
@@ -91,23 +91,23 @@ impl SOMStack {
     /// Peeks at a value `n` items from the top of the stack.
     pub fn peek_n(self: Gc<Self>, n: usize) -> Val {
         debug_assert!(n < self.len());
-        unsafe { ptr::read(storage!(self).add(self.len - n - 1)) }
+        unsafe { ptr::read(storage!(self).add(self.len() - n - 1)) }
     }
 
     /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
     /// this function will lead to undefined behaviour.
-    pub fn pop(mut self: Gc<Self>) -> Val {
+    pub fn pop(self: Gc<Self>) -> Val {
         debug_assert!(!self.is_empty());
-        self.len -= 1;
-        unsafe { ptr::read(storage!(self).add(self.len)) }
+        self.len.set(self.len() - 1);
+        unsafe { ptr::read(storage!(self).add(self.len())) }
     }
 
     /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
     /// this function will lead to undefined behaviour.
-    pub fn pop_n(mut self: Gc<Self>, n: usize) -> Val {
+    pub fn pop_n(self: Gc<Self>, n: usize) -> Val {
         debug_assert!(n < self.len());
-        self.len -= 1;
-        let i = self.len - n;
+        self.len.set(self.len() - 1);
+        let i = self.len() - n;
         let v = unsafe { ptr::read(storage!(self).add(i)) };
         unsafe { ptr::copy(storage!(self).add(i + 1), storage!(self).add(i), n) };
         v
@@ -116,10 +116,10 @@ impl SOMStack {
     /// Push `v` onto the end of the stack. You must previously have checked (using
     /// [`SOMStack::remaining_capacity`]) that there is room for this value: if there is not,
     /// undefined behaviour will occur.
-    pub fn push(mut self: Gc<Self>, v: Val) {
+    pub fn push(self: Gc<Self>, v: Val) {
         debug_assert!(self.remaining_capacity() > 0);
-        unsafe { ptr::write(storage!(self).add(self.len), v) };
-        self.len += 1;
+        unsafe { ptr::write(storage!(self).add(self.len()), v) };
+        self.len.set(self.len() + 1);
     }
 
     pub fn set(self: Gc<Self>, n: usize, v: Val) {
@@ -134,24 +134,24 @@ impl SOMStack {
     /// Returns a newly allocated `NormalArray` containing the elements in the range [at, len).
     /// After the call, the SOM stack will be left containing the elements [0, at) with its
     /// previous capacity unchanged.
-    pub fn split_off(mut self: Gc<Self>, at: usize) -> Val {
+    pub fn split_off(self: Gc<Self>, at: usize) -> Val {
         let arr = unsafe {
             NormalArray::alloc(self.len() - at, |arr_store: *mut Val| {
                 ptr::copy_nonoverlapping(storage!(self).add(at), arr_store, self.len() - at);
             })
         };
-        self.len = at;
+        self.len.set(at);
         arr
     }
 
     /// Shortens the stack, keeping the first len elements and dropping the rest.
-    pub fn truncate(mut self: Gc<Self>, len: usize) {
+    pub fn truncate(self: Gc<Self>, len: usize) {
         debug_assert!(len <= self.len());
-        for i in len..self.len {
+        for i in len..self.len() {
             unsafe {
                 ptr::read(storage!(self).add(i));
             }
         }
-        self.len = len;
+        self.len.set(len);
     }
 }

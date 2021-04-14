@@ -19,7 +19,6 @@ path = "lang_tests/run.rs"
 harness = false
 
 [features]
-rustgc = ["libgc/rustgc"]
 krun_harness = ["libc"]
 
 [build-dependencies]

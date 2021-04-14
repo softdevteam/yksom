@@ -16,12 +16,6 @@ sh rustup.sh --default-host x86_64-unknown-linux-gnu \
     -y
 export PATH=`pwd`/.cargo/bin/:$PATH
 
-cargo test
-cargo test --release
-
-cargo run -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
-cargo run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
-
 rustup toolchain install nightly --allow-downgrade --component rustfmt
 cargo +nightly fmt --all -- --check
 
@@ -34,8 +28,8 @@ rustup toolchain link rustgc rustgc/build/x86_64-unknown-linux-gnu/stage1
 
 cargo clean
 
-cargo +rustgc test --features "rustgc"
-cargo +rustgc test --release --features "rustgc"
+cargo +rustgc test
+cargo +rustgc test --release
 
-cargo +rustgc run --features "rustgc" -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
-cargo +rustgc run --features "rustgc" --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
+cargo +rustgc run  -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
+cargo +rustgc run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som

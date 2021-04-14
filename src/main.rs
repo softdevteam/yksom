@@ -1,6 +1,7 @@
 #![feature(allocator_api)]
 #![cfg_attr(feature = "rustgc", feature(gc))]
 #![feature(box_patterns)]
+#![feature(rustc_private)]
 
 use std::{
     env,

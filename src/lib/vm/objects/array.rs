@@ -14,21 +14,29 @@ use crate::vm::{
     val::{NotUnboxable, Val},
 };
 
-pub trait Array {
+pub trait Array: Send {
     /// Return the item at index `idx` (using SOM indexing starting at 1) or an error if the index
     /// is invalid.
-    fn at(self: Gc<Self>, vm: &VM, idx: usize) -> Result<Val, Box<VMError>>;
+    fn at(self: Gc<Self>, vm: &VM, idx: usize) -> Result<Val, Box<VMError>>
+    where
+        Self: Send;
 
     /// Return the item at index `idx` (using SOM indexing starting at 1). This will lead to
     /// undefined behaviour if the index is invalid.
-    unsafe fn unchecked_at(self: Gc<Self>, idx: usize) -> Val;
+    unsafe fn unchecked_at(self: Gc<Self>, idx: usize) -> Val
+    where
+        Self: Send;
 
     /// Set the item at index `idx` (using SOM indexing starting at 1) to `val` or return an error
     /// if the index is invalid.
-    fn at_put(self: Gc<Self>, vm: &mut VM, idx: usize, val: Val) -> Result<(), Box<VMError>>;
+    fn at_put(self: Gc<Self>, vm: &mut VM, idx: usize, val: Val) -> Result<(), Box<VMError>>
+    where
+        Self: Send;
 
     /// Iterate over this array's values.
-    fn iter(self: Gc<Self>) -> ArrayIterator;
+    fn iter(self: Gc<Self>) -> ArrayIterator
+    where
+        Self: Send;
 }
 
 #[derive(Debug)]
@@ -184,25 +192,40 @@ pub struct MethodsArray {
 }
 
 impl Obj for MethodsArray {
-    fn dyn_objtype(self: Gc<Self>) -> ObjType {
+    fn dyn_objtype(self: Gc<Self>) -> ObjType
+    where
+        Self: Send,
+    {
         ObjType::Array
     }
 
-    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val {
+    fn get_class(self: Gc<Self>, vm: &mut VM) -> Val
+    where
+        Self: Send,
+    {
         vm.array_cls
     }
 
-    fn to_array(self: Gc<Self>) -> Result<Gc<dyn Array>, Box<VMError>> {
+    fn to_array(self: Gc<Self>) -> Result<Gc<dyn Array>, Box<VMError>>
+    where
+        Self: Send,
+    {
         Ok(self)
     }
 
-    fn hashcode(self: Gc<Self>) -> u64 {
+    fn hashcode(self: Gc<Self>) -> u64
+    where
+        Self: Send,
+    {
         let mut hasher = DefaultHasher::new();
         hasher.write_usize(Gc::into_raw(self) as *const _ as usize);
         hasher.finish()
     }
 
-    fn length(self: Gc<Self>) -> usize {
+    fn length(self: Gc<Self>) -> usize
+    where
+        Self: Send,
+    {
         let store = unsafe { &*self.store.get() };
         store.len()
     }
