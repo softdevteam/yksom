@@ -4,7 +4,7 @@ VM:
   stdout:
     1
 
-    ERROR: Unable to resolve unknown
+    ERROR: Tried loading 'unknown' as a class, but failed.
 "
 
 unknown_global_lookup = (
