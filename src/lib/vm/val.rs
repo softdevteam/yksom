@@ -280,6 +280,27 @@ impl Val {
         }
     }
 
+    pub fn as_f64(&self, vm: &mut VM) -> Result<f64, Box<VMError>> {
+        match self.valkind() {
+            ValKind::GCBOX => match unsafe { self.gcbox_to_tobj() }.downcast::<ArbInt>() {
+                Some(tobj) => tobj.to_f64(vm),
+                None => Err(VMError::new(vm, VMErrorKind::CantRepresentAsDouble)),
+            },
+            ValKind::INT => {
+                if self.val & 1 << (BITSIZE - 1) == 0 {
+                    Ok((self.val >> TAG_BITSIZE) as isize as f64)
+                } else {
+                    // For negative integers we need to pad the top TAG_BITSIZE bits with 1s.
+                    Ok(
+                        ((self.val >> TAG_BITSIZE) | (TAG_BITMASK << (BITSIZE - TAG_BITSIZE)))
+                            as isize as f64,
+                    )
+                }
+            }
+            ValKind::ILLEGAL => unreachable!(),
+        }
+    }
+
     /// Is this `Val` bit equal to `other`? This is a very strong property, generally used as a
     /// fast proxy for "if both `Val`s are `GCBox`s then do they point to the same thing?" since,
     /// in such cases, at least one of the sides has been pre-guaranteed to be a `GCBox`.

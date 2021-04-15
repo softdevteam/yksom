@@ -165,7 +165,7 @@ impl String_ {
             todo!();
         }
         if end < start {
-            todo!();
+            return Ok(String_::new_str(vm, SmartString::new()));
         }
         if start > self.s.len() || end > self.s.len() {
             todo!();

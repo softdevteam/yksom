@@ -162,7 +162,9 @@ pub enum VMErrorKind {
         expected_cls: Val,
         got_cls: Val,
     },
-    /// Tried to convert an invalid string to a number.
+    /// Tried to convert an invalid string to a Double.
+    InvalidDouble(SmartString),
+    /// Tried to convert an invalid string to an Integer.
     InvalidInteger(SmartString),
     /// Tried to access a global before it being initialised.
     InvalidSymbol,
@@ -225,6 +227,9 @@ impl VMErrorKind {
                     expected_name.as_str(),
                     got_name.as_str()
                 ))
+            }
+            VMErrorKind::InvalidDouble(s) => {
+                Ok(format!("'{}' cannot be converted to a Double", s.as_str()))
             }
             VMErrorKind::InvalidInteger(s) => Ok(format!(
                 "'{}' cannot be converted to an Integer",

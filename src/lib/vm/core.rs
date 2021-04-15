@@ -672,6 +672,13 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::AsDouble => {
+                let rcv = self.stack.pop();
+                let i = stry!(rcv.as_f64(self));
+                let v = Double::new(self, i);
+                self.stack.push(v);
+                SendReturn::Val
+            }
             Primitive::AsInteger => {
                 let rcv = self.stack.pop();
                 let dbl = stry!(rcv.downcast::<Double>(self));
@@ -784,6 +791,12 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
+            Primitive::ErrorPrint => {
+                todo!();
+            }
+            Primitive::ErrorPrintln => {
+                todo!();
+            }
             Primitive::Equals => {
                 let v = self.stack.pop();
                 let rcv = self.stack.pop();
@@ -822,19 +835,33 @@ impl VM {
             }
             Primitive::FromString => {
                 let str_ = stry!(self.stack.pop().downcast::<String_>(self));
-                let _rcv = self.stack.pop();
+                let rcv = self.stack.pop();
                 let s = str_.as_str();
-                let v = match s.parse::<isize>() {
-                    Ok(i) => Val::from_isize(self, i),
-                    Err(_) => match BigInt::from_str(s) {
-                        Ok(i) => ArbInt::new(self, i),
+                let v = if rcv == self.int_cls {
+                    match s.parse::<isize>() {
+                        Ok(i) => Val::from_isize(self, i),
+                        Err(_) => match BigInt::from_str(s) {
+                            Ok(i) => ArbInt::new(self, i),
+                            Err(_) => {
+                                return SendReturn::Err(VMError::new(
+                                    self,
+                                    VMErrorKind::InvalidInteger(SmartString::from(s)),
+                                ))
+                            }
+                        },
+                    }
+                } else if rcv == self.double_cls {
+                    match s.parse::<f64>() {
+                        Ok(i) => Double::new(self, i),
                         Err(_) => {
                             return SendReturn::Err(VMError::new(
                                 self,
-                                VMErrorKind::InvalidInteger(SmartString::from(s)),
+                                VMErrorKind::InvalidDouble(SmartString::from(s)),
                             ))
                         }
-                    },
+                    }
+                } else {
+                    unreachable!();
                 };
                 self.stack.push(v);
                 SendReturn::Val
@@ -1020,6 +1047,9 @@ impl VM {
                 }
                 SendReturn::Val
             }
+            Primitive::LoadFile => {
+                todo!();
+            }
             Primitive::Methods => {
                 let rcv = self.stack.pop();
                 let methods = stry!(rcv.downcast::<Class>(self)).methods(self);
@@ -1109,6 +1139,9 @@ impl VM {
                 let substr = stry!(str_.substring(self, start, end));
                 self.stack.push(substr);
                 SendReturn::Val
+            }
+            Primitive::PrintStackTrace => {
+                todo!();
             }
             Primitive::RefEquals => {
                 let v = self.stack.pop();
