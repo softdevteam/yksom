@@ -12,6 +12,7 @@ VM:
     #ab
     #+
     #+-+
+    #primitive
 "
 
 symbol = (
@@ -29,5 +30,6 @@ symbol = (
 
         #+ println.
         #+-+ println.
+        #primitive println.
     )
 )
