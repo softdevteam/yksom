@@ -175,6 +175,7 @@ StringConst -> Result<Expr, ()>:
       "#" "STRING" { Ok(Expr::StringSymbol(map_err($2)?.span())) }
     | "#" "ID" { Ok(Expr::Symbol(map_err($2)?.span())) }
     | "#" "KEYWORD" { Ok(Expr::Symbol(map_err($2)?.span())) }
+    | "#" "PRIMITIVE" { Ok(Expr::Symbol(map_err($2)?.span())) }
     | "#" BinOp { Ok(Expr::Symbol($2?)) }
     ;
 Array -> Result<Expr, ()>:

@@ -640,7 +640,16 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     max_stack = max(max_stack, 1 + i + expr_stack);
                 }
                 let send_off = vm.add_send((mn, msglist.len()));
-                let instr = Instr::Send(send_off, vm.new_inline_cache());
+                let instr = match receiver {
+                    box ast::Expr::UnaryMsg {
+                        receiver: box ast::Expr::VarLookup(span2),
+                        ids,
+                        span: _,
+                    } if ids.len() == 0 && self.lexer.span_str(*span2) == "super" => {
+                        Instr::SuperSend(send_off, vm.new_inline_cache())
+                    }
+                    _ => Instr::Send(send_off, vm.new_inline_cache()),
+                };
                 vm.instrs_push(instr, *span);
                 debug_assert!(max_stack > 0);
                 Ok(max_stack)
