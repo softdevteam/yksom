@@ -545,7 +545,16 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 let mut stack_size = self.c_expr(vm, lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
                 let send_off = vm.add_send((SmartString::from(self.lexer.span_str(*op)), 1));
-                let instr = Instr::Send(send_off, vm.new_inline_cache());
+                let instr = match lhs {
+                    box ast::Expr::UnaryMsg {
+                        receiver: box ast::Expr::VarLookup(span2),
+                        ids,
+                        span: _,
+                    } if ids.len() == 0 && self.lexer.span_str(*span2) == "super" => {
+                        Instr::SuperSend(send_off, vm.new_inline_cache())
+                    }
+                    _ => Instr::Send(send_off, vm.new_inline_cache()),
+                };
                 vm.instrs_push(instr, *span);
                 debug_assert!(stack_size > 0);
                 Ok(stack_size)
