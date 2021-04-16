@@ -287,16 +287,13 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let sig = String_::new_sym(vm, name.1.clone());
         let meth = Method::new(vm, sig, func);
         let meth_gc = meth.tobj(vm).unwrap().downcast::<Method>().unwrap();
-        meth_gc.func.set_containing_method(meth_gc);
 
         // We now need to set the containing method of all blocks (and, recursively, their child
         // blocks) to be the method itself.
         fn patch(f: &Function, meth: Gc<Method>) {
+            f.set_containing_method(meth);
             for blk_func in f.block_funcs().iter() {
-                blk_func.set_containing_method(meth);
-                for f in blk_func.block_funcs().iter() {
-                    patch(f, meth);
-                }
+                patch(blk_func, meth);
             }
         }
         patch(&meth_gc.func, meth_gc);
