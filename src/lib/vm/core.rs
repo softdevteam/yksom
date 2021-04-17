@@ -905,7 +905,10 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::Halt => unimplemented!(),
+            Primitive::Halt => {
+                eprintln!("BREAKPOINT");
+                SendReturn::Val
+            }
             Primitive::HasGlobal => todo!(),
             Primitive::Hashcode => {
                 let rcv = self.stack.pop();
