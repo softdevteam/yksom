@@ -5,6 +5,7 @@ VM:
     5
     1
     13
+    2
 "
 
 string_length = (
@@ -12,5 +13,6 @@ string_length = (
         'hello' length println.
         '❤' length println.
         'hello ❤ world' length println.
+        ('abc' substringFrom: 1 to: 2) length println.
     )
 )

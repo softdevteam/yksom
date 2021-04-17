@@ -177,7 +177,7 @@ impl String_ {
             .take(end - start + 1)
             .collect::<String>()
             .into();
-        Ok(String_::new_str_chars_len(vm, substr, end - start))
+        Ok(String_::new_str_chars_len(vm, substr, end + 1 - start))
     }
 
     pub fn to_string_(&self, vm: &mut VM) -> Result<Val, Box<VMError>> {
