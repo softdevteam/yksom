@@ -75,7 +75,9 @@ fn main() {
         Some(x) => x,
         None => todo!(),
     };
-    let src_fname_val = String_::new_str(&mut vm, SmartString::from(src_fname));
+    let mut src_fname = PathBuf::from(src_fname);
+    src_fname.set_extension("");
+    let src_fname_val = String_::new_str(&mut vm, SmartString::from(src_fname.to_str().unwrap()));
     let mut args_vec = vec![src_fname_val];
     args_vec.extend(
         matches
