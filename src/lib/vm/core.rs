@@ -793,7 +793,9 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::ErrorPrint => {
-                todo!();
+                let v = self.stack.pop();
+                eprint!("{}", stry!(v.downcast::<String_>(self)).as_str());
+                SendReturn::Val
             }
             Primitive::ErrorPrintln => {
                 let v = self.stack.pop();
