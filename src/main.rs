@@ -75,7 +75,7 @@ fn main() {
         Some(x) => x,
         None => todo!(),
     };
-    let src_fname_val = String_::new_sym(&mut vm, SmartString::from(src_fname));
+    let src_fname_val = String_::new_str(&mut vm, SmartString::from(src_fname));
     let mut args_vec = vec![src_fname_val];
     args_vec.extend(
         matches
