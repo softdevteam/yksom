@@ -4,6 +4,6 @@ VM:
   stdout: Hello world
 "
 
-Hello_World1 = (
+hello_world1 = (
     run = ( 'Hello world' println )
 )

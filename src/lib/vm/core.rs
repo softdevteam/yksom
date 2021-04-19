@@ -3,6 +3,7 @@
 use std::{
     collections::HashMap,
     convert::TryFrom,
+    fs::read_to_string,
     mem::size_of,
     path::{Path, PathBuf},
     process,
@@ -792,10 +793,14 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::ErrorPrint => {
-                todo!();
+                let v = self.stack.pop();
+                eprint!("{}", stry!(v.downcast::<String_>(self)).as_str());
+                SendReturn::Val
             }
             Primitive::ErrorPrintln => {
-                todo!();
+                let v = self.stack.pop();
+                eprintln!("{}", stry!(v.downcast::<String_>(self)).as_str());
+                SendReturn::Val
             }
             Primitive::Equals => {
                 let v = self.stack.pop();
@@ -900,7 +905,10 @@ impl VM {
                 self.stack.push(v);
                 SendReturn::Val
             }
-            Primitive::Halt => unimplemented!(),
+            Primitive::Halt => {
+                eprintln!("BREAKPOINT");
+                SendReturn::Val
+            }
             Primitive::HasGlobal => todo!(),
             Primitive::Hashcode => {
                 let rcv = self.stack.pop();
@@ -1048,7 +1056,17 @@ impl VM {
                 SendReturn::Val
             }
             Primitive::LoadFile => {
-                todo!();
+                let path_val = self.stack.pop();
+                let _rcv = self.stack.pop();
+                let path = PathBuf::from(stry!(path_val.downcast::<String_>(self)).as_str());
+                match read_to_string(path) {
+                    Ok(s) => {
+                        let v = String_::new_str(self, SmartString::from(s));
+                        self.stack.push(v);
+                    }
+                    Err(_) => self.stack.push(self.nil),
+                }
+                SendReturn::Val
             }
             Primitive::Methods => {
                 let rcv = self.stack.pop();

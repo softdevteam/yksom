@@ -33,3 +33,8 @@ cargo +rustgc test --release
 
 cargo +rustgc run  -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
 cargo +rustgc run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
+
+cd SOM && \
+  cargo +rustgc run --release -- \
+    --cp Smalltalk:TestSuite:SomSom/src/compiler:SomSom/src/vm:SomSom/src/vmobjects:SomSom/src/interpreter:SomSom/src/primitives \
+    SomSom/tests/SomSomTests.som
