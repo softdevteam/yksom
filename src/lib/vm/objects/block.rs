@@ -20,8 +20,14 @@ use crate::vm::{
 /// be found at: http://www.craftinginterpreters.com/closures.html.
 #[derive(Clone, Debug)]
 pub struct UpVar {
+    /// The previous `UpVar` in the global linked list of `UpVar`s (if any).
     prev: Cell<Option<Gc<UpVar>>>,
+    /// A pointer to this `UpVar`'s `Val`. This will either be a pointer to a value on the SOM
+    /// stack or a pointer to `self.closed`.
     ptr: Cell<Gc<Val>>,
+    /// When an `UpVar` is created, `closed` is a `Val::illegal`. If/when an `UpVar` is closed, the
+    /// value pointed to by `self.ptr` is copied to `self.closed`, and `self.ptr` is updated to
+    /// point to `self.closed`.
     closed: Cell<Val>,
 }
 
