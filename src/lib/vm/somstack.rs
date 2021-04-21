@@ -156,7 +156,8 @@ impl SOMStack {
         debug_assert!(len <= self.len());
         for i in len..self.len() {
             unsafe {
-                ptr::read(storage!(self).add(i));
+                // Since `Val`s don't have a `drop` implementation, we can simply discard them
+                // without worrying about them being dropped.
                 ptr::write(storage!(self).add(i), Val::illegal());
             }
         }
