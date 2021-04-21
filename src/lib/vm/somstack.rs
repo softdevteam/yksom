@@ -8,7 +8,8 @@ pub const SOM_STACK_LEN: usize = 4096;
 
 /// A contiguous stack of SOM values. This stack does minimal or no checking on important
 /// operations and users must ensure that they obey the constraints on each function herein, or
-/// undefined behaviour will occur.
+/// undefined behaviour will occur. Note also that `UpVar`s store interior pointers into this
+/// stack: it must not, therefore, ever be moved in memory.
 ///
 /// The basic layout of the stack is as a series of function frames growing from the beginning of
 /// the stack upwards. On a 64-bit machine, a function frame looks roughly like:
