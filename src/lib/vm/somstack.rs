@@ -99,7 +99,11 @@ impl SOMStack {
     pub fn pop(self: Gc<Self>) -> Val {
         debug_assert!(!self.is_empty());
         self.len.set(self.len() - 1);
-        unsafe { ptr::read(storage!(self).add(self.len())) }
+        unsafe {
+            let v = ptr::read(storage!(self).add(self.len()));
+            ptr::write(storage!(self).add(self.len()), Val::illegal());
+            v
+        }
     }
 
     /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
@@ -108,9 +112,12 @@ impl SOMStack {
         debug_assert!(n < self.len());
         self.len.set(self.len() - 1);
         let i = self.len() - n;
-        let v = unsafe { ptr::read(storage!(self).add(i)) };
-        unsafe { ptr::copy(storage!(self).add(i + 1), storage!(self).add(i), n) };
-        v
+        unsafe {
+            let v = ptr::read(storage!(self).add(i));
+            ptr::copy(storage!(self).add(i + 1), storage!(self).add(i), n);
+            ptr::write(storage!(self).add(self.len()), Val::illegal());
+            v
+        }
     }
 
     /// Push `v` onto the end of the stack. You must previously have checked (using
@@ -140,7 +147,7 @@ impl SOMStack {
                 ptr::copy_nonoverlapping(storage!(self).add(at), arr_store, self.len() - at);
             })
         };
-        self.len.set(at);
+        self.truncate(at);
         arr
     }
 
@@ -150,6 +157,7 @@ impl SOMStack {
         for i in len..self.len() {
             unsafe {
                 ptr::read(storage!(self).add(i));
+                ptr::write(storage!(self).add(i), Val::illegal());
             }
         }
         self.len.set(len);
