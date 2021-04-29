@@ -8,8 +8,8 @@ use std::{
     str,
 };
 
-use libgc::Gc;
 use smartstring::alias::String as SmartString;
+use std::gc::Gc;
 
 use crate::vm::{
     core::VM,

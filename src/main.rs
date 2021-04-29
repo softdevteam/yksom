@@ -1,5 +1,5 @@
 #![feature(allocator_api)]
-#![cfg_attr(feature = "rustgc", feature(gc))]
+#![feature(gc)]
 #![feature(box_patterns)]
 #![feature(rustc_private)]
 
@@ -19,7 +19,7 @@ use yksom::vm::{
     VMError, VMErrorKind, VM,
 };
 
-use libgc::GcAllocator;
+use std::gc::GcAllocator;
 
 #[global_allocator]
 static ALLOCATOR: GcAllocator = GcAllocator;

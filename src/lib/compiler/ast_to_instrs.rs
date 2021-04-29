@@ -5,10 +5,10 @@ use std::{
 };
 
 use itertools::Itertools;
-use libgc::Gc;
 use lrpar::{NonStreamingLexer, Span};
 use num_bigint::BigInt;
 use smartstring::alias::String as SmartString;
+use std::gc::Gc;
 
 use crate::{
     compiler::{

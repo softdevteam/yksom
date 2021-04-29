@@ -2,7 +2,7 @@
 
 use std::{alloc::Layout, collections::hash_map::DefaultHasher, hash::Hasher, mem::size_of};
 
-use libgc::Gc;
+use std::gc::Gc;
 
 use crate::vm::{
     core::VM,

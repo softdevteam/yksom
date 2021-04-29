@@ -1,6 +1,6 @@
 use std::{alloc::Layout, cell::Cell, mem::size_of, ptr};
 
-use libgc::Gc;
+use std::gc::Gc;
 
 use crate::vm::{objects::NormalArray, val::Val};
 
