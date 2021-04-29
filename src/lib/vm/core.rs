@@ -11,11 +11,11 @@ use std::{
     time::Instant,
 };
 
-use libgc::Gc;
 use lrpar::Span;
 use num_bigint::BigInt;
 use smartstring::alias::String as SmartString;
 use static_assertions::const_assert;
+use std::gc::Gc;
 
 use crate::{
     compiler::{

@@ -19,6 +19,7 @@
 #![feature(entry_insert)]
 #![feature(raw_ref_op)]
 #![feature(unsize)]
+#![feature(gc)]
 #![cfg_attr(feature = "rustgc", feature(gc))]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::float_cmp)]

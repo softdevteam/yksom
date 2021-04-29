@@ -13,9 +13,9 @@
 
 use std::convert::TryFrom;
 
-use libgc::Gc;
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, Signed, ToPrimitive, Zero};
+use std::gc::Gc;
 
 use crate::vm::{
     core::VM,

@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use libgc::Gc;
+use std::gc::Gc;
 
 use crate::{
     compiler::instrs::{Primitive, UpVarDef},

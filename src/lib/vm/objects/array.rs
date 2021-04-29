@@ -5,7 +5,7 @@ use std::{
     mem::size_of, ptr::copy_nonoverlapping,
 };
 
-use libgc::Gc;
+use std::gc::Gc;
 
 use crate::vm::{
     core::VM,

@@ -1,8 +1,8 @@
 use std::{fs::read_to_string, io::stderr};
 
-use libgc::Gc;
 use lrpar::Span;
 use smartstring::alias::String as SmartString;
+use std::gc::Gc;
 use termion::{is_tty, style};
 
 use crate::vm::{

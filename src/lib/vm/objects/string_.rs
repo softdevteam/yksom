@@ -7,11 +7,8 @@ use std::{
     str,
 };
 
-#[cfg(feature = "rustgc")]
-use std::gc::NoFinalize;
-
-use libgc::Gc;
 use smartstring::alias::String as SmartString;
+use std::gc::Gc;
 
 use crate::vm::{
     core::VM,

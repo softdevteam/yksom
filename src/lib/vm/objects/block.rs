@@ -2,10 +2,7 @@
 
 use std::{cell::Cell, collections::hash_map::DefaultHasher, hash::Hasher};
 
-#[cfg(feature = "rustgc")]
-use std::gc::NoFinalize;
-
-use libgc::Gc;
+use std::gc::Gc;
 
 use crate::vm::{
     core::VM,

@@ -2,10 +2,10 @@
 
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
-use libgc::Gc;
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
 use smartstring::alias::String as SmartString;
+use std::gc::Gc;
 
 use crate::vm::{
     core::VM,
