@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{env, fs::read_to_string, path::PathBuf, process::Command};
 
 use lang_tester::LangTester;
 use lazy_static::lazy_static;
@@ -18,16 +18,17 @@ fn main() {
     LangTester::new()
         .test_dir("lang_tests")
         .test_file_filter(|p| {
-            if p.parent().unwrap().file_name().unwrap() == "lang_tests" {
+            if p.parent().unwrap().file_name().unwrap().to_str() == Some("lang_tests") {
                 p.extension().unwrap().to_str().unwrap() == "som"
             } else {
                 p.file_name().unwrap() == "test.som"
             }
         })
-        .test_extract(|s| {
+        .test_extract(|p| {
             EXPECTED
-                .captures(s)
+                .captures(&read_to_string(p).unwrap())
                 .map(|x| x.get(1).unwrap().as_str().trim().to_owned())
+                .unwrap()
         })
         .test_cmds(|p| {
             // We call target/[debug|release]/yksom directly, because it's noticeably faster than
