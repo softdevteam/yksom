@@ -15,6 +15,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(box_patterns)]
 #![feature(coerce_unsized)]
+#![feature(negative_impls)]
 #![feature(dispatch_from_dyn)]
 #![feature(entry_insert)]
 #![feature(raw_ref_op)]

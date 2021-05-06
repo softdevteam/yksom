@@ -14,6 +14,8 @@ use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::gc::Gc;
 
+use std::gc::NoTrace;
+
 use super::{
     core::VM,
     error::{VMError, VMErrorKind},
@@ -64,6 +66,8 @@ pub struct Val {
     // several parts of the code to cooperate in order to be correct.
     pub val: usize,
 }
+
+impl !NoTrace for Val {}
 
 impl Val {
     /// Create a new `Val` from an object that should be allocated on the heap.
