@@ -38,7 +38,6 @@ arrayvec = "0.5"
 cfgrammar = "0.9"
 getopts = "0.2"
 itertools = "0.9"
-libgc = { git = "https://github.com/softdevteam/libgc" }
 lrlex = "0.9"
 lrpar = "0.9"
 natrob = { git="https://github.com/softdevteam/natrob", features=["libgc"] }
