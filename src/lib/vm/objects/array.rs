@@ -7,6 +7,8 @@ use std::{
 
 use std::gc::Gc;
 
+use std::gc::NoTrace;
+
 use crate::vm::{
     core::VM,
     error::{VMError, VMErrorKind},
@@ -43,6 +45,8 @@ pub trait Array: Send {
 pub struct NormalArray {
     len: usize,
 }
+
+impl !NoTrace for NormalArray {}
 
 // Since arrays have a fixed number of elements in their store, we do not need to allocate a separate
 // object and store: we can fit both in a single block. We thus use a custom layout where

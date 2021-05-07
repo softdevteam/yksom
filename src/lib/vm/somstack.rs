@@ -4,6 +4,8 @@ use std::gc::Gc;
 
 use crate::vm::{objects::NormalArray, val::Val};
 
+use std::gc::NoTrace;
+
 pub const SOM_STACK_LEN: usize = 4096;
 
 /// A contiguous stack of SOM values. This stack does minimal or no checking on important
@@ -33,6 +35,8 @@ pub struct SOMStack {
     /// How many items are used? Note that the stack has an implicit capacity of [`SOM_STACK_LEN`].
     len: Cell<usize>,
 }
+
+impl !NoTrace for SOMStack {}
 
 macro_rules! storage {
     ($self:ident) => {

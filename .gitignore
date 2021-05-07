@@ -1,3 +1,5 @@
 Cargo.lock
 target/
 *.core
+rebench.conf
+rebench.data
