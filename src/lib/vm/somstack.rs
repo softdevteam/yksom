@@ -1,28 +1,26 @@
-use std::{alloc::Layout, cell::Cell, mem::size_of, ptr};
+use std::cell::{Cell, UnsafeCell};
 
 use std::gc::Gc;
 
 use crate::vm::{objects::NormalArray, val::Val};
 
-use std::gc::NoTrace;
-
 pub const SOM_STACK_LEN: usize = 4096;
 
 /// A contiguous stack of SOM values. This stack does minimal or no checking on important
 /// operations and users must ensure that they obey the constraints on each function herein, or
-/// undefined behaviour will occur. Note also that `UpVar`s store interior pointers into this
+/// undefined behaviour will occur. Note also that `UpVar`s store interior pointers into the
 /// stack: it must not, therefore, ever be moved in memory.
 ///
 /// The basic layout of the stack is as a series of function frames growing from the beginning of
-/// the stack upwards. On a 64-bit machine, a function frame looks roughly like:
+/// the stack upwards. A function frame looks roughly like:
 ///
-///   0    :     <arg 0>
-///               ...
-///              <arg n>
-///   n * 8:     <var 0>
-///              ...
-///              <var m>
-///   (n+m) * 8: <working stack>
+///   0    : <arg 0>
+///           ...
+///          <arg n>
+///   n    : <var 0>
+///          ...
+///          <var m>
+///   (n+m): <working stack>
 ///
 /// The compiler and VM treat <arg 0> as special: it always contains a reference to `self` (hence
 /// all functions have 1 extra parameter over those specified by the user). Functions are expected
@@ -34,32 +32,18 @@ pub const SOM_STACK_LEN: usize = 4096;
 pub struct SOMStack {
     /// How many items are used? Note that the stack has an implicit capacity of [`SOM_STACK_LEN`].
     len: Cell<usize>,
-}
-
-impl !NoTrace for SOMStack {}
-
-macro_rules! storage {
-    ($self:ident) => {
-        // We assume that the stack immediately follows the `SOMStack` without padding. This
-        // invariant is enforced in `SOMStack::new`. This saves us having to create a full `Layout`
-        // each time.
-        (Gc::into_raw($self) as *mut u8).add(::std::mem::size_of::<SOMStack>()) as *mut Val
-    };
+    /// The stack itself. Notice that we store this as *part of the `SOMStack` struct, so when we
+    /// take interior pointers (in [`SOMStack::addr_of`]) they are interior pointers to `SOMStack`
+    /// itself.
+    store: UnsafeCell<[Val; SOM_STACK_LEN]>,
 }
 
 impl SOMStack {
     pub fn new() -> Gc<Self> {
-        #![allow(clippy::cast_ptr_alignment)]
-        let layout = Layout::new::<Self>();
-        let (layout, off) = layout
-            .extend(Layout::array::<Val>(SOM_STACK_LEN).unwrap())
-            .unwrap();
-        assert_eq!(off, size_of::<usize>());
-        let gc = Gc::<Self>::new_from_layout(layout);
-        unsafe {
-            *(&raw mut *(Gc::into_raw(gc) as *mut Self)) = SOMStack { len: Cell::new(0) };
-            gc.assume_init()
-        }
+        Gc::new(SOMStack {
+            len: Cell::new(0),
+            store: UnsafeCell::new([Val::illegal(); SOM_STACK_LEN]),
+        })
     }
 
     /// Returns `true` if the stack contains no elements.
@@ -78,7 +62,7 @@ impl SOMStack {
     }
 
     pub unsafe fn addr_of(self: Gc<Self>, n: usize) -> Gc<Val> {
-        Gc::from_raw(storage!(self).add(n))
+        Gc::from_raw((&*self.store.get()).get_unchecked(n))
     }
 
     /// Returns the top-most value of the stack without removing it. If the stack is empty, calling
@@ -87,40 +71,28 @@ impl SOMStack {
         self.peek_n(0)
     }
 
-    /// Peeks at a value `n` items from the top of the stack.
+    /// Peeks at a value `n` items from the start of the stack.
     pub fn peek_at(self: Gc<Self>, off: usize) -> Val {
         debug_assert!(off < self.len());
-        unsafe { ptr::read(storage!(self).add(off)) }
+        *unsafe { (&*self.store.get()).get_unchecked(off) }
     }
 
     /// Peeks at a value `n` items from the top of the stack.
     pub fn peek_n(self: Gc<Self>, n: usize) -> Val {
         debug_assert!(n < self.len());
-        unsafe { ptr::read(storage!(self).add(self.len() - n - 1)) }
+        *unsafe { (&*self.store.get()).get_unchecked(self.len() - n - 1) }
     }
 
     /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
     /// this function will lead to undefined behaviour.
     pub fn pop(self: Gc<Self>) -> Val {
         debug_assert!(!self.is_empty());
-        self.len.set(self.len() - 1);
+        let len = self.len() - 1;
+        self.len.set(len);
         unsafe {
-            let v = ptr::read(storage!(self).add(self.len()));
-            ptr::write(storage!(self).add(self.len()), Val::illegal());
-            v
-        }
-    }
-
-    /// Pops the top-most value of the stack and returns it. If the stack is empty, calling
-    /// this function will lead to undefined behaviour.
-    pub fn pop_n(self: Gc<Self>, n: usize) -> Val {
-        debug_assert!(n < self.len());
-        self.len.set(self.len() - 1);
-        let i = self.len() - n;
-        unsafe {
-            let v = ptr::read(storage!(self).add(i));
-            ptr::copy(storage!(self).add(i + 1), storage!(self).add(i), n);
-            ptr::write(storage!(self).add(self.len()), Val::illegal());
+            let p = (&mut *self.store.get()).get_unchecked_mut(len);
+            let v = *p;
+            *p = Val::illegal();
             v
         }
     }
@@ -130,15 +102,14 @@ impl SOMStack {
     /// undefined behaviour will occur.
     pub fn push(self: Gc<Self>, v: Val) {
         debug_assert!(self.remaining_capacity() > 0);
-        unsafe { ptr::write(storage!(self).add(self.len()), v) };
-        self.len.set(self.len() + 1);
+        let len = self.len();
+        *unsafe { (&mut *self.store.get()).get_unchecked_mut(len) } = v;
+        self.len.set(len + 1);
     }
 
     pub fn set(self: Gc<Self>, n: usize, v: Val) {
         debug_assert!(n < self.len());
-        unsafe {
-            ptr::write(storage!(self).add(n), v);
-        }
+        *unsafe { (&mut *self.store.get()).get_unchecked_mut(n) } = v;
     }
 
     /// Splits the collection into two at the given index.
@@ -147,24 +118,18 @@ impl SOMStack {
     /// After the call, the SOM stack will be left containing the elements [0, at) with its
     /// previous capacity unchanged.
     pub fn split_off(self: Gc<Self>, at: usize) -> Val {
-        let arr = unsafe {
-            NormalArray::alloc(self.len() - at, |arr_store: *mut Val| {
-                ptr::copy_nonoverlapping(storage!(self).add(at), arr_store, self.len() - at);
-            })
-        };
+        let v = Vec::from(&unsafe { &*self.store.get() }[at..self.len()]);
         self.truncate(at);
-        arr
+        NormalArray::from_vec(v)
     }
 
     /// Shortens the stack, keeping the first len elements and dropping the rest.
     pub fn truncate(self: Gc<Self>, len: usize) {
         debug_assert!(len <= self.len());
         for i in len..self.len() {
-            unsafe {
-                // Since `Val`s don't have a `drop` implementation, we can simply discard them
-                // without worrying about them being dropped.
-                ptr::write(storage!(self).add(i), Val::illegal());
-            }
+            // Since `Val`s don't have a `drop` implementation, we can simply discard them without
+            // worrying about them being dropped.
+            self.set(i, Val::illegal());
         }
         self.len.set(len);
     }

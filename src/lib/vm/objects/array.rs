@@ -1,13 +1,8 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::{
-    alloc::Layout, cell::UnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher,
-    mem::size_of, ptr::copy_nonoverlapping,
-};
+use std::{cell::UnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 use std::gc::Gc;
-
-use std::gc::NoTrace;
 
 use crate::vm::{
     core::VM,
@@ -43,29 +38,7 @@ pub trait Array: Send {
 
 #[derive(Debug)]
 pub struct NormalArray {
-    len: usize,
-}
-
-impl !NoTrace for NormalArray {}
-
-// Since arrays have a fixed number of elements in their store, we do not need to allocate a separate
-// object and store: we can fit both in a single block. We thus use a custom layout where
-// the `NormalArray` comes first, followed immediately by a contiguous array of `Val`s. On a
-// 64-bit machine this looks roughly as follows:
-//
-//   0: NormalArray { len: ... }
-//   8: Val_0
-//   16: Val_1
-//   ...
-
-macro_rules! narr_store {
-    ($self:ident) => {
-        // We assume that the backing store immediately follows the `NormalArray` without padding.
-        // This invariant is enforced in `NormalArray::alloc`. This saves us having to create a
-        // full `Layout`, which would require us having to know how many elements are stored in
-        // this array.
-        (Gc::into_raw($self) as *mut u8).add(::std::mem::size_of::<NormalArray>()) as *mut Val
-    };
+    store: UnsafeCell<Vec<Val>>,
 }
 
 impl Obj for NormalArray {
@@ -88,7 +61,7 @@ impl Obj for NormalArray {
     }
 
     fn length(self: Gc<Self>) -> usize {
-        self.len
+        unsafe { &*self.store.get() }.len()
     }
 }
 
@@ -102,36 +75,36 @@ impl StaticObjType for NormalArray {
 
 impl Array for NormalArray {
     fn at(self: Gc<Self>, vm: &VM, idx: usize) -> Result<Val, Box<VMError>> {
-        if idx > 0 && idx <= self.len {
+        if idx > 0 && idx <= self.length() {
             Ok(unsafe { self.unchecked_at(idx) })
         } else {
             Err(VMError::new(
                 vm,
                 VMErrorKind::IndexError {
                     tried: idx,
-                    max: self.len,
+                    max: self.length(),
                 },
             ))
         }
     }
 
     unsafe fn unchecked_at(self: Gc<Self>, idx: usize) -> Val {
-        debug_assert!(idx > 0 && idx <= self.len);
-        narr_store!(self).add(idx - 1).read()
+        debug_assert!(idx > 0);
+        let store = &*self.store.get();
+        debug_assert!(idx <= self.length());
+        *store.get_unchecked(idx - 1)
     }
 
     fn at_put(self: Gc<Self>, vm: &mut VM, idx: usize, val: Val) -> Result<(), Box<VMError>> {
-        if idx > 0 && idx <= self.len {
-            unsafe {
-                narr_store!(self).add(idx - 1).write(val);
-            }
+        if idx > 0 && idx <= self.length() {
+            *unsafe { (&mut *self.store.get()).get_unchecked_mut(idx - 1) } = val;
             Ok(())
         } else {
             Err(VMError::new(
                 vm,
                 VMErrorKind::IndexError {
                     tried: idx,
-                    max: self.len,
+                    max: self.length(),
                 },
             ))
         }
@@ -140,7 +113,7 @@ impl Array for NormalArray {
     fn iter(self: Gc<Self>) -> ArrayIterator {
         ArrayIterator {
             arr: self,
-            len: self.len,
+            len: self.length(),
             i: 0,
         }
     }
@@ -148,44 +121,14 @@ impl Array for NormalArray {
 
 impl NormalArray {
     pub fn new(vm: &VM, len: usize) -> Val {
-        unsafe {
-            NormalArray::alloc(len, |mut store: *mut Val| {
-                for _ in 0..len {
-                    store.write(vm.nil);
-                    store = store.add(1);
-                }
-            })
-        }
+        Val::from_obj(NormalArray {
+            store: UnsafeCell::new(vec![vm.nil; len]),
+        })
     }
 
     pub fn from_vec(v: Vec<Val>) -> Val {
-        unsafe {
-            NormalArray::alloc(v.len(), |store: *mut Val| {
-                copy_nonoverlapping(v.as_ptr(), store, v.len());
-            })
-        }
-    }
-
-    /// Create a new `NormalArray` with a backing store of `len` elements. `init` will be called
-    /// with a pointer to the uninitialised backing store. After `init` completes, the backing
-    /// store will be considered fully initialised: failure to fully initialise it causes undefined
-    /// behaviour.
-    pub unsafe fn alloc<F>(len: usize, init: F) -> Val
-    where
-        F: FnOnce(*mut Val),
-    {
-        let (vals_layout, vals_dist) = Layout::new::<Val>().repeat(len).unwrap();
-        // We require the store to be laid out as a C-like contiguous array.
-        debug_assert_eq!(vals_dist, size_of::<Val>());
-        let (layout, store_off) = Layout::new::<NormalArray>().extend(vals_layout).unwrap();
-        // We require the store to be positioned immediately after the `NormalArray` with no
-        // padding in-between. This assumption is relied upon by the `narr_store!` macro.
-        debug_assert_eq!(store_off, size_of::<NormalArray>());
-        Val::new_from_layout(layout, |ptr: *mut NormalArray| {
-            let ptr = &raw mut *ptr;
-            (*ptr).len = len;
-            let store = (ptr as *mut u8).add(size_of::<NormalArray>()) as *mut Val;
-            init(store);
+        Val::from_obj(NormalArray {
+            store: UnsafeCell::new(v),
         })
     }
 }
