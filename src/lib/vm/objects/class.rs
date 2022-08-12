@@ -10,6 +10,7 @@ use std::{
 
 use smartstring::alias::String as SmartString;
 use std::gc::Gc;
+use std::gc::NoFinalize;
 
 use crate::vm::{
     core::VM,
@@ -78,6 +79,11 @@ impl StaticObjType for Class {
         ObjType::Class
     }
 }
+
+// This must be explicitly marked as `NoFinalize` because `Class` structs
+// contain `HashMap`s, which are not yet automatically `NoFinalize` based on
+// their contents.
+unsafe impl NoFinalize for Class {}
 
 impl Class {
     pub fn new(
