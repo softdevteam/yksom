@@ -74,9 +74,6 @@ pub struct Block {
     pub method_stack_base: usize,
 }
 
-#[cfg(feature = "rustgc")]
-impl NoFinalize for Block {}
-
 impl Obj for Block {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::Block
