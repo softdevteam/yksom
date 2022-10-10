@@ -40,7 +40,7 @@ getopts = "0.2"
 itertools = "0.10"
 lrlex = "0.10"
 lrpar = "0.10"
-natrob = { git="https://github.com/softdevteam/natrob", features=["libgc"] }
+natrob = { git="https://github.com/softdevteam/natrob", features=["rustgc"] }
 num-bigint = "0.4"
 num-integer = "0.1"
 num_enum = "0.5"

@@ -38,6 +38,12 @@ pub struct Class {
     inst_vars: UnsafeCell<Vec<Val>>,
 }
 
+// This is safe because there is no non-GC'd shared ownership inside `Class`.
+// This means that even though a finalizer will call its drop methods in another
+// thread, it is guaranteed that the finalizer thread will be the only thread
+// accessing its data.
+unsafe impl FinalizerSafe for Class {}
+
 impl Obj for Class {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::Class

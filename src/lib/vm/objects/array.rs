@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::{cell::UnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher};
+use std::{cell::SyncUnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 use std::gc::Gc;
 
@@ -38,7 +38,7 @@ pub trait Array: Send {
 
 #[derive(Debug)]
 pub struct NormalArray {
-    store: UnsafeCell<Vec<Val>>,
+    store: SyncUnsafeCell<Vec<Val>>,
 }
 
 impl Obj for NormalArray {
@@ -122,20 +122,20 @@ impl Array for NormalArray {
 impl NormalArray {
     pub fn new(vm: &VM, len: usize) -> Val {
         Val::from_obj(NormalArray {
-            store: UnsafeCell::new(vec![vm.nil; len]),
+            store: SyncUnsafeCell::new(vec![vm.nil; len]),
         })
     }
 
     pub fn from_vec(v: Vec<Val>) -> Val {
         Val::from_obj(NormalArray {
-            store: UnsafeCell::new(v),
+            store: SyncUnsafeCell::new(v),
         })
     }
 }
 
 #[derive(Debug)]
 pub struct MethodsArray {
-    store: UnsafeCell<Vec<Val>>,
+    store: SyncUnsafeCell<Vec<Val>>,
 }
 
 impl Obj for MethodsArray {
@@ -241,7 +241,7 @@ impl Array for MethodsArray {
 impl MethodsArray {
     pub fn from_vec(_vm: &mut VM, store: Vec<Val>) -> Val {
         Val::from_obj(MethodsArray {
-            store: UnsafeCell::new(store),
+            store: SyncUnsafeCell::new(store),
         })
     }
 }

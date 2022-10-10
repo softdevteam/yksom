@@ -1,6 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 
-use std::{cell::UnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher};
+use std::{cell::SyncUnsafeCell, collections::hash_map::DefaultHasher, hash::Hasher};
 
 use std::gc::Gc;
 
@@ -14,7 +14,7 @@ use crate::vm::{
 #[derive(Debug)]
 pub struct Inst {
     class: Val,
-    inst_vars: UnsafeCell<Vec<Val>>,
+    inst_vars: SyncUnsafeCell<Vec<Val>>,
 }
 
 unsafe impl std::gc::NoFinalize for Inst {}
@@ -67,7 +67,7 @@ impl Inst {
         debug_assert!(vm.nil.valkind() != ValKind::ILLEGAL || len == 0);
         Val::from_obj(Inst {
             class,
-            inst_vars: UnsafeCell::new(vec![vm.nil; len]),
+            inst_vars: SyncUnsafeCell::new(vec![vm.nil; len]),
         })
     }
 }

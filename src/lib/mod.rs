@@ -12,7 +12,6 @@
 
 #![feature(alloc_layout_extra)]
 #![feature(allocator_api)]
-#![feature(arbitrary_self_types)]
 #![feature(box_patterns)]
 #![feature(coerce_unsized)]
 #![feature(negative_impls)]
@@ -21,6 +20,7 @@
 #![feature(raw_ref_op)]
 #![feature(unsize)]
 #![feature(gc)]
+#![feature(sync_unsafe_cell)]
 #![cfg_attr(feature = "rustgc", feature(gc))]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::float_cmp)]
