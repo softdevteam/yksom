@@ -12,7 +12,6 @@
 
 #![feature(alloc_layout_extra)]
 #![feature(allocator_api)]
-#![feature(arbitrary_self_types)]
 #![feature(box_patterns)]
 #![feature(coerce_unsized)]
 #![feature(negative_impls)]
