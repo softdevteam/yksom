@@ -74,6 +74,11 @@ pub struct Block {
     pub method_stack_base: usize,
 }
 
+// By default, `Block` is not `FinalizerSafe` because it has fields to other
+// `Gc`s. These fields would be unsound to access inside a `drop` method, so
+// this explicit impl is needed to tell the compiler we are not doing that.
+unsafe impl FinalizerSafe for Block {}
+
 impl Obj for Block {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {
         ObjType::Block
