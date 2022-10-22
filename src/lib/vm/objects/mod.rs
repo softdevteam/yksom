@@ -224,7 +224,7 @@ pub trait Obj: std::fmt::Debug + FinalizerSafe {
             unsafe { std::mem::transmute::<&dyn Obj, (*const u8, usize)>(&**other_tobj).0 };
         Ok(Val::from_bool(
             vm,
-            (Gc::into_raw(self) as *const _ as *const u8) == other_data,
+            (Gc::as_ptr(&self) as *const _ as *const u8) == other_data,
         ))
     }
 

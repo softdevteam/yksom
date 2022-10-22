@@ -67,7 +67,7 @@ impl !NoTrace for Val {}
 impl Val {
     /// Create a new `Val` from an object that should be allocated on the heap.
     pub fn from_obj<T: Obj + 'static>(obj: T) -> Val {
-        let p = Gc::into_raw(ThinObj::new(obj));
+        let p = Gc::as_ptr(&ThinObj::new(obj));
         Val {
             val: (p as usize) | (ValKind::GCBOX as usize),
         }
@@ -78,7 +78,7 @@ impl Val {
     /// undefined behaviour.
     pub fn recover<T: Obj + 'static>(obj: Gc<T>) -> Self {
         unsafe {
-            let p = Gc::into_raw(ThinObj::recover_gc(obj));
+            let p = Gc::as_ptr(&ThinObj::recover_gc(obj));
             Val {
                 val: (p as usize) | (ValKind::GCBOX as usize),
             }

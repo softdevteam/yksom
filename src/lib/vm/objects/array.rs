@@ -56,7 +56,7 @@ impl Obj for NormalArray {
 
     fn hashcode(self: Gc<Self>) -> u64 {
         let mut hasher = DefaultHasher::new();
-        hasher.write_usize(Gc::into_raw(self) as *const _ as usize);
+        hasher.write_usize(Gc::as_ptr(&self) as *const _ as usize);
         hasher.finish()
     }
 
@@ -165,7 +165,7 @@ impl Obj for MethodsArray {
         Self: Send,
     {
         let mut hasher = DefaultHasher::new();
-        hasher.write_usize(Gc::into_raw(self) as *const _ as usize);
+        hasher.write_usize(Gc::as_ptr(&self) as *const _ as usize);
         hasher.finish()
     }
 
