@@ -432,7 +432,7 @@ impl VM {
                             let mut uv = self.open_upvars;
                             let mut prev = None;
                             let local_ptr =
-                                Gc::into_raw(unsafe { self.stack.addr_of(stack_base + u.upidx) });
+                                Gc::as_ptr(&unsafe { self.stack.addr_of(stack_base + u.upidx) });
 
                             // Search for an existing UpVar.
                             while let Some(uv_uw) = uv {
@@ -441,14 +441,14 @@ impl VM {
                                 //   * the stack is contiguous
                                 // we can stop searching if this UpVar is for a variable lower on
                                 // the stack than the one we're looking for.
-                                if Gc::into_raw(uv_uw.to_gc()) <= local_ptr {
+                                if Gc::as_ptr(&uv_uw.to_gc()) <= local_ptr {
                                     break;
                                 }
                                 prev = uv;
                                 uv = uv_uw.prev();
                             }
 
-                            if (uv.is_some() && Gc::into_raw(uv.unwrap().to_gc()) < local_ptr)
+                            if (uv.is_some() && Gc::as_ptr(&uv.unwrap().to_gc()) < local_ptr)
                                 || uv.is_none()
                             {
                                 // Create a new UpVar.
@@ -461,7 +461,7 @@ impl VM {
                                     self.open_upvars = uv;
                                 }
                             } else {
-                                debug_assert_eq!(Gc::into_raw(uv.unwrap().to_gc()), local_ptr);
+                                debug_assert_eq!(Gc::as_ptr(&uv.unwrap().to_gc()), local_ptr);
                             }
                             blk_upvars.push(uv.unwrap());
                         } else {
@@ -640,7 +640,7 @@ impl VM {
                 }
                 Instr::UpVarSet(n) => {
                     let v = self.stack.peek();
-                    unsafe { (Gc::into_raw(blk.unwrap().upvars[n].to_gc()) as *mut Val).write(v) };
+                    unsafe { (Gc::as_ptr(&blk.unwrap().upvars[n].to_gc()) as *mut Val).write(v) };
                     pc += 1;
                 }
             }
@@ -1326,7 +1326,7 @@ impl VM {
         while self.open_upvars.is_some() {
             let uv = self.open_upvars.unwrap();
             debug_assert!(!uv.is_closed());
-            if Gc::into_raw(uv.to_gc()) < Gc::into_raw(unsafe { self.stack.addr_of(stack_base) }) {
+            if Gc::as_ptr(&uv.to_gc()) < Gc::as_ptr(&unsafe { self.stack.addr_of(stack_base) }) {
                 break;
             }
             uv.close();
