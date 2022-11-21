@@ -8,7 +8,7 @@ use itertools::Itertools;
 use lrpar::{NonStreamingLexer, Span};
 use num_bigint::BigInt;
 use smartstring::alias::String as SmartString;
-use std::gc::Gc;
+use std::gc::{Gc, NonFinalizable};
 
 use crate::{
     compiler::{
@@ -247,9 +247,9 @@ impl<'a, 'input> Compiler<'a, 'input> {
             self.path.to_path_buf(),
             instrs_off,
             supercls_val,
-            inst_vars_map,
+            NonFinalizable::new(inst_vars_map),
             methods,
-            methods_map,
+            NonFinalizable::new(methods_map),
         );
         let cls: Gc<Class> = cls_val.downcast(vm).unwrap();
         cls.set_methods_class(vm, cls_val);

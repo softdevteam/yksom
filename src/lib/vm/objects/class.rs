@@ -9,8 +9,7 @@ use std::{
 };
 
 use smartstring::alias::String as SmartString;
-use std::gc::Gc;
-use std::gc::NoFinalize;
+use std::gc::{Gc, NonFinalizable};
 
 use crate::vm::{
     core::VM,
@@ -27,14 +26,14 @@ pub struct Class {
     /// Offset to this class's instructions in VM::instrs.
     pub instrs_off: usize,
     supercls: Cell<Val>,
-    pub inst_vars_map: HashMap<SmartString, usize>,
+    pub inst_vars_map: NonFinalizable<HashMap<SmartString, usize>>,
     /// A SOM Array of methods (though note that it is *not* guaranteed that these definitely point
     /// to SOM `Method` instances -- anything can be stored in this array!).
     methods: Val,
     /// A map from method names to indexes into the methods SOM Array. Note that indexes are stored
     /// with SOM indexing (starting from 1). We guarantee that the indexes are valid indexes for
     /// the `methods` array.
-    methods_map: HashMap<SmartString, usize>,
+    methods_map: NonFinalizable<HashMap<SmartString, usize>>,
     inst_vars: UnsafeCell<Vec<Val>>,
 }
 
@@ -86,11 +85,6 @@ impl StaticObjType for Class {
     }
 }
 
-// This must be explicitly marked as `NoFinalize` because `Class` structs
-// contain `HashMap`s, which are not yet automatically `NoFinalize` based on
-// their contents.
-unsafe impl NoFinalize for Class {}
-
 impl Class {
     pub fn new(
         vm: &VM,
@@ -99,9 +93,9 @@ impl Class {
         path: PathBuf,
         instrs_off: usize,
         supercls: Val,
-        inst_vars_map: HashMap<SmartString, usize>,
+        inst_vars_map: NonFinalizable<HashMap<SmartString, usize>>,
         methods: Val,
-        methods_map: HashMap<SmartString, usize>,
+        methods_map: NonFinalizable<HashMap<SmartString, usize>>,
     ) -> Val {
         #[cfg(debug_assertions)]
         {
