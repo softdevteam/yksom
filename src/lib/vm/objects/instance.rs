@@ -17,7 +17,7 @@ pub struct Inst {
     inst_vars: SyncUnsafeCell<Vec<Val>>,
 }
 
-unsafe impl std::gc::NoFinalize for Inst {}
+unsafe impl std::gc::FinalizerOptional for Inst {}
 
 impl Obj for Inst {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {
