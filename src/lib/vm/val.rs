@@ -449,8 +449,10 @@ impl Val {
     pub fn mul(&self, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         debug_assert_eq!(ValKind::INT as usize, 0);
         if self.valkind() == ValKind::INT && other.valkind() == ValKind::INT {
-            if let Some(val) = self.val.checked_mul(other.val / (1 << TAG_BITSIZE)) {
-                return Ok(Val { val });
+            if let Some(val) = self.val.checked_mul(other.val) {
+                return Ok(Val {
+                    val: val >> TAG_BITSIZE,
+                });
             }
         }
         self.tobj(vm).unwrap().as_gc().mul(vm, other)
