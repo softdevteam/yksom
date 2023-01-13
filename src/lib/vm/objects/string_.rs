@@ -76,12 +76,16 @@ impl Obj for String_ {
     }
 
     fn ref_equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
-        self.equals(vm, other)
+        let b = match other.downcast::<String_>(vm) {
+            Ok(other_str) => (self.cls == other_str.cls) && (self.s == other_str.s),
+            Err(_) => false,
+        };
+        Ok(Val::from_bool(vm, b))
     }
 
     fn equals(self: Gc<Self>, vm: &mut VM, other: Val) -> Result<Val, Box<VMError>> {
         let b = match other.downcast::<String_>(vm) {
-            Ok(other_str) => (self.cls == other_str.cls) && (self.s == other_str.s),
+            Ok(other_str) => self.s == other_str.s,
             Err(_) => false,
         };
         Ok(Val::from_bool(vm, b))
