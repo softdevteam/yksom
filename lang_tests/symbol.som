@@ -4,10 +4,12 @@ VM:
   stdout:
     #ab
     true
-    false
+    true
     true
     String
-    String
+    Symbol
+    true
+    true
     #ab:
     #ab
     #+
@@ -23,6 +25,8 @@ symbol = (
         (('a' + 'b') asSymbol == #ab) println.
         (('a' + #ab) class) println.
         ((#ab + 'a') class) println.
+        (#ab = 'ab') println.
+        ('ab' = #ab) println.
 
         #ab: println.
 
