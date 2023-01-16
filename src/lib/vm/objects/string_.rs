@@ -29,9 +29,6 @@ pub struct String_ {
     s: SmartString,
 }
 
-#[cfg(feature = "rustgc")]
-impl NoFinalize for String_ {}
-
 // This is safe because there is no non-GC'd shared ownership inside `String_`.
 // This means that even though a finalizer will call its drop methods in another
 // thread, it is guaranteed that the finalizer thread will be the only thread
