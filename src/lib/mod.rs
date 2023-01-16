@@ -21,7 +21,6 @@
 #![feature(unsize)]
 #![feature(gc)]
 #![feature(sync_unsafe_cell)]
-#![cfg_attr(feature = "rustgc", feature(gc))]
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::float_cmp)]
 #![allow(clippy::missing_safety_doc)]
