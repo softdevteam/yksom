@@ -38,7 +38,7 @@ pub use integers::{ArbInt, Int};
 pub use method::Method;
 pub use string_::String_;
 
-use natrob::narrowable_rustgc;
+use natrob::narrowable_alloy;
 use std::gc::Gc;
 
 use crate::vm::{
@@ -79,7 +79,7 @@ impl ObjType {
 
 /// The main SOM Object trait. Notice that code should almost never call these functions directly:
 /// you should instead call the equivalent function in the `Val` struct.
-#[narrowable_rustgc(ThinObj)]
+#[narrowable_alloy(ThinObj)]
 pub trait Obj: std::fmt::Debug + FinalizerSafe {
     /// What `ObjType` does this `Val` represent?
     fn dyn_objtype(self: Gc<Self>) -> ObjType;
