@@ -34,7 +34,10 @@ cargo +alloy test --release
 cargo +alloy run  -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
 cargo +alloy run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
 
-cd SOM && \
-  cargo +alloy run --release -- \
-    --cp Smalltalk:TestSuite:SomSom/src/compiler:SomSom/src/vm:SomSom/src/vmobjects:SomSom/src/interpreter:SomSom/src/primitives \
-    SomSom/tests/SomSomTests.som
+cd SOM
+cargo +alloy run --release -- \
+  --cp Smalltalk:TestSuite:SomSom/src/compiler:SomSom/src/vm:SomSom/src/vmobjects:SomSom/src/interpreter:SomSom/src/primitives \
+  SomSom/tests/SomSomTests.som
+cargo +alloy run --release -- \
+  --cp Smalltalk:Examples/Benchmarks/GraphSearch \
+  Examples/Benchmarks/BenchmarkHarness.som GraphSearch 10 4
