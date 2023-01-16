@@ -19,22 +19,22 @@ export PATH=`pwd`/.cargo/bin/:$PATH
 rustup toolchain install nightly --allow-downgrade --component rustfmt
 cargo +nightly fmt --all -- --check
 
-# Build rustgc
-git clone https://github.com/softdevteam/rustgc
-mkdir -p rustgc/build/rustgc
-(cd rustgc && ./x.py build --config ../.buildbot.config.toml)
+# Build alloy
+git clone https://github.com/softdevteam/alloy
+mkdir -p alloy/build/alloy
+(cd alloy && ./x.py build --config ../.buildbot.config.toml)
 
-rustup toolchain link rustgc rustgc/build/x86_64-unknown-linux-gnu/stage1
+rustup toolchain link alloy alloy/build/x86_64-unknown-linux-gnu/stage1
 
 cargo clean
 
-cargo +rustgc test
-cargo +rustgc test --release
+cargo +alloy test
+cargo +alloy test --release
 
-cargo +rustgc run  -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
-cargo +rustgc run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
+cargo +alloy run  -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
+cargo +alloy run --release -- --cp SOM/Smalltalk SOM/TestSuite/TestHarness.som
 
 cd SOM && \
-  cargo +rustgc run --release -- \
+  cargo +alloy run --release -- \
     --cp Smalltalk:TestSuite:SomSom/src/compiler:SomSom/src/vm:SomSom/src/vmobjects:SomSom/src/interpreter:SomSom/src/primitives \
     SomSom/tests/SomSomTests.som
