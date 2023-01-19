@@ -5,6 +5,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use lrlex::{DefaultLexerTypes, LRNonStreamingLexer};
 use lrpar::{NonStreamingLexer, Span};
 use num_bigint::BigInt;
 use smartstring::alias::String as SmartString;
@@ -28,7 +29,7 @@ use crate::{
 const CLOSURE_RETURN_VAR: &str = "$$closurereturn$$";
 
 pub struct Compiler<'a, 'input> {
-    lexer: &'a dyn NonStreamingLexer<'input, StorageT>,
+    lexer: &'a LRNonStreamingLexer<'a, 'input, DefaultLexerTypes<StorageT>>,
     path: &'a Path,
     upvars_stack: Vec<Vec<(SmartString, UpVarDef)>>,
     /// The stack of local variables at the current point of evaluation. Maps variable names to
@@ -54,7 +55,7 @@ enum VarLookup {
 impl<'a, 'input> Compiler<'a, 'input> {
     pub fn compile(
         vm: &mut VM,
-        lexer: &dyn NonStreamingLexer<StorageT>,
+        lexer: &LRNonStreamingLexer<DefaultLexerTypes<StorageT>>,
         path: &Path,
         astcls: &ast::Class,
     ) -> Result<(SmartString, Val), String> {
@@ -157,7 +158,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
     fn c_class(
         &mut self,
         vm: &mut VM,
-        lexer: &'a dyn NonStreamingLexer<StorageT>,
+        lexer: &'a LRNonStreamingLexer<DefaultLexerTypes<StorageT>>,
         name: SmartString,
         supercls_val: Val,
         ast_inst_vars: &[Span],

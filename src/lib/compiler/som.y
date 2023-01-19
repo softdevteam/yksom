@@ -191,13 +191,14 @@ ArrayList -> Result<Vec<Expr>, ()>:
 
 %%
 
-use lrpar::{Lexeme, Span};
+use lrlex::DefaultLexeme;
+use lrpar::Span;
 
-type StorageT = u32;
+type StorageT = u8;
 
-fn map_err<StorageT>(r: Result<Lexeme<StorageT>, Lexeme<StorageT>>)
-    -> Result<Lexeme<StorageT>, ()>
-{
+fn map_err(
+  r: Result<DefaultLexeme<StorageT>, DefaultLexeme<StorageT>>
+) -> Result<DefaultLexeme<StorageT>, ()> {
     r.map_err(|_| ())
 }
 
@@ -209,13 +210,19 @@ fn flattenr<T>(lhs: Result<Vec<T>, ()>, rhs: Result<T, ()>) -> Result<Vec<T>, ()
 }
 
 /// Flatten `rhs` into `lhs`.
-fn flattenr_span(lhs: Result<Vec<Span>, ()>, rhs: Result<Lexeme<StorageT>, Lexeme<StorageT>>) -> Result<Vec<Span>, ()> {
+fn flattenr_span(
+  lhs: Result<Vec<Span>, ()>,
+  rhs: Result<DefaultLexeme<StorageT>, DefaultLexeme<StorageT>>
+) -> Result<Vec<Span>, ()> {
     let mut flt = lhs?;
     flt.push(rhs.map_err(|_| ())?.span());
     Ok(flt)
 }
 
-fn span_merge(lhs: Result<Lexeme<StorageT>, Lexeme<StorageT>>, rhs: Span) -> Span {
+fn span_merge(
+  lhs: Result<DefaultLexeme<StorageT>,
+  DefaultLexeme<StorageT>>, rhs: Span
+) -> Span {
     let lhs_span = match lhs {
         Ok(l) | Err(l) => l.span()
     };
