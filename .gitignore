@@ -1,4 +1,3 @@
-Cargo.lock
 target/
 *.core
 rebench.conf
