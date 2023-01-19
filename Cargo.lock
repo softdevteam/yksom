@@ -326,9 +326,9 @@ dependencies = [
 
 [[package]]
 name = "lang_tester"
-version = "0.6.2"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3b3fa474bc7bf012687865aa790bd458d0bda3adf27e2b54d049324b752200e"
+checksum = "d63df63b7380a561f2c38b0a67ebe3a24b87ff2928391d0b5f8f3cfd39fe112c"
 dependencies = [
  "fm",
  "getopts",
