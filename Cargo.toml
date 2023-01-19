@@ -46,7 +46,7 @@ num-integer = "0.1"
 num_enum = "0.5"
 num-traits = "0.2"
 ryu = "1.0"
-smartstring = "0.2"
+smartstring = "1"
 static_assertions = "1.1"
 termion = "1.5"
 libc = { version = "0.2", optional = true }
