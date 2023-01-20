@@ -17,7 +17,7 @@ pub mod instrs;
 lrlex_mod!("lib/compiler/som.l");
 lrpar_mod!("lib/compiler/som.y");
 
-type StorageT = u32;
+type StorageT = u8;
 
 /// Compile a class. Should only be called by the `VM`.
 pub fn compile(vm: &mut VM, path: &Path) -> (String, Val) {

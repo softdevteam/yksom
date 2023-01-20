@@ -22,33 +22,33 @@ harness = false
 krun_harness = ["libc"]
 
 [build-dependencies]
-cfgrammar = "0.10"
-lrlex = "0.10"
-lrpar = "0.10"
+cfgrammar = "0.13"
+lrlex = "0.13"
+lrpar = "0.13"
 rerun_except = "1.0"
 
 [dev-dependencies]
-serial_test = "0.5"
-lang_tester = "0.6"
+serial_test = "1"
+lang_tester = "0.7"
 lazy_static = "1.3"
 regex = "1.1"
 
 [dependencies]
 arrayvec = "0.7"
-cfgrammar = "0.10"
+cfgrammar = "0.13"
 getopts = "0.2"
 itertools = "0.10"
-lrlex = "0.10"
-lrpar = "0.10"
+lrlex = "0.13"
+lrpar = "0.13"
 natrob = { git="https://github.com/softdevteam/natrob", features=["alloy"] }
 num-bigint = "0.4"
 num-integer = "0.1"
 num_enum = "0.5"
 num-traits = "0.2"
 ryu = "1.0"
-smartstring = "0.2"
+smartstring = "1"
 static_assertions = "1.1"
-termion = "1.5"
+termion = "2"
 libc = { version = "0.2", optional = true }
 
 # The main reason for customising the profile.* sections is to force unwind=abort.
