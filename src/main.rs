@@ -57,29 +57,39 @@ fn main() {
         usage(prog);
     }
 
-    let src_path = Path::new(&matches.free[0]).to_owned();
-    if !src_path.is_file() {
-        error(&format!(
-            "{} does not exist or is not a file",
-            &matches.free[0]
-        ));
+    let mut cp: Vec<_> = matches
+        .opt_str("cp")
+        .unwrap()
+        .split(":")
+        .map(|x| PathBuf::from_str(x).unwrap())
+        .collect();
+
+    let mut src_path = Path::new(&matches.free[0]).to_owned();
+    if !src_path.is_file() && src_path.extension().is_none() {
+        for d in &cp {
+            let mut p = PathBuf::new();
+            p.push(d);
+            p.push(&matches.free[0]);
+            p.set_extension("som");
+            if p.is_file() {
+                src_path = p;
+            }
+        }
+        if !src_path.is_file() {
+            error(&format!(
+                "{} does not exist or is not a file",
+                &matches.free[0]
+            ));
+        }
     }
     let src_path = match src_path.canonicalize() {
         Ok(s) => s,
         Err(e) => error(&format!("Can't canonicalise {}: {}", &matches.free[0], e)),
     };
 
-    let mut cp = match src_path.parent() {
-        Some(p) => vec![p.to_owned()],
-        None => vec![],
-    };
-    cp.extend(
-        matches
-            .opt_str("cp")
-            .unwrap()
-            .split(":")
-            .map(|x| PathBuf::from_str(x).unwrap()),
-    );
+    if let Some(p) = src_path.parent() {
+        cp.insert(0, p.to_owned());
+    }
 
     let mut vm = VM::new(cp);
     let system = vm.get_global_or_nil("system");
