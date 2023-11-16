@@ -22,6 +22,7 @@ pub struct Method {
 // method. This explicit impl is needed to tell the compiler we are not doing
 // that.
 unsafe impl FinalizerSafe for Method {}
+unsafe impl Sync for Method {}
 
 impl Obj for Method {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {

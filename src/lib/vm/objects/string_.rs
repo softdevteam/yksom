@@ -34,6 +34,7 @@ pub struct String_ {
 // thread, it is guaranteed that the finalizer thread will be the only thread
 // accessing its data.
 unsafe impl FinalizerSafe for String_ {}
+unsafe impl Sync for String_ {}
 
 impl Obj for String_ {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {

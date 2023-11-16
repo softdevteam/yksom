@@ -42,6 +42,7 @@ pub struct Class {
 // thread, it is guaranteed that the finalizer thread will be the only thread
 // accessing its data.
 unsafe impl FinalizerSafe for Class {}
+unsafe impl Sync for Class {}
 
 impl Obj for Class {
     fn dyn_objtype(self: Gc<Self>) -> ObjType {
