@@ -7,7 +7,6 @@ use std::{
     str,
 };
 
-use smartstring::alias::String as SmartString;
 use std::gc::Gc;
 
 use crate::vm::{
@@ -26,7 +25,7 @@ pub struct String_ {
     /// that if anyone ever manages to make a string of usize::MAX characters, we won't cache its
     /// length correctly, but will recalculate it each time.
     chars_len: Cell<usize>,
-    s: SmartString,
+    s: String,
 }
 
 // This is safe because there is no non-GC'd shared ownership inside `String_`.
@@ -99,13 +98,13 @@ impl StaticObjType for String_ {
 }
 
 impl String_ {
-    pub fn new_str(vm: &mut VM, s: SmartString) -> Val {
+    pub fn new_str(vm: &mut VM, s: String) -> Val {
         String_::new_str_chars_len(vm, s, usize::MAX)
     }
 
     /// Create a new `String_` whose number of Unicode characters is already known. Note that it is
     /// safe to pass `usize::MAX` for `chars_len`.
-    fn new_str_chars_len(vm: &mut VM, s: SmartString, chars_len: usize) -> Val {
+    fn new_str_chars_len(vm: &mut VM, s: String, chars_len: usize) -> Val {
         Val::from_obj(String_ {
             cls: Cell::new(vm.str_cls),
             chars_len: Cell::new(chars_len),
@@ -113,7 +112,7 @@ impl String_ {
         })
     }
 
-    pub fn new_sym(vm: &mut VM, s: SmartString) -> Val {
+    pub fn new_sym(vm: &mut VM, s: String) -> Val {
         Val::from_obj(String_ {
             cls: Cell::new(vm.sym_cls),
             chars_len: Cell::new(usize::MAX),
@@ -170,7 +169,7 @@ impl String_ {
             todo!();
         }
         if end < start {
-            return Ok(String_::new_str(vm, SmartString::new()));
+            return Ok(String_::new_str(vm, String::new()));
         }
         if start > self.s.len() || end > self.s.len() {
             todo!();

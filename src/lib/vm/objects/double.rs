@@ -4,7 +4,7 @@ use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
-use smartstring::alias::String as SmartString;
+
 use std::gc::Gc;
 
 use crate::vm::{
@@ -33,10 +33,7 @@ impl Obj for Double {
 
     fn to_strval(self: Gc<Self>, vm: &mut VM) -> Result<Val, Box<VMError>> {
         let mut buf = ryu::Buffer::new();
-        Ok(String_::new_str(
-            vm,
-            SmartString::from(buf.format(self.val)),
-        ))
+        Ok(String_::new_str(vm, String::from(buf.format(self.val))))
     }
 
     fn hashcode(self: Gc<Self>) -> u64 {

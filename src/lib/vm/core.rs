@@ -13,7 +13,7 @@ use std::{
 
 use lrpar::Span;
 use num_bigint::BigInt;
-use smartstring::alias::String as SmartString;
+
 use static_assertions::const_assert;
 use std::gc::Gc;
 
@@ -78,24 +78,24 @@ pub struct VM {
     /// The current known set of globals including those not yet assigned to: in other words, it is
     /// expected that some entries of this `Vec` are illegal (i.e. created by `Val::illegal`).
     globals: Vec<Val>,
-    reverse_globals: HashMap<SmartString, usize>,
+    reverse_globals: HashMap<String, usize>,
     inline_caches: Vec<Option<(Val, Gc<Method>)>>,
     /// `instrs` and `instr_span`s are always the same length: they are separated only because we
     /// rarely access `instr_spans`.
     instrs: Vec<Instr>,
     instr_spans: Vec<Span>,
-    sends: Vec<(Gc<SmartString>, usize)>,
+    sends: Vec<(Gc<String>, usize)>,
     /// reverse_sends is an optimisation allowing us to reuse sends: it maps a send `(String,
     /// usize)` to a `usize` where the latter represents the index of the send in `sends`.
-    reverse_sends: HashMap<(Gc<SmartString>, usize), usize>,
+    reverse_sends: HashMap<(Gc<String>, usize), usize>,
     stack: Gc<SOMStack>,
     arbints: Vec<Val>,
     strings: Vec<Val>,
     /// reverse_strings is an optimisation allowing us to reuse strings: it maps a `String to a
     /// `usize` where the latter represents the index of the string in `strings`.
-    reverse_strings: HashMap<SmartString, usize>,
+    reverse_strings: HashMap<String, usize>,
     symbols: Vec<Val>,
-    reverse_symbols: HashMap<SmartString, usize>,
+    reverse_symbols: HashMap<String, usize>,
     time_at_start: Instant,
     open_upvars: Option<Gc<UpVar>>,
 }
@@ -850,7 +850,7 @@ impl VM {
                             Err(_) => {
                                 return SendReturn::Err(VMError::new(
                                     self,
-                                    VMErrorKind::InvalidInteger(SmartString::from(s)),
+                                    VMErrorKind::InvalidInteger(String::from(s)),
                                 ))
                             }
                         },
@@ -861,7 +861,7 @@ impl VM {
                         Err(_) => {
                             return SendReturn::Err(VMError::new(
                                 self,
-                                VMErrorKind::InvalidDouble(SmartString::from(s)),
+                                VMErrorKind::InvalidDouble(String::from(s)),
                             ))
                         }
                     }
@@ -1061,7 +1061,7 @@ impl VM {
                 let path = PathBuf::from(stry!(path_val.downcast::<String_>(self)).as_str());
                 match read_to_string(path) {
                     Ok(s) => {
-                        let v = String_::new_str(self, SmartString::from(s));
+                        let v = String_::new_str(self, String::from(s));
                         self.stack.push(v);
                     }
                     Err(_) => self.stack.push(self.nil),
@@ -1408,7 +1408,7 @@ impl VM {
 
     /// Add the send `send` to the VM, returning its index. Note that sends are reused, so indexes
     /// are also reused.
-    pub fn add_send(&mut self, send: (SmartString, usize)) -> usize {
+    pub fn add_send(&mut self, send: (String, usize)) -> usize {
         // We want to avoid `clone`ing `send` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
         let send = (Gc::new(send.0), send.1);
@@ -1432,7 +1432,7 @@ impl VM {
 
     /// Add the string `s` to the VM, returning its index. Note that strings are reused, so indexes
     /// are also reused.
-    pub fn add_string(&mut self, s: SmartString) -> usize {
+    pub fn add_string(&mut self, s: String) -> usize {
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
         if let Some(i) = self.reverse_strings.get(&s) {
@@ -1448,7 +1448,7 @@ impl VM {
 
     /// Add the symbol `s` to the VM, returning its index. Note that symbols are reused, so indexes
     /// are also reused.
-    pub fn add_symbol(&mut self, s: SmartString) -> usize {
+    pub fn add_symbol(&mut self, s: String) -> usize {
         // We want to avoid `clone`ing `s` in the (hopefully common) case of a cache hit, hence
         // this slightly laborious dance and double-lookup.
         if let Some(i) = self.reverse_symbols.get(&s) {
@@ -1469,7 +1469,7 @@ impl VM {
             *i
         } else {
             let len = self.globals.len();
-            self.reverse_globals.insert(SmartString::from(s), len);
+            self.reverse_globals.insert(String::from(s), len);
             self.globals.push(Val::illegal());
             len
         }
@@ -1516,7 +1516,7 @@ impl VM {
             self.globals[*i] = v;
         } else {
             self.reverse_globals
-                .insert(SmartString::from(name), self.globals.len());
+                .insert(String::from(name), self.globals.len());
             self.globals.push(v);
         }
     }

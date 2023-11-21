@@ -8,7 +8,7 @@ use itertools::Itertools;
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexer};
 use lrpar::{NonStreamingLexer, Span};
 use num_bigint::BigInt;
-use smartstring::alias::String as SmartString;
+
 use std::gc::{Gc, NonFinalizable};
 
 use crate::{
@@ -31,10 +31,10 @@ const CLOSURE_RETURN_VAR: &str = "$$closurereturn$$";
 pub struct Compiler<'a, 'input> {
     lexer: &'a LRNonStreamingLexer<'a, 'input, DefaultLexerTypes<StorageT>>,
     path: &'a Path,
-    upvars_stack: Vec<Vec<(SmartString, UpVarDef)>>,
+    upvars_stack: Vec<Vec<(String, UpVarDef)>>,
     /// The stack of local variables at the current point of evaluation. Maps variable names to
     /// `(captured, var idx)`.
-    locals_stack: Vec<HashMap<SmartString, (bool, usize)>>,
+    locals_stack: Vec<HashMap<String, (bool, usize)>>,
     blocks_stack: Vec<Vec<Gc<Function>>>,
     /// Since SOM's "^" operator returns from the enclosed method, we need to track whether we are
     /// in a closure -- and, if so, how many nested closures we are inside at the current point of
@@ -58,7 +58,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         lexer: &LRNonStreamingLexer<DefaultLexerTypes<StorageT>>,
         path: &Path,
         astcls: &ast::Class,
-    ) -> Result<(SmartString, Val), String> {
+    ) -> Result<(String, Val), String> {
         let mut compiler = Compiler {
             lexer,
             path,
@@ -68,7 +68,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             closure_depth: 0,
         };
 
-        let name = SmartString::from(lexer.span_str(astcls.name));
+        let name = String::from(lexer.span_str(astcls.name));
         let (supercls_val, supercls_meta_val) = if name.as_str() != "Object" {
             let supercls_val = if let Some(n) = astcls.supername.map(|x| lexer.span_str(x)) {
                 match vm.load_class(n) {
@@ -159,7 +159,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         &mut self,
         vm: &mut VM,
         lexer: &'a LRNonStreamingLexer<DefaultLexerTypes<StorageT>>,
-        name: SmartString,
+        name: String,
         supercls_val: Val,
         ast_inst_vars: &[Span],
         ast_methods: &[ast::Method],
@@ -190,7 +190,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         };
         for var in ast_inst_vars {
             let vars_len = inst_vars.len();
-            let n = SmartString::from(lexer.span_str(*var));
+            let n = String::from(lexer.span_str(*var));
             match inst_vars.entry(n) {
                 hash_map::Entry::Occupied(_) => {
                     return Err(vec![(
@@ -233,7 +233,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
         let inst_vars_map = self.locals_stack[0]
             .iter()
             .map(|(k, v)| (k.clone(), v.1))
-            .collect::<HashMap<SmartString, usize>>();
+            .collect::<HashMap<String, usize>>();
         self.locals_stack.pop();
         if !errs.is_empty() {
             return Err(errs);
@@ -257,27 +257,21 @@ impl<'a, 'input> Compiler<'a, 'input> {
         Ok(cls_val)
     }
 
-    fn c_method(
-        &mut self,
-        vm: &mut VM,
-        astmeth: &ast::Method,
-    ) -> CompileResult<(SmartString, Val)> {
+    fn c_method(&mut self, vm: &mut VM, astmeth: &ast::Method) -> CompileResult<(String, Val)> {
         let (name, args) = match astmeth.name {
             ast::MethodName::BinaryOp(op, arg) => {
                 let arg_v = match arg {
                     Some(l) => vec![l],
                     None => vec![],
                 };
-                ((op, SmartString::from(self.lexer.span_str(op))), arg_v)
+                ((op, String::from(self.lexer.span_str(op))), arg_v)
             }
-            ast::MethodName::Id(span) => {
-                ((span, SmartString::from(self.lexer.span_str(span))), vec![])
-            }
+            ast::MethodName::Id(span) => ((span, String::from(self.lexer.span_str(span))), vec![]),
             ast::MethodName::Keywords(ref pairs) => {
                 let name = pairs
                     .iter()
                     .map(|x| self.lexer.span_str(x.0))
-                    .collect::<SmartString>();
+                    .collect::<String>();
                 let args = pairs.iter().map(|x| x.1).collect::<Vec<_>>();
                 ((pairs[0].0, name), args)
             }
@@ -444,10 +438,10 @@ impl<'a, 'input> Compiler<'a, 'input> {
     ) -> CompileResult<(usize, Vec<Gc<Function>>, Vec<UpVarDef>)> {
         self.upvars_stack.push(Vec::new());
         let mut vars = HashMap::new();
-        vars.insert(SmartString::from("self"), (false, 0));
+        vars.insert(String::from("self"), (false, 0));
         let mut process_var = |var_sp: Span| {
             let vars_len = vars.len();
-            let var_str = SmartString::from(self.lexer.span_str(var_sp));
+            let var_str = String::from(self.lexer.span_str(var_sp));
             match vars.entry(var_str.clone()) {
                 hash_map::Entry::Occupied(_) => Err(vec![(
                     var_sp,
@@ -542,7 +536,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             ast::Expr::BinaryMsg { span, lhs, op, rhs } => {
                 let mut stack_size = self.c_expr(vm, lhs)?;
                 stack_size = max(stack_size, 1 + self.c_expr(vm, rhs)?);
-                let send_off = vm.add_send((SmartString::from(self.lexer.span_str(*op)), 1));
+                let send_off = vm.add_send((String::from(self.lexer.span_str(*op)), 1));
                 let instr = match lhs {
                     box ast::Expr::UnaryMsg {
                         receiver: box ast::Expr::VarLookup(span2),
@@ -640,7 +634,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 msglist,
             } => {
                 let mut max_stack = self.c_expr(vm, receiver)?;
-                let mut mn = SmartString::new();
+                let mut mn = String::new();
                 for (i, (kw, expr)) in msglist.iter().enumerate() {
                     mn.push_str(self.lexer.span_str(*kw));
                     let expr_stack = self.c_expr(vm, expr)?;
@@ -668,7 +662,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             } => {
                 let max_stack = self.c_expr(vm, receiver)?;
                 for (i, id) in ids.iter().enumerate() {
-                    let send_off = vm.add_send((SmartString::from(self.lexer.span_str(*id)), 0));
+                    let send_off = vm.add_send((String::from(self.lexer.span_str(*id)), 0));
                     let instr = match receiver {
                         box ast::Expr::VarLookup(span)
                             if i == 0 && self.lexer.span_str(*span) == "super" =>
@@ -697,7 +691,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     // "self" as an upvalue.
                     let locals_stack_len = self.locals_stack[1].len();
                     self.locals_stack[1]
-                        .entry(SmartString::from(CLOSURE_RETURN_VAR))
+                        .entry(String::from(CLOSURE_RETURN_VAR))
                         .or_insert((false, locals_stack_len));
                     match self.find_var_name(CLOSURE_RETURN_VAR) {
                         VarLookup::UpVar(upidx) => {
@@ -711,7 +705,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
             }
             ast::Expr::String(span) => {
                 let s_orig = self.lexer.span_str(*span);
-                let mut new_s = SmartString::new();
+                let mut new_s = String::new();
                 // Start by ignoring the beginning quote.
                 let mut i = '\"'.len_utf8();
                 // End by ignoring the beginning quote.
@@ -752,13 +746,13 @@ impl<'a, 'input> Compiler<'a, 'input> {
                 // XXX are there string escaping rules we need to take account of?
                 let s_orig = self.lexer.span_str(*span);
                 // Strip off the beginning/end quotes.
-                let s = SmartString::from(&s_orig[1..s_orig.len() - 1]);
+                let s = String::from(&s_orig[1..s_orig.len() - 1]);
                 let instr = Instr::Symbol(vm.add_symbol(s));
                 vm.instrs_push(instr, *span);
                 Ok(1)
             }
             ast::Expr::Symbol(span) => {
-                let s = SmartString::from(self.lexer.span_str(*span));
+                let s = String::from(self.lexer.span_str(*span));
                 let instr = Instr::Symbol(vm.add_symbol(s));
                 vm.instrs_push(instr, *span);
                 Ok(1)
@@ -814,7 +808,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     e.1
                 };
                 self.upvars_stack[depth + 1].push((
-                    SmartString::from(name),
+                    String::from(name),
                     UpVarDef {
                         capture_local: true,
                         upidx,
@@ -828,7 +822,7 @@ impl<'a, 'input> Compiler<'a, 'input> {
                     let mut upidx = i;
                     for j in depth + 1..self.upvars_stack.len() {
                         self.upvars_stack[j].push((
-                            SmartString::from(name),
+                            String::from(name),
                             UpVarDef {
                                 capture_local: false,
                                 upidx,
