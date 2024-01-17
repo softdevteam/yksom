@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, io::stderr};
 
 use lrpar::Span;
-use smartstring::alias::String as SmartString;
+
 use std::gc::Gc;
 use termion::{is_tty, style};
 
@@ -163,9 +163,9 @@ pub enum VMErrorKind {
         got_cls: Val,
     },
     /// Tried to convert an invalid string to a Double.
-    InvalidDouble(SmartString),
+    InvalidDouble(String),
     /// Tried to convert an invalid string to an Integer.
-    InvalidInteger(SmartString),
+    InvalidInteger(String),
     /// Tried to access a global before it being initialised.
     InvalidSymbol,
     /// Tried to do a shl or shr with a value below zero.
@@ -182,7 +182,7 @@ pub enum VMErrorKind {
     /// Tried to do a shl that would overflow memory and/or not fit in the required integer size.
     ShiftTooBig,
     /// An unknown global.
-    UnknownGlobal(SmartString),
+    UnknownGlobal(String),
     /// An unknown method.
     UnknownMethod,
     /// Tried calling a method with the wrong number of arguments.

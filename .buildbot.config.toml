@@ -10,7 +10,6 @@ extended = false
 
 [llvm]
 assertions = true           # Turn on assertions in LLVM.
-use-linker = "gold"         # Uses less memory than ld.
 
 [install]
 prefix = "build/rustc_boehm"

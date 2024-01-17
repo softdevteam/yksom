@@ -12,7 +12,6 @@ use std::{
 };
 
 use getopts::Options;
-use smartstring::alias::String as SmartString;
 
 use yksom::vm::{
     objects::{NormalArray, String_},
@@ -99,14 +98,14 @@ fn main() {
     };
     let mut src_fname = PathBuf::from(src_fname);
     src_fname.set_extension("");
-    let src_fname_val = String_::new_str(&mut vm, SmartString::from(src_fname.to_str().unwrap()));
+    let src_fname_val = String_::new_str(&mut vm, String::from(src_fname.to_str().unwrap()));
     let mut args_vec = vec![src_fname_val];
     args_vec.extend(
         matches
             .free
             .iter()
             .skip(1)
-            .map(|x| String_::new_str(&mut vm, SmartString::from(x))),
+            .map(|x| String_::new_str(&mut vm, String::from(x))),
     );
     let args = NormalArray::from_vec(args_vec);
     match vm.top_level_send(system, "initialize:", vec![args]) {

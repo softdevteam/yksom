@@ -9,8 +9,6 @@ use num_enum::{IntoPrimitive, UnsafeFromPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::gc::Gc;
 
-use std::gc::NoTrace;
-
 use super::{
     core::VM,
     error::{VMError, VMErrorKind},
@@ -61,8 +59,6 @@ pub struct Val {
     // several parts of the code to cooperate in order to be correct.
     pub val: usize,
 }
-
-impl !NoTrace for Val {}
 
 impl Val {
     /// Create a new `Val` from an object that should be allocated on the heap.
@@ -666,7 +662,6 @@ mod tests {
     };
 
     use serial_test::serial;
-    use smartstring::alias::String as SmartString;
 
     #[test]
     #[serial]
@@ -737,7 +732,7 @@ mod tests {
         assert_eq!(v.as_usize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
         assert_eq!(v.as_isize(&mut vm).unwrap(), 1 << (BITSIZE - 2));
 
-        let v = String_::new_str(&mut vm, SmartString::new());
+        let v = String_::new_str(&mut vm, String::new());
         assert!(v.as_usize(&mut vm).is_err());
     }
 
@@ -747,7 +742,7 @@ mod tests {
         let mut vm = VM::new_no_bootstrap();
 
         let v = {
-            let v = String_::new_str(&mut vm, SmartString::from("s"));
+            let v = String_::new_str(&mut vm, String::from("s"));
             let v_tobj = v.tobj(&mut vm).unwrap();
             let v_str: Gc<String_> = v_tobj.downcast().unwrap();
             let v_recovered = Val::recover(v_str);
@@ -763,7 +758,7 @@ mod tests {
     #[serial]
     fn test_cast() {
         let mut vm = VM::new_no_bootstrap();
-        let v = String_::new_str(&mut vm, SmartString::from("s"));
+        let v = String_::new_str(&mut vm, String::from("s"));
         assert!(v.downcast::<String_>(&mut vm).is_ok());
         assert_eq!(
             v.downcast::<Class>(&mut vm).unwrap_err().kind,
@@ -778,7 +773,7 @@ mod tests {
     #[serial]
     fn test_downcast() {
         let mut vm = VM::new_no_bootstrap();
-        let v = String_::new_str(&mut vm, SmartString::from("s"));
+        let v = String_::new_str(&mut vm, String::from("s"));
         assert!(v.downcast::<String_>(&mut vm).is_ok());
         assert!(v.downcast::<Class>(&mut vm).is_err());
         assert!(v.try_downcast::<String_>(&mut vm).is_some());
