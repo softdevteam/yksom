@@ -4,7 +4,7 @@ use std::gc::Gc;
 
 use crate::vm::{objects::NormalArray, val::Val};
 
-pub const SOM_STACK_LEN: usize = 4096;
+pub const SOM_STACK_LEN: usize = 16384;
 
 /// A contiguous stack of SOM values. This stack does minimal or no checking on important
 /// operations and users must ensure that they obey the constraints on each function herein, or
