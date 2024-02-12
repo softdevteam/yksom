@@ -28,8 +28,8 @@ lrpar = "0.13"
 rerun_except = "1.0"
 
 [dev-dependencies]
-serial_test = "1"
-lang_tester = "0.7"
+serial_test = "3"
+lang_tester = "0.8"
 lazy_static = "1.3"
 regex = "1.1"
 
@@ -37,18 +37,18 @@ regex = "1.1"
 arrayvec = "0.7"
 cfgrammar = "0.13"
 getopts = "0.2"
-itertools = "0.10"
+itertools = "0.12"
 lrlex = "0.13"
 lrpar = "0.13"
 natrob = { git="https://github.com/softdevteam/natrob", features=["alloy"] }
 num-bigint = "0.4"
 num-integer = "0.1"
-num_enum = "0.5"
+num_enum = "0.7"
 num-traits = "0.2"
 ryu = "1.0"
 smartstring = "1"
 static_assertions = "1.1"
-termion = "2"
+termion = "3"
 libc = { version = "0.2", optional = true }
 
 # The main reason for customising the profile.* sections is to force unwind=abort.

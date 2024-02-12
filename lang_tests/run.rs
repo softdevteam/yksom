@@ -17,11 +17,13 @@ lazy_static! {
 fn main() {
     LangTester::new()
         .test_dir("lang_tests")
-        .test_file_filter(|p| {
-            if p.parent().unwrap().file_name().unwrap().to_str() == Some("lang_tests") {
+        .test_path_filter(|p| {
+            if p.is_file()
+                && p.parent().unwrap().file_name().unwrap().to_str() == Some("lang_tests")
+            {
                 p.extension().unwrap().to_str().unwrap() == "som"
             } else {
-                p.file_name().unwrap() == "test.som"
+                p.is_file() && p.file_name().unwrap() == "test.som"
             }
         })
         .test_extract(|p| {

@@ -104,7 +104,7 @@ impl Val {
             _ => panic!("Invalid tag {}", self.val & TAG_BITMASK),
         }
 
-        unsafe { ValKind::from_unchecked(self.val & TAG_BITMASK) }
+        unsafe { ValKind::unchecked_transmute_from(self.val & TAG_BITMASK) }
     }
 
     /// Cast a `Val` into an instance of type `T` (where `T` must statically be a type that cannot
