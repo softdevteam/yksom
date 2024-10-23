@@ -10,6 +10,7 @@ extended = false
 
 [llvm]
 assertions = true           # Turn on assertions in LLVM.
+download-ci-llvm = false
 
 [install]
 prefix = "build/rustc_boehm"
