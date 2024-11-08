@@ -2,8 +2,6 @@
 
 set -e
 
-exit 0
-
 git submodule init
 git pull --recurse-submodules
 
