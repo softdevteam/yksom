@@ -74,14 +74,6 @@ pub struct Block {
     pub method_stack_base: usize,
 }
 
-// The following impls are needed to allow the GC to finalise `Block`. By
-// default, `Block` is not `FinalizerSafe` because it has fields to other `Gc`s.
-// These fields would be unsound to access inside a `drop` method, so this
-// explicit impl is needed to tell the compiler we are not doing that. The only
-// time a `Block` is shared between threads is inside a finaliser, which is
-// Sync-safe because we guarantee it will not be accessed at the same time as
-// the main-thread.
-unsafe impl FinalizerSafe for Block {}
 unsafe impl Sync for Block {}
 
 impl Obj for Block {

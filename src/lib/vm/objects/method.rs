@@ -17,11 +17,6 @@ pub struct Method {
     pub func: Function,
 }
 
-// By default, `Method` is not `FinalizerSafe` because it contains a `Cell`
-// field. Cell is `!Sync` so it would be unsound to access inside a `drop`
-// method. This explicit impl is needed to tell the compiler we are not doing
-// that.
-unsafe impl FinalizerSafe for Method {}
 unsafe impl Sync for Method {}
 
 impl Obj for Method {
