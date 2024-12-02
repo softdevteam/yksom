@@ -80,7 +80,7 @@ impl ObjType {
 /// The main SOM Object trait. Notice that code should almost never call these functions directly:
 /// you should instead call the equivalent function in the `Val` struct.
 #[narrowable_alloy(ThinObj)]
-pub trait Obj: std::fmt::Debug + Send + Sync + FinalizerSafe {
+pub trait Obj: std::fmt::Debug + Send + Sync {
     /// What `ObjType` does this `Val` represent?
     fn dyn_objtype(self: Gc<Self>) -> ObjType;
 

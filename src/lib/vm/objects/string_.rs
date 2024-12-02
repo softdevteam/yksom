@@ -28,11 +28,6 @@ pub struct String_ {
     s: String,
 }
 
-// This is safe because there is no non-GC'd shared ownership inside `String_`.
-// This means that even though a finalizer will call its drop methods in another
-// thread, it is guaranteed that the finalizer thread will be the only thread
-// accessing its data.
-unsafe impl FinalizerSafe for String_ {}
 unsafe impl Sync for String_ {}
 
 impl Obj for String_ {
